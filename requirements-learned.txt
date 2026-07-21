@@ -1,0 +1,9 @@
+# OPTIONAL: the learned matcher fallback (DISK keypoints + LightGlue).
+# Only needed for pairs that defeat SIFT and ORB: low texture, repetitive
+# structure, heavy illumination change. Everything else works without it.
+# Adds ~2 GB installed, plus ~40 MB of model weights fetched ONCE over
+# HTTPS from github (cvlab-epfl/disk, cvg/LightGlue releases) by
+# ./setup.sh --learned. After that it runs fully offline, on CPU.
+# Requires Python >= 3.11 (kornia 0.8.3).
+torch==2.13.0
+kornia==0.8.3
