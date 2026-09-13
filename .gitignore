@@ -2,3 +2,20 @@ __pycache__/
 /.idea
 .pytest_cache/
 /.venv/
+/_reveal/
+# agent operating layer — local session state
+/.claude/.env
+/.claude/claude-docs/NEXT_SESSION_PROMPT.md
+/.claude/.ship-title
+/.claude/BLOCKING_QUESTIONS.md
+/.claude/ATTENTION.md
+/.serena/
+# agent artefacts — never let generated bulk reach a commit
+/verify-shots/
+/scratch/
+/fixtures/
+/benchmarks/runs/
+*.bak-*
+.env.bak*
+# OS
+.DS_Store

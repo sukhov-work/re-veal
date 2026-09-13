@@ -1,0 +1,34 @@
+# Tracked backlog — the ONE debt / tails registry (durable, version-controlled)
+
+Seeded 2026-09-13. This file is the durable copy; the (gitignored) handover mirrors it, never
+replaces it.
+
+**Rules**
+- One row per item. IDs are stable and never reused (`T1`, `T2`, …); the range and count are
+  stated in the header and must have no gaps.
+- Every row is dated at creation and dated again at every state change.
+- **Audits VERIFY rows; they never re-discover them.** A finding matching a row is reported as
+  STATUS VERIFICATION against that row, citing it.
+- Closing a row is a dated **state edit**, never a deletion. Cite the closing DECISIONS line.
+- New debt found anywhere — a session tail, an owner ruling, an audit finding not fixed in the
+  same session — lands here the SAME session.
+- The `Pointer` must resolve today. A dangling pointer is itself a finding; a `DECISIONS 2026-09-13`
+  pointer may resolve in `DECISIONS.md` **or** its archive, so check both before calling it dead.
+- States: OPEN · CLOSED · DEFERRED · PARKED (owner order) · WATCH · ACCEPTED RISK · WON'T-FIX ·
+  STANDING RULE · ARMED (a reopener with a named trigger).
+
+- The table is **five columns**. A row with fewer cells is a finding in its own right, and the
+  check must read the row SHAPE, not its values — a 3-cell row survived two audits that only ever
+  looked at the contents.
+
+Range: T1–T7 · 7 rows · 7 OPEN (update this line at every state change; the range must have no gaps).
+
+| ID | Since | Item | Pointer | State (dated) |
+|----|-------|------|---------|---------------|
+| T1 | 2026-09-13 | Audit machinery shipped but never exercised: tracks A–C and F have no checklists, and the false-positive ratchet has no baseline | `references/audit-mode.md`; DECISIONS 2026-09-13 | OPEN (2026-09-13) — first Audit scheduled at the first phase boundary |
+| T2 | 2026-09-13 | `harness.py` is one all-or-nothing process (~63 s): no way to run one lettered section; algorithm exploration will re-run all 82 checks per iteration | `harness.py:101–918` (sections A–Q); `conventions/testing.md` | OPEN (2026-09-13) — mission slice H1 in EXPLORATION_PLAN.md |
+| T3 | 2026-09-13 | No benchmark sheet: an algorithm change has no per-pair before/after row (method · inliers · rmse · confidence · residual · wall s) to be judged against | `conventions/testing.md §Measurement`; `HANDOFF.md §3.4` (per-pair comparison rule) | OPEN (2026-09-13) — slice H2 |
+| T4 | 2026-09-13 | Fixture catalogue empty: no real pair in or beside the repo; the graffiti-box pair of `HANDOFF.md §9.1` (the roster's real-pair anchor) has no known path | `conventions/verify.md §fixtures` | OPEN (2026-09-13) — OWNER-BLOCKED: owner names the pair location |
+| T5 | 2026-09-13 | Video export has no frame-level verification beyond size/fps/duration (checks 34–37); a new transition style cannot be judged by the harness | `reveal.py:1433` `export_video`; `harness.py:325` section L | OPEN (2026-09-13) — slice H3 |
+| T6 | 2026-09-13 | No lint/format/type gate; the profile's slots are empty by owner choice pending a decision (ruff? none?) | `AGENTS.md §Build` | OPEN (2026-09-13) — decision to confirm in the handover |
+| T7 | 2026-09-13 | `HANDOFF.md §10` runbook still says "51 assertions" while `§7` says 82 — a volatile count in two places (docs.md item 7) | `HANDOFF.md §10`; `§7` | OPEN (2026-09-13) — fix at the first doc-sync that touches HANDOFF |

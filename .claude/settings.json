@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(python3 -m py_compile *)",
+      "Bash(bash -n *)",
+      "Bash(ls *)", "Bash(find *)", "Bash(cat *)", "Bash(wc *)", "Bash(grep *)",
+      "Bash(head *)", "Bash(tail *)", "Bash(sed -n *)",
+      "Bash(scripts/*)",
+      "Read(**)",
+      "Edit(reveal.py)", "Write(reveal.py)",
+      "Edit(harness.py)", "Write(harness.py)",
+      "Edit(README.md)", "Edit(HANDOFF.md)", "Edit(VERSION)",
+      "Edit(.claude/**)", "Write(.claude/**)",
+      "Edit(.serena/**)", "Write(.serena/**)",
+      "mcp__serena__*"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(git push --force*)",
+      "Edit(models/**)", "Write(models/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command",
+      "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.sh\"", "timeout": 10 }] }],
+    "PreCompact":   [{ "matcher": "", "hooks": [{ "type": "command",
+      "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-compact.sh\"", "timeout": 15 }] }]
+  }
+}
