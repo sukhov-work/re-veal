@@ -21,7 +21,7 @@ replaces it.
   check must read the row SHAPE, not its values — a 3-cell row survived two audits that only ever
   looked at the contents.
 
-Range: T1–T11 · 11 rows · 9 OPEN · 1 DEFERRED (T6) · 1 CLOSED (T7) (update this line at every state change; the range must have no gaps).
+Range: T1–T12 · 12 rows · 10 OPEN · 1 DEFERRED (T6) · 1 CLOSED (T7) (update this line at every state change; the range must have no gaps).
 
 | ID | Since | Item | Pointer | State (dated) |
 |----|-------|------|---------|---------------|
@@ -36,3 +36,4 @@ Range: T1–T11 · 11 rows · 9 OPEN · 1 DEFERRED (T6) · 1 CLOSED (T7) (update
 | T9 | 2026-09-13 | Transitions have never seen a real photo pair: class routing, morph look and `edge_ratio` on real re-shots are UNVERIFIED (research E2) | `TRANSITIONS.md §7.1`; EXPLORATION_PLAN TR2 | OPEN (2026-09-13) — blocked on T4 like H2 |
 | T10 | 2026-09-13 | No seam from Reveal to the transitions engine: `reveal.py align --video --style morph` and the page cannot reach it; doing so adds a one-way lazy import to `reveal.py`, which is a Reveal-side behaviour change needing the owner's yes | EXPLORATION_PLAN TR3; `conventions/architecture.md §seams` | OPEN (2026-09-13) — owner decision |
 | T11 | 2026-09-13 | The research artifact's RoMa path picks the MPS device and downloads weights on first call; both violate this repo's rulings (decision 9; decisions 24–27). Not ported. Any learned dense matcher needs CPU-only + warmup/manifest first | `TRANSITIONS.md §4`; research `correspond._roma_displacements` | OPEN (2026-09-13 evening) — precondition of slice TR5; device rule now in `HANDOFF.md §11` (CPU first, MPS only with a CPU-equivalence check) |
+| T12 | 2026-09-13 | A copy of the `no-slop` skill (`.claude/skills/no-slop/SKILL.md`, `SKILL-DNA.md`, byte-identical to `~/.claude/skills/no-slop/`) was vendored into the project and staged when the skill was invoked at 21:12, and went out unnoticed in commit `39d2c67` under a message that names only the research artifact. Keeping it makes `.claude/rules/prose.md` work on a fresh clone; it can drift from the global copy | `git show --stat 39d2c67`; `.claude/rules/prose.md` | OPEN (2026-09-13) — owner decides keep-and-sync or remove; until then the rule loads whichever copy the Skill tool resolves |
