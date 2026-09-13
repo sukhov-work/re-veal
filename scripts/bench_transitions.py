@@ -13,6 +13,12 @@ writes sheet.json, sheet.md and index.html (thumbnails + strips) into --out.
 Run: .venv/bin/python scripts/bench_transitions.py --out benchmarks/runs/<date> [--reveal]
      [--presets morph,flow-dissolve,snap-morph,dissolve] [--seconds 1.0] [--long-preset morph --long-seconds 3.0]
      [--max-long 1920] [--only match_1,mismatch_2]
+     --render-only            rebuild sheet.md / index.html from sheet.json without running anything
+     --picks picks.json       merge the owner's picks exported from index.html into the sheet
+
+Review page: each strip is EIGHT FRAMES OF ONE TRANSITION (time-labelled), not eight variants;
+the variants are the preset rows. The page plays every variant inline, explains what each preset
+changes, and has a radio + note per pair whose "Export picks" button downloads picks.json.
 """
 import argparse
 import json
@@ -80,8 +86,18 @@ def main():
     ap.add_argument("--max-long", type=int, default=1920)
     ap.add_argument("--reveal", action="store_true", help="also run reveal.py align")
     ap.add_argument("--only", default="")
+    ap.add_argument("--render-only", action="store_true")
+    ap.add_argument("--picks", default="", help="picks.json exported from index.html")
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    if a.render_only:
+        runs = load_json(out / "sheet.json")
+        if not runs:
+            sys.exit("no sheet.json to render")
+        picks = load_json(a.picks) if a.picks else {}
+        write_sheet(out, runs, picks)
+        print(f"re-rendered {out/'sheet.md'} and {out/'index.html'}")
+        return
     pairs = find_pairs(Path(a.fixtures))
     if a.only:
         keep = set(a.only.split(","))
@@ -149,11 +165,49 @@ def main():
         runs["pairs"].append(row)
         runs["pairs"].sort(key=lambda r: (r["id"].split("_")[0], int(r["id"].split("_")[1])))
         (out / "sheet.json").write_text(json.dumps(runs, indent=2))
-    write_sheet(out, runs)
+    write_sheet(out, runs, load_json(a.picks) if a.picks else {})
     print(f"wrote {out/'sheet.json'}, {out/'sheet.md'}, {out/'index.html'}")
 
 
-def write_sheet(out, runs):
+def preset_legend(tags):
+    """What differs between the variant rows, from transitions.PRESETS itself."""
+    sys.path.insert(0, str(ROOT))
+    import transitions as T
+    base = T.TransitionSpec()
+    rows = []
+    for tag in tags:
+        preset, sec = tag.rsplit("_", 1)
+        spec = T.spec_from(preset, seconds=float(sec.rstrip("s")))
+        diff = []
+        for f in ("style", "warp_amount", "warp_curve", "mix_curve", "mix_delay", "portal"):
+            v, b = getattr(spec, f), getattr(base, f)
+            if v != b or f == "style":
+                diff.append(f"{f}={v}")
+        rows.append((tag, f"{spec.seconds:g} s, {spec.n_frames()} frames; " + ", ".join(diff)))
+    return rows
+
+
+def label_strip(src, dst, n_frames, seconds, k=8):
+    """Write frame index and time under each tile of a strip."""
+    img = cv2.imread(str(src))
+    if img is None:
+        return False
+    h, w = img.shape[:2]
+    band = np.full((38, w, 3), 24, np.uint8)
+    idx = np.linspace(0, n_frames - 1, k).round().astype(int)
+    tw = w / k
+    fs = 0.42 if tw >= 90 else 0.36        # portrait canvases give narrow tiles
+    for j, i in enumerate(idx):
+        t = i / max(n_frames - 1, 1) * seconds
+        x = int(j * tw) + 4
+        cv2.putText(band, f"frame {i}", (x, 15), cv2.FONT_HERSHEY_SIMPLEX, fs, (200, 230, 255), 1, cv2.LINE_AA)
+        cv2.putText(band, f"{t:.2f} s", (x, 32), cv2.FONT_HERSHEY_SIMPLEX, fs, (200, 230, 255), 1, cv2.LINE_AA)
+    cv2.imwrite(str(dst), np.concatenate([img, band], 0), [cv2.IMWRITE_JPEG_QUALITY, 88])
+    return True
+
+
+def write_sheet(out, runs, picks=None):
+    picks = (picks or {}).get("picks", {})
     md = [f"# Real-pair sheet — {runs['date']} (transitions canvas capped at {runs['max_long']} px)\n"]
     md.append("## Reveal align (native resolution)\n")
     md.append("| pair | mode | rc | method | inliers | rmse_px | ecc_rho | periph_ssim | residual | changed_% | confidence | wall s | error |")
@@ -174,22 +228,79 @@ def write_sheet(out, runs):
                       f"{r.get('median_disp_px')} | {r.get('mean_certainty')} | {cv} | {r.get('n_frames')} | {r.get('correspondence_s')} | "
                       f"{r.get('render_s')} | {r['wall_s']} | {r.get('warping_error')} | {r.get('edge_ratio')} | {r.get('max_step')} | "
                       f"{ep.get('first_vs_A')}/{ep.get('last_vs_B')} |")
+    if picks:
+        md.append("\n## Owner picks (from index.html → picks.json)\n")
+        md.append("| pair | best variant | note |")
+        md.append("|---|---|---|")
+        for row in runs["pairs"]:
+            pk = picks.get(row["id"]) or {}
+            md.append(f"| {row['id']} | {pk.get('best', '')} | {(pk.get('note') or '').replace('|', '/')} |")
     (out / "sheet.md").write_text("\n".join(md) + "\n")
-    html = ["<!doctype html><meta charset=utf-8><title>Transitions real-pair sheet</title>",
-            "<style>body{font:14px system-ui;margin:16px;background:#111;color:#ddd}h2{margin-top:32px}"
-            ".pair{display:flex;gap:12px;align-items:flex-start;margin:8px 0}.pair img{height:120px}"
-            ".run{margin:6px 0 14px}.run img{max-width:100%;display:block}code{color:#9cf}</style>",
-            f"<h1>Real-pair sheet — {runs['date']}</h1><p>Transitions canvas capped at {runs['max_long']} px. Click a strip to open the mp4.</p>"]
+
+    tags = []
     for row in runs["pairs"]:
-        html.append(f"<h2>{row['id']} <small>{row['before']} → {row['after']} · {row.get('size_before')} / {row.get('size_after')}</small></h2>")
+        for tag in row["transitions"]:
+            if tag not in tags:
+                tags.append(tag)
+    legend = preset_legend(tags)
+    for row in runs["pairs"]:
+        for tag, r in row["transitions"].items():
+            src = out / r["strip"]
+            if src.exists() and r.get("n_frames"):
+                sec = float(tag.rsplit("_", 1)[1].rstrip("s"))
+                if label_strip(src, src.with_name("strip_labeled.jpg"), r["n_frames"], sec):
+                    r["strip_labeled"] = str(Path(r["strip"]).with_name("strip_labeled.jpg"))
+    html = ["<!doctype html><meta charset=utf-8><title>Transitions real-pair sheet</title>",
+            "<style>body{font:14px system-ui;margin:16px;background:#111;color:#ddd;max-width:1600px}h2{margin-top:40px;border-top:1px solid #333;padding-top:16px}"
+            ".pair{display:flex;gap:12px;align-items:flex-start;margin:8px 0}.pair img{height:140px}"
+            ".run{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start;margin:10px 0 18px;padding:8px;background:#181818;border-radius:6px}"
+            ".run img{max-width:100%;display:block}.run video{width:300px;max-height:360px;background:#000}"
+            "code{color:#9cf}.legend td{padding:2px 10px;vertical-align:top}.pick{margin:8px 0 0}.pick label{margin-right:14px}"
+            "textarea{width:100%;max-width:900px;background:#222;color:#ddd;border:1px solid #444}button{padding:6px 12px}"
+            ".note{color:#bbb}.hint{background:#26210a;padding:10px;border-radius:6px;margin:12px 0}</style>",
+            f"<h1>Real-pair sheet — {runs['date']}</h1>",
+            f"<div class=hint><b>How to read this page.</b> Each pair has {len(tags)} variants, one per row. "
+            "The strip under a variant shows <b>eight frames of that one transition</b>, labelled with the frame index and the time; "
+            "the player next to it is the full clip (loops; the first and last frames are the two photos byte for byte). "
+            f"Transitions canvas capped at {runs['max_long']} px. Pick the best variant per pair, add a note, then <b>Export picks</b> "
+            "and drop the file next to sheet.json: <code>scripts/bench_transitions.py --render-only --picks picks.json</code> puts it in the sheet.</div>",
+            "<h3>What differs between the variants</h3><table class=legend>"]
+    for tag, desc in legend:
+        html.append(f"<tr><td><code>{tag}</code></td><td>{desc}</td></tr>")
+    html.append("</table><p class=note>style: <b>morph</b> = both photos forward-warped along the dense correspondence and cross-dissolved; "
+                "<b>warp-dissolve</b> = same with the warp scaled by warp_amount and the dissolve shifted by mix_delay; <b>dissolve</b> = no geometry, crossfade only. "
+                "Curves: <b>ease</b> = slow-fast-slow; <b>hold-then-go</b> = nothing for the first 35 %, then linear; <b>ease-in</b> = starts slow. "
+                "class A = a homography plus DIS residual flow was found between the photos; class B = no geometric correspondence, a similarity between the two salient blobs is used. "
+                "certainty = mean forward-backward consistency of the dense field (1 = every pixel agrees both ways).</p>")
+    html.append("<p><button onclick='exportPicks()'>Export picks</button> <span id=status class=note></span></p>")
+    for row in runs["pairs"]:
+        html.append(f"<h2 id='{row['id']}'>{row['id']} <small>{row['before']} → {row['after']} · {row.get('size_before')} / {row.get('size_after')}</small></h2>")
         html.append(f"<div class=pair><img src='{row['id']}/thumb_S.jpg'><img src='{row['id']}/thumb_F.jpg'></div>")
         for mode, r in row["reveal"].items():
             html.append(f"<div><code>reveal {mode}</code> rc={r['rc']} {r.get('method')} inliers={r.get('inliers')} rmse={r.get('rmse_px')} "
                         f"conf={r.get('confidence')} {r['wall_s']}s {('<b>' + (r.get('error') or '') + '</b>') if r.get('error') else ''}</div>")
+        pk = picks.get(row["id"]) or {}
+        html.append(f"<div class=pick><b>Best variant:</b> " + " ".join(
+            f"<label><input type=radio name='pick_{row['id']}' value='{tag}' {'checked' if pk.get('best') == tag else ''} onchange='save()'> {tag}</label>"
+            for tag in row["transitions"]) + f" <label><input type=radio name='pick_{row['id']}' value='none' {'checked' if pk.get('best') == 'none' else ''} onchange='save()'> none usable</label></div>")
+        html.append(f"<textarea id='note_{row['id']}' rows=2 placeholder='what is wrong / what works' oninput='save()'>{pk.get('note', '')}</textarea>")
         for tag, r in row["transitions"].items():
-            html.append(f"<div class=run><code>{tag}</code> class={r.get('class')} {r.get('method')} inliers={r.get('sparse_inliers')} "
-                        f"disp={r.get('median_disp_px')}px edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')} "
-                        f"render={r.get('render_s')}s<br><a href='{r['mp4']}'><img src='{r['strip']}'></a></div>")
+            strip = r.get("strip_labeled", r["strip"])
+            html.append(f"<div class=run><div><code>{tag}</code> class={r.get('class')} {r.get('method')} inliers={r.get('sparse_inliers')} "
+                        f"disp={r.get('median_disp_px')}px certainty={r.get('mean_certainty')} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')} "
+                        f"render={r.get('render_s')}s<br><img src='{strip}'></div>"
+                        f"<video src='{r['mp4']}' controls loop muted playsinline preload=metadata></video></div>")
+    html.append("""<script>
+const KEY='picks:'+location.pathname;
+function collect(){const p={};document.querySelectorAll('h2[id]').forEach(h=>{const id=h.id;const r=document.querySelector(`input[name='pick_${id}']:checked`);
+ const n=document.getElementById('note_'+id);if((r&&r.value)||(n&&n.value))p[id]={best:r?r.value:'',note:n?n.value:''};});return p;}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(collect()));document.getElementById('status').textContent='saved locally '+new Date().toLocaleTimeString();}catch(e){}}
+function restore(){try{const p=JSON.parse(localStorage.getItem(KEY)||'{}');for(const id in p){const r=document.querySelector(`input[name='pick_${id}'][value='${p[id].best}']`);if(r)r.checked=true;
+ const n=document.getElementById('note_'+id);if(n&&p[id].note)n.value=p[id].note;}}catch(e){}}
+function exportPicks(){const blob=new Blob([JSON.stringify({date:new Date().toISOString(),picks:collect()},null,2)],{type:'application/json'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='picks.json';a.click();document.getElementById('status').textContent='picks.json downloaded';}
+restore();
+</script>""")
     (out / "index.html").write_text("\n".join(html))
 
 

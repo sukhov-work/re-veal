@@ -4,23 +4,24 @@ Status: **RANKED.** Authority: `HANDOFF.md` and `TRANSITIONS.md` (both under `.c
 win; a slice that contradicts a recorded decision needs a new dated `DECISIONS.md` line before it
 starts. This file is iterated in place (dated amendment rows at the bottom), never forked.
 
-## Rank (owner, 2026-09-13: "speed up phases so we have results including potential models quicker";
-## "i want to get to dense matcher upgrade and generative tier soon enough"; ordering within that: agent)
-1. **TR7** speed pass on the deterministic tier (measured hotspots below; nothing to wait for)
-2. **TR2** real pairs — starts the day the first row lands in `fixtures/MANIFEST.md`; runs beside TR7
-3. **TR5** dense matcher upgrade (RoMa) — offline warmup first, CPU measured, then the device question
-4. **TR6** generative tier — measure one backend on this Mac before any code
-5. **TR3** Reveal → transitions seam · **TR4** clips and sequences (PyAV decision T8)
-6. **H1 · H3 · H2** Reveal harness slices · **E1 · E2** Reveal algorithm work — after the above or
-   when a Reveal defect makes them urgent
-
-## Owner's stated directions (verbatim, 2026-09-13)
-> "i want to keep exploring additional capabilities there ( e.g use and improve algorithms for
-> additional modes, video transitions generation etc so need to build proper harness around it first"
-
-Read as: (1) the operating environment first — done by the bootstrap; (2) then the *product*
-harness gaps that make algorithm and transition work measurable (H-slices); (3) then the
-exploration itself (E-slices), each in the experimental lane (`AGENTS.md §Reversibility`).
+## Rank (revised 2026-09-13 night after the owner's first review; ordering is the agent's under the owner's "At your discretion")
+Owner's review of the first sheet (verbatim, `benchmarks/2026-09-13-real-pairs.md §Owner review`):
+match_1, match_4, match_5 "look promising … still missing accuracy and those interesing intermediate
+transformations of parts of image"; match_2 "shifted sideways … and only then morphs"; match_3
+"person from start of frame erased/ dissolved into person in end frame"; "such junky transition show
+how we miss to grasp some themes or objects or ideas about given frame and build flows around them";
+mismatches are "naive cross-dissolves … very generic ( but maybe this is intent for this phase )".
+1. **TR5** dense matcher (RoMa): the accuracy step on the promising pairs; its per-pixel certainty
+   replaces the DIS consistency weight and answers TR2b.
+2. **TR9** object and theme correspondence: SAM 2 masks + DINOv2 part matches as automatic anchors,
+   the anchor editor, mask portals. The answer to match_3 and to every mismatch.
+3. **TR6** generative tier: "interesting intermediate transformations of parts" come from a
+   generative backend steered by the deterministic skeleton; measure one backend first.
+4. **TR7** speed: byte-identical levers only, when iteration time blocks 1–3.
+5. **TR2b** certainty floor: folded into TR5 unless the owner asks for it earlier (S-sized).
+6. **TR3 · TR4**, then **H1 · H3 · H2 · E1 · E2**.
+Prerequisite for 1–3 (owner, once per backend): a yes on license and disk footprint before weights
+are fetched; every model lands behind warmup + manifest + refuse-to-download (`HANDOFF.md §11`).
 
 ## H — harness before exploration (evidence: `HANDOFF.md §7`, `harness.py`, backlog T2–T5)
 | Slice | Goal (acceptance) | Seam | Revert | Gate / check | Size | Depends on |
@@ -78,4 +79,5 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-13 | Drafted at bootstrap from the owner's directions and `HANDOFF.md §7/§9`; unranked | bootstrap session |
 | 2026-09-13 | Added §TR (transitions engine, six slices) from the owner's order and the Impossible research artifact; TR1 shipped the same day; E3 stays as the Reveal-side `--style` lane and is now reached through TR3. H1/H3 unchanged, still unranked | transitions session |
 | 2026-09-13 | Owner answered the five open decisions (quoted above); plan RANKED; TR7 (speed pass) added with the measured profile; TR5/TR6 carry the device rule from `HANDOFF.md §11`; design docs moved under `.claude/claude-docs/` | transitions session, evening |
+| 2026-09-13 | Rank revised after the owner's first review of the sheet: TR5 → TR9 → TR6 → TR7 → TR2b → TR3/TR4 → H/E (quotes in §Rank) | transitions session, night |
 | 2026-09-13 | Coverage map of the research artifact written (`TRANSITIONS.md §8`); every experiment not yet planned got a slice: TR8 splat quality, TR9 class B semantics + anchor editor + SAM portals, TR10 depth camera move, TR11 color science + HDR, TR12 product surface, TR4b motion carry-over. Owner: "make sure we account … for any useful content in … impossible artifact prototype" | transitions session, late |

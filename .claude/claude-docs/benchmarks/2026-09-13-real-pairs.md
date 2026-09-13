@@ -40,6 +40,40 @@ ten pairs, 12 on mismatch_6 and mismatch_7 added later the same evening), M3 Pro
   481 inliers and 0.79 px here against 458 and 0.74 in the 2026-07-13 sandbox; OpenCV is 5.0.0 here and
   no estimation code changed, so the delta is the environment, and this row is the new local baseline.
 
+## Owner review (2026-09-13 night, verbatim)
+> I went through benchmarks/runs/2026-09-13/index.html , so several important notes here. 1) If the idea was to let me judge different variations of each type of each case ( e.g match_1 - morph_1s , variants 1-8 ( if this is what you intended) ) then i need a way to pick best for each pair and case and also need to undestand the difference , what went into those 8 options . Next, some matches like match_1, match_4 and match_5 look promising, at least somewhat resembling nice dynamic  transition ( still missing accuracy and those interesing intermediate transformations of parts of image ). Match_2 suffers that person in frame is shifted sideways ( because before/after not perfectly aligned) and only then morphs. Match_3 - basically person from start of frame erased/ dissolved into person in end frame. I am not saying that you must finetune now all cases to accomodate for people or something else specifically, but such junky transition show how we miss to grasp some themes or objects or ideas about given frame and build flows around them even if they are quite detached both physically and conceptually from each other.  As for mismatches - no miracle here, almost all results are just naive  cross-dissolves with very simple frame movements animation , looks very generic ( but maybe this is intent for this phase )
+
+The E2 gate ("at least 6 of 10 usable as-is") is not met: three of the five matched pairs are
+"promising", two are "junky", the seven mismatched pairs are "naive cross-dissolves". A per-pair
+pick is still to come through the page's picks.json.
+
+## What the page got wrong, and the fix
+The eight tiles under each variant were eight time-sampled frames of one transition, not eight
+variants, and nothing on the page said so. The page now labels every tile with its frame index and
+time, plays each variant inline, lists what each preset changes, and has a "best variant" radio
+plus a note per pair that exports to `picks.json`
+(`scripts/bench_transitions.py --render-only --picks picks.json` puts them into this sheet).
+
+## Diagnosis per remark (mechanism, not excuse)
+- **match_2, "shifted sideways and only then morphs".** The engine aligns the two photos by the
+  background homography and the person, who moved between the shots, becomes a large residual
+  displacement (141 px median). The forward splat slides the person along that displacement while
+  the crossfade runs on the same eased curve, so the eye reads a slide first and a dissolve second.
+  The `flow-dissolve` variant (warp 0.6, dissolve delayed 0.1) and a negative `mix_delay` soften
+  this, but no preset produces motion of the person's parts: there is no part-level correspondence.
+- **match_3, "person erased into person".** The two poses share no consistent flow, so the
+  forward-backward certainty collapses on the person and the coverage-aware mix degrades to a
+  crossfade there, while the dome and lake stay put. Correct for the field it has, wrong for the
+  theme: a person should become the person.
+- **match_1, match_4, match_5, "promising, missing accuracy and the interesting intermediate
+  transformations".** The DIS residual on a pre-aligned pair is a phase-1 dense field; a learned
+  dense matcher (RoMa, slice TR5) is the accuracy step, and intermediate transformations of parts
+  are what the generative tier (TR6) exists for.
+- **mismatches, "naive cross-dissolves, generic".** Class B in this phase is a similarity between
+  two salient blobs plus a crossfade, by design; the object-and-theme correspondence the owner
+  describes (a person to a person, a sun to a sun, the box to the box, across unrelated scenes) is
+  slice TR9: SAM 2 masks, DINOv2 part matches, user anchors through Moving Least Squares.
+
 ## Speed (canvas ≤ 1920 px, 1.3–2.8 MP)
 morph 1 s (30 frames): render 4.7–13.4 s, or 0.16–0.45 s per frame (the 1920×1488 canvas of mismatch_7
 is the slowest); morph 3 s: 13–37 s; correspondence 0.4–0.65 s once per pair; Reveal `align` 2.2–16 s

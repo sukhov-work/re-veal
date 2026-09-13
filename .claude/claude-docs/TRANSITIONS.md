@@ -147,10 +147,13 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Two iPhone HEIC files (6048×8064, ICC) | decode 1.9 s each; class A, 492 inliers, 63.7 px median displacement |
 
 ## 7. Risks and open questions, ranked
-1. **Usability is the owner's call and still pending.** The first ten real pairs route correctly and
-   stay under the flicker gate, and the graffiti-box morph keeps its edges straight, but a non-rigid
-   subject ghosts (match_1, 64 px) and a large repaint doubles an edge mid-way (match_5, 103 px).
-   Whether that is "usable as-is" is the E2 rating in `benchmarks/2026-09-13-real-pairs.md`.
+1. **Object-level correspondence is the top gap (owner review, 2026-09-13).** Three matched pairs
+   are "promising" but miss accuracy and any transformation of parts; a person who moved reads as a
+   slide (match_2); two poses that share no flow crossfade into each other (match_3); every
+   unrelated pair is "a naive cross-dissolve". The engine matches pixels, not themes. Order of
+   remedies: a learned dense matcher (TR5), object and part correspondence with anchors (TR9), a
+   generative backend for the intermediate transformations (TR6). Verbatim review and per-pair
+   mechanism: `benchmarks/2026-09-13-real-pairs.md`.
 2. **Class B is crude by design.** The box similarity lands a sun on a sun (mismatch_4) but scales
    a sun onto a galaxy with a visible rectangular patch (mismatch_5, mismatch_6). Anchors, semantic
    matches and an anchor editor are slice TR9.
