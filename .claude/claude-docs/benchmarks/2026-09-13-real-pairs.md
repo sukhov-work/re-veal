@@ -15,7 +15,8 @@ ten pairs, 12 on mismatch_6 and mismatch_7 added later the same evening), M3 Pro
 - `edge_ratio` on morph, dissolve and flow-dissolve: maximum 0.79 (mismatch_6 dissolve), every run
   below the 1.5 gate. snap-morph measures 1.23–1.99, which its hold-then-go curve produces by design.
 - Endpoints: 0 / 0 on every run.
-- Owner rating (gate: at least 6 of 10 pairs usable as-is at 1 s; 12 pairs now): **pending** — the owner reviews `index.html`.
+- Owner rating (gate: at least 6 of 10 pairs usable as-is at 1 s; 12 pairs now): **0 of 12 usable as-is**
+  (picks 2026-09-14, corrected wording 2026-09-14 — see §Owner picks).
 
 ## Observations (four strips looked at by the agent; not a rating)
 - match_4, the roster pair: the mural dissolves onto the box while wall and pavement stay put; the box
@@ -44,8 +45,8 @@ ten pairs, 12 on mismatch_6 and mismatch_7 added later the same evening), M3 Pro
 > I went through benchmarks/runs/2026-09-13/index.html , so several important notes here. 1) If the idea was to let me judge different variations of each type of each case ( e.g match_1 - morph_1s , variants 1-8 ( if this is what you intended) ) then i need a way to pick best for each pair and case and also need to undestand the difference , what went into those 8 options . Next, some matches like match_1, match_4 and match_5 look promising, at least somewhat resembling nice dynamic  transition ( still missing accuracy and those interesing intermediate transformations of parts of image ). Match_2 suffers that person in frame is shifted sideways ( because before/after not perfectly aligned) and only then morphs. Match_3 - basically person from start of frame erased/ dissolved into person in end frame. I am not saying that you must finetune now all cases to accomodate for people or something else specifically, but such junky transition show how we miss to grasp some themes or objects or ideas about given frame and build flows around them even if they are quite detached both physically and conceptually from each other.  As for mismatches - no miracle here, almost all results are just naive  cross-dissolves with very simple frame movements animation , looks very generic ( but maybe this is intent for this phase )
 
 The E2 gate ("at least 6 of 10 usable as-is") is not met: three of the five matched pairs are
-"promising", two are "junky", the seven mismatched pairs are "naive cross-dissolves". A per-pair
-pick is still to come through the page's picks.json.
+"promising", two are "junky", the seven mismatched pairs are "naive cross-dissolves". The picks
+below name the closest variant per pair; none is usable as-is.
 
 ## What the page got wrong, and the fix
 The eight tiles under each variant were eight time-sampled frames of one transition, not eight
@@ -75,7 +76,10 @@ plus a note per pair that exports to `picks.json`
   slice TR9: SAM 2 masks, DINOv2 part matches, user anchors through Moving Least Squares.
 
 ## Owner picks (2026-09-14, `picks_1-14-10-2026.json`, verbatim notes)
-Usable as-is: 3 of 12 (match_1, match_4, match_5). The research gate E2 (at least 6 of 10) is **not met**.
+Usable as-is: **0 of 12**. A pick marks the variant closest to the intent, not an accepted result; the owner
+on 2026-09-14: "they simply resable what i am looking for but very far from perfect". Three pairs have such
+a pick (match_1 flow-dissolve 1 s; match_4 and match_5 morph 3 s); nine have none. The research gate E2
+(at least 6 of 10 usable as-is) is **not met**, and the per-pair notes below are the requirements list.
 
 | pair | best variant | note |
 |---|---|---|
