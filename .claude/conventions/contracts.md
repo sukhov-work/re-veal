@@ -24,11 +24,11 @@ DECISIONS line and a harness check that pins the new shape.
 ## `transitions.py` (added 2026-09-13; harness = `transitions_harness.py`)
 | Contract | Where | Consumers |
 |---|---|---|
-| CLI: `pair BEFORE AFTER --out DIR [--seconds --fps --preset --color --warp --max-long --anchors --class]`, `check`; exit 0 ok / 2 `FAILED: <message>` on stderr | `main`, `cmd_pair`, `cmd_check` | `TRANSITIONS.md §8`; harness 27–36 |
+| CLI: `pair BEFORE AFTER --out DIR [--seconds --fps --preset --color --warp --max-long --canvas finish\|common --anchors --class]`, `check`; exit 0 ok / 2 `FAILED: <message>` on stderr | `main`, `cmd_pair`, `cmd_check` | `TRANSITIONS.md §9`; harness 27–36, 39–40 |
 | `PRESETS` keys `morph dissolve flow-dissolve snap-morph iris wipe luma`; `STYLES` `morph dissolve warp-dissolve portal luma`; `PORTALS` `iris wipe`; `CURVES` `linear ease ease-in ease-out snap hold-then-go` | `transitions.py` Configuration | `--preset` choices; harness 5, 7, 21–22 |
 | Length clamp [0.1, 10] s; `n_frames = round(seconds × fps)` ≥ 2; frame 0 = A and frame n−1 = B byte-exact | `TransitionSpec`, `iter_frames` | harness 4, 6, 21, 29, 35 |
 | Output files in `--out`: `transition.mp4` (H.264 yuv420p, canvas size, `--fps`), `strip.jpg` (8 tiles), `report.json` | `render_pair` | harness 27–33; the future benchmark sheet |
-| `report.json` keys: `tool_version spec{…} class method sparse_inliers sparse_rmse mean_certainty median_disp_px correspondence_s canvas n_frames render_s quality{warping_error flicker{mean max spikiness edge_ratio} n_frames endpoint{first_vs_A last_vs_B} proxy_long} total_s outputs` | `render_pair`, `StreamStats.quality` | harness 27, 31, 35 |
+| `report.json` keys: `tool_version spec{…} class method sparse_inliers sparse_rmse mean_certainty median_disp_px correspondence_s canvas canvas_policy n_frames render_s quality{warping_error flicker{mean max spikiness edge_ratio} n_frames endpoint{first_vs_A last_vs_B} proxy_long} total_s outputs` | `render_pair`, `StreamStats.quality` | harness 27, 31, 35 |
 | Displacement convention: `dAB[y,x]=(dx,dy)` with `B[y+dy,x+dx] ≈ A[y,x]`, canvas pixels; anchors `"ax,ay,bx,by;…"` in canvas pixels, ≥ 3 pairs | `dense_displacement`, `parse_anchors` | harness 13, 15–16 |
 | Isolation: no `reveal` import in `transitions.py`, no `transitions` import in `reveal.py`, no network-capable or weight-loading import in `transitions.py` | both files | harness 1–3 |
 | Accepted extensions = Reveal's `RAW_EXTS HEIF_EXTS PIL_EXTS` (duplicated on purpose) | `transitions.py` Decode | `load_image_rgb` |

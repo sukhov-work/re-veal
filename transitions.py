@@ -160,6 +160,7 @@ class TransitionSpec:
     portal: str = "iris"           # style=portal: iris | wipe
     portal_feather: float = 0.08   # fraction of the canvas diagonal
     max_long_edge: int = 0         # 0 = native canvas
+    canvas: str = "finish"         # canvas policy: finish | common
     anchors: list = field(default_factory=list)   # [[ax, ay, bx, by], ...] canvas px
     force_class: str = ""          # "", "A", "B"
 
@@ -181,6 +182,9 @@ class TransitionSpec:
                                   f"Portals: {', '.join(PORTALS)}")
         if self.force_class not in ("", "A", "B"):
             raise TransitionError("--class must be A or B")
+        if self.canvas not in CANVAS_POLICIES:
+            raise TransitionError(f"Unknown canvas policy {self.canvas!r}. "
+                                  f"Policies: {', '.join(CANVAS_POLICIES)}")
         return self
 
     def progress(self, i):
@@ -304,16 +308,34 @@ def cover(img, w, h):
     return np.ascontiguousarray(r[y:y + h, x:x + w])
 
 
-def common_canvas(a, b, max_long=0):
-    """The shared canvas for two images: the smaller frame's size (never
-    upscale the smaller source), optionally capped, even dimensions
-    (yuv420p needs them)."""
-    h = min(a.shape[0], b.shape[0])
-    w = min(a.shape[1], b.shape[1])
+CANVAS_POLICIES = ("finish", "common")
+
+
+def common_canvas(a, b, max_long=0, policy="finish"):
+    """The shared canvas for two images, even dimensions (yuv420p), never
+    upscaling either source, optionally capped by max_long.
+
+    finish (default; owner ruling 2026-09-14 "finish target ratio wins"):
+        the canvas has the FINISH image's aspect ratio and is the largest
+        such rectangle both images can cover without upscaling.
+    common: the smaller frame's width and the smaller frame's height (the
+        largest area both can cover; the aspect is neither's when they
+        differ). A letterbox mode is planned (EXPLORATION_PLAN TR13)."""
+    hA, wA = a.shape[:2]
+    hB, wB = b.shape[:2]
+    if policy == "common":
+        w, h = min(wA, wB), min(hA, hB)
+    elif policy == "finish":
+        r = wB / hB
+        w = min(wA, hA * r, wB)
+        h = w / r
+    else:
+        raise TransitionError(f"Unknown canvas policy {policy!r}. "
+                              f"Policies: {', '.join(CANVAS_POLICIES)}")
     if max_long and max(h, w) > max_long:
         s = max_long / max(h, w)
-        h, w = round(h * s), round(w * s)
-    return even(w), even(h)
+        h, w = h * s, w * s
+    return even(round(w)), even(round(h))
 
 
 def _grid(h, w):
@@ -863,7 +885,7 @@ def _anchor_arrays(spec):
 def prepare(A, B, spec, cfg=TCFG):
     """Shared canvas + correspondence, computed once per transition.
     Returns (A_canvas, B_canvas, corr)."""
-    w, h = common_canvas(A, B, spec.max_long_edge)
+    w, h = common_canvas(A, B, spec.max_long_edge, spec.canvas)
     A2, B2 = cover(A, w, h), cover(B, w, h)
     t = time.time()
     corr = dense_displacement(A2, B2, anchors=_anchor_arrays(spec),
@@ -991,7 +1013,7 @@ def render_pair(A, B, spec, out_dir, cfg=TCFG):
         (out / "strip.jpg").write_bytes(buf.tobytes())
     report = {"tool_version": VERSION, "spec": asdict(spec),
               "class": corr["cls"], "method": corr["method"], **corr["diag"],
-              "canvas": [w, h], "n_frames": written,
+              "canvas": [w, h], "canvas_policy": spec.canvas, "n_frames": written,
               "render_s": render_s, "quality": stats.quality(A2, B2),
               "total_s": round(time.time() - t_all, 2),
               "outputs": ["transition.mp4", "strip.jpg", "report.json"]}
@@ -1052,7 +1074,7 @@ def cmd_pair(args):
     B = load_image_rgb(args.after)
     spec = spec_from(args.preset, seconds=args.seconds, fps=args.fps,
                      color_strength=args.color, warp_amount=args.warp,
-                     max_long_edge=args.max_long,
+                     max_long_edge=args.max_long, canvas=args.canvas,
                      anchors=parse_anchors(args.anchors),
                      force_class=args.force_class)
     report = render_pair(A, B, spec, args.out)
@@ -1079,6 +1101,9 @@ def main(argv=None):
                     help="geometric warp amount 0..1")
     pp.add_argument("--max-long", type=int, default=0,
                     help="cap the canvas long edge (0 = native)")
+    pp.add_argument("--canvas", default="finish", choices=list(CANVAS_POLICIES),
+                    help="canvas aspect: finish = the AFTER photo's ratio (default); "
+                         "common = the smaller width and height of the two")
     pp.add_argument("--anchors", default="",
                     help='"ax,ay,bx,by;..." canvas pixels, A -> B, >= 3 pairs')
     pp.add_argument("--class", dest="force_class", default="",

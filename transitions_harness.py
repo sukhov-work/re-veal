@@ -112,6 +112,14 @@ def _imports(path):
     return names
 
 
+def _refused_policy():
+    try:
+        T.spec_from("morph", canvas="nope")
+        return False
+    except T.TransitionError:
+        return True
+
+
 def run_cli(argv):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -353,6 +361,20 @@ check(35, f"--seconds below the floor clamps to 0.1 s (3 frames; got {tiny['n_fr
       rc == 0 and tiny["spec"]["seconds"] == 0.1 and tiny["n_frames"] == 3)
 rc, so, _ = run_cli(["check"])
 check(36, "check exits 0 with every row OK", rc == 0 and "!!" not in so)
+
+# ===========================================================================
+print("== J. canvas policy (owner ruling 2026-09-14: the finish ratio wins) ==")
+_S = np.zeros((2000, 1000, 3), np.uint8)      # portrait start
+_F = np.zeros((1500, 1500, 3), np.uint8)      # square finish
+_w, _h = T.common_canvas(_S, _F)
+check(39, f"finish policy: the canvas takes the FINISH ratio and upscales neither source "
+          f"(portrait 1000x2000 + square 1500x1500 -> {_w}x{_h}, expect 1000x1000)",
+      (_w, _h) == (1000, 1000))
+_w2, _h2 = T.common_canvas(_S, _F, policy="common")
+_w3, _h3 = T.common_canvas(_S, _F, max_long=500)
+check(40, f"common policy keeps the old rule ({_w2}x{_h2}, expect 1000x1500); "
+          f"max_long caps the finish canvas ({_w3}x{_h3}, expect 500x500); unknown policy refused",
+      (_w2, _h2) == (1000, 1500) and (_w3, _h3) == (500, 500) and _refused_policy())
 
 # ===========================================================================
 print("== I. identity fence (the tool is called transitions; owner ruling 2026-09-13) ==")

@@ -21,7 +21,7 @@ present).
   perturbed pair, one that must still pass in strict.
 
 ## The second harness: `transitions_harness.py` (Gate 1b)
-Same working method, its OWN check space (1–38 as of 2026-09-13, never reused either), ~5 s, no
+Same working method, its OWN check space (1–40 as of 2026-09-14, never reused either), ~5 s, no
 port bound, may run alongside anything. Coverage paragraph and the paid mutation live in
 `TRANSITIONS.md §5` (the volatile count lives there). Its pair generator (`affine_pair`) carries
 the same exposure change and changed patch as `make_pair()` so the color path and the morph both

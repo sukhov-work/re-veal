@@ -37,8 +37,11 @@ measured here. Decisions live in `DECISIONS.md` (dated lines from 2026-09-13); p
 ## 2. Pipeline
 1. **Decode** to sRGB uint8 with EXIF orientation applied (Pillow, pillow-heif, rawpy; the same
    routing as Reveal).
-2. **Common canvas.** The smaller frame's size, optionally capped by `--max-long`, even
-   dimensions for yuv420p. Each endpoint is cover-cropped onto it. Anchors are canvas pixels.
+2. **Common canvas.** Policy `finish` (default; owner ruling 2026-09-14 "finish target ratio
+   wins"): the canvas has the FINISH photo's aspect ratio and is the largest such rectangle both
+   photos cover without upscaling; `--canvas common` keeps the older rule (the smaller width and
+   the smaller height). Optionally capped by `--max-long`; even dimensions for yuv420p. Each
+   endpoint is cover-cropped onto it; a letterbox mode is slice TR13. Anchors are canvas pixels.
 3. **Correspondence** (`dense_displacement`). Fields are canvas pixels on the source grid:
    `dAB[y,x] = (dx,dy)` means `B[y+dy, x+dx] ≈ A[y,x]`.
    - **Class A, related pair.** SIFT, ratio test 0.75, MAGSAC++ homography `H_BA` at 2.5 px;
@@ -111,7 +114,7 @@ Exit 0 on success, 2 with `FAILED: <message>` on stderr.
   starts with a measurement, not code.
 - **`clips` and `sequence`.** Wait for the PyAV decision (slice TR4).
 
-## 5. Harness: `transitions_harness.py`, 38 checks, about 5 s (as of 2026-09-13; own numbering)
+## 5. Harness: `transitions_harness.py`, 40 checks, about 5 s (as of 2026-09-14; own numbering)
 Coverage by section. A: isolation both ways and the no-network import set (1–3). B: grammar —
 frame count, monotone progress for every curve and warp amount, length clamp, unknown names fail
 cleanly (4–7). C: warp — a translation field equals `warpAffine` within 0.5 levels, no fake holes,
@@ -124,7 +127,8 @@ determinism, no manufactured endpoint step (21–24). G: quality basket — the 
 fires on a cut and not on a dissolve; warping error separates a pan from noise (25–26). H: CLI and
 the decoded mp4 — files, frame count, size, fps, endpoints within codec loss, no black frame,
 report basket, monotone wipe seam, identical frames across two CLI runs, missing input exits 2,
-length floor, `check` (27–36). I: identity fence (37–38).
+length floor, `check` (27–36). I: identity fence (37–38). J: canvas policy — the finish ratio wins
+without upscaling, `common` keeps the old rule, `max_long` caps, an unknown policy is refused (39–40).
 
 Mutation applied on 2026-09-13: making `to_u8` truncate turned checks 11, 20, 21 and 24 red
 (32 of 36 at the time). Gaps: the harness inputs are synthetic by rule; the real-pair tier lives in
@@ -145,6 +149,7 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | First real pairs, 12 owner fixtures, canvas ≤ 1920 px (`benchmarks/2026-09-13-real-pairs.md`) | class routing 11 of 12 as labelled (mismatch_7 shares its skyline and routes A by rule); `edge_ratio` ≤ 0.79 on the smooth presets; endpoints 0 / 0; morph 1 s renders in 4.7–13.4 s |
 | Lowest certainty seen: mismatch_7 (same skyline, different skies) | mean certainty 0.053; the morph tears the clouds; a certainty floor for the DIS residual is proposed (TR2b) |
 | Two iPhone HEIC files (6048×8064, ICC) | decode 1.9 s each; class A, 492 inliers, 63.7 px median displacement |
+| Owner picks 2026-09-14 (`benchmarks/2026-09-13-real-pairs.md §Owner picks`) | 3 of 12 usable: match_1 flow-dissolve 1 s, match_4 and match_5 morph 3 s; E2 gate not met |
 
 ## 7. Risks and open questions, ranked
 1. **Object-level correspondence is the top gap (owner review, 2026-09-13).** Three matched pairs
@@ -154,9 +159,16 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
    remedies: a learned dense matcher (TR5), object and part correspondence with anchors (TR9), a
    generative backend for the intermediate transformations (TR6). Verbatim review and per-pair
    mechanism: `benchmarks/2026-09-13-real-pairs.md`.
-2. **Class B is crude by design.** The box similarity lands a sun on a sun (mismatch_4) but scales
-   a sun onto a galaxy with a visible rectangular patch (mismatch_5, mismatch_6). Anchors, semantic
-   matches and an anchor editor are slice TR9.
+2. **Class B shows the warped frame's border** (owner, every mismatched pair: "next frame square
+   borders … especially ugly"). The similarity warp moves the whole finish frame and the hole fill
+   exposes its rectangular edge. Defect T13, slice TR2c, first in the queue. Beyond that, class B
+   is crude by design: the box similarity lands a sun on a sun (mismatch_4) but the object and
+   theme correspondence the owner wants is slice TR9.
+2c. **Directional texture inflow and subject shift on the box pairs** (match_4, match_5). Inside a
+   repainted region no true correspondence exists; the DIS residual still chooses a direction and
+   the splat follows it. Slice TR2d scales displacement by certainty so such regions dissolve in
+   place; Reveal's §5a warning (spatially varying fields bend straight edges) is the metric to
+   watch, on the box edges themselves.
 2b. **Class A with near-zero certainty tears.** mismatch_7 shares a skyline, so it routes to class A
    correctly, but its skies differ and the DIS residual chases cloud content (mean certainty 0.053).
    Reveal met the same mechanism as field defect #1 and answered with a low-order field. Proposed

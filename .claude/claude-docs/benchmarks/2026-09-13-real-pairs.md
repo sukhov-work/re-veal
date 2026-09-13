@@ -74,6 +74,38 @@ plus a note per pair that exports to `picks.json`
   describes (a person to a person, a sun to a sun, the box to the box, across unrelated scenes) is
   slice TR9: SAM 2 masks, DINOv2 part matches, user anchors through Moving Least Squares.
 
+## Owner picks (2026-09-14, `picks_1-14-10-2026.json`, verbatim notes)
+Usable as-is: 3 of 12 (match_1, match_4, match_5). The research gate E2 (at least 6 of 10) is **not met**.
+
+| pair | best variant | note |
+|---|---|---|
+| match_1 | flow-dissolve_1s | dissolve_1s is very junky, just cross dissove; Best are morph_1s , flow_dissolve and snap_morph , they are pretty close, morph_3s too slow, in  this case as movement is subtle. |
+| match_2 | none | dissolve_1s is very junky, just cross dissove; Partially ok:  morph_1s , flow_dissolve and snap_morph , they are pretty close and all have the same bug that image shifts first ,then morphs; morph_3s too slow, in  this case as movement is subtle |
+| match_3 | none | dissolve_1s is very junky, just cross dissove; Somewhat ok:  morph_1s , morph_3s, flow_dissolve and snap_morph , they are curious , but if we aim for person here- it just disintegrates and then starts materializing in finishing position out or random direction |
+| match_4 | morph_3s | dissolve_1s is junky, just cross dissove; Best are morph_3s, but morph_1s ,  flow_dissolve and snap_morph , they are pretty close but  have one  small-medium issue , that new image textures come from the right on the box , altough nothing in the picture indicates directionality and i would expect it to transform unidirectiobally ( in this case!)  |
+| match_5 | morph_3s | dissolve_1s is junky, just cross dissove; Best are morph_3s , probably the best morph across this run ,but only because images were very well aligned from the start. Also i wish the boxes ( which are main subject here) didn't shift at all ( or as little as possible ) and that changes whould come a bit more subtly at different parts of the image, but this is more taste matter |
+| mismatch_1 | none | here on all samples are just cross-dissolve/ fade with primitive movement animation between frames , also you can see next frame square  borders which is especially ugly in transition  |
+| mismatch_2 | none | here on all samples are just cross-dissolve/ fade with primitive movement animation between frames , also you can see next frame square  borders which is especially ugly in transition  |
+| mismatch_3 |  | here on all samples are just cross-dissolve/ fade with primitive movement animation between frames , also you can see next frame square  borders which is especially ugly in transition  |
+| mismatch_4 | none | here on all samples are just cross-dissolve/ fade with primitive movement animation between frames , also you can see next frame square  borders which is especially ugly in transition  |
+| mismatch_5 | none | here on all samples are just cross-dissolve/ fade with primitive movement animation between frames , also you can see next frame square  borders which is especially ugly in transition   |
+| mismatch_6 | none | here on all samples are just cross-dissolve/ fade with primitive movement animation between frames , also you can see next frame square  borders which is especially ugly in transition , worst of the batch  |
+| mismatch_7 | none | here on all samples are just cross-dissolve/ fade with primitive movement animation between frames , also you can see next frame square  borders which is especially ugly in transition , but in this pair there it at least some inkling ( tiny ) of transformation  |
+
+Three findings the picks add to the diagnosis above:
+- **Class B frame border walks through the picture** (every mismatched pair: "you can see next frame
+  square borders which is especially ugly"). The similarity warp moves the whole finish frame, so its
+  rectangular edge enters the canvas and the hole fill shows it. Defect, backlog T13; fix = warp only
+  the salient region under a soft mask and crossfade the rest, or feather the warped frame's validity.
+- **Directional texture inflow where nothing implies a direction** (match_4: "new image textures come
+  from the right on the box"; match_5: "i wish the boxes … didn't shift at all"). Inside a repainted
+  region there is no true correspondence; the DIS residual still picks a direction and the splat
+  follows it. Candidate lever: scale the displacement by the per-pixel certainty so low-certainty
+  regions dissolve in place (plan TR2d). Reveal's §5a warning about spatially varying fields applies
+  and is the thing to measure.
+- **Timing taste**: 1 s is right when the movement is subtle (match_1); 3 s won on the two box
+  pairs; the plain dissolve is "junky" everywhere and stays a baseline only.
+
 ## Speed (canvas ≤ 1920 px, 1.3–2.8 MP)
 morph 1 s (30 frames): render 4.7–13.4 s, or 0.16–0.45 s per frame (the 1920×1488 canvas of mismatch_7
 is the slowest); morph 3 s: 13–37 s; correspondence 0.4–0.65 s once per pair; Reveal `align` 2.2–16 s
