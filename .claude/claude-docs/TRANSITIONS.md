@@ -127,8 +127,9 @@ report basket, monotone wipe seam, identical frames across two CLI runs, missing
 length floor, `check` (27–36). I: identity fence (37–38).
 
 Mutation applied on 2026-09-13: making `to_u8` truncate turned checks 11, 20, 21 and 24 red
-(32 of 36 at the time). Gaps: every input is synthetic; no real photo pair has been through the
-tool (backlog T4, T9); timings were taken with other work running on the machine.
+(32 of 36 at the time). Gaps: the harness inputs are synthetic by rule; the real-pair tier lives in
+`fixtures/` and the dated sheets under `.claude/claude-docs/benchmarks/` (first sheet 2026-09-13, ten
+pairs); DNG and ARW have never been decoded from a real file; the owner's usability rating is pending.
 
 ## 6. Measurements (2026-09-13, M3 Pro, `.venv` Python 3.13.5, OpenCV 5.0.0)
 | What | Result |
@@ -141,12 +142,17 @@ tool (backlog T4, T9); timings were taken with other work running on the machine
 | Encode per frame, 1080p / 4K | 0.037 / 0.064 s |
 | Color cache + in-place hole fill (frames byte-identical, hash equal) | 1080p morph frame 0.163 → 0.151 s |
 | `REVEAL-BASELINE.sha256` in the artifact vs this repo | all nine files identical: the research targeted exactly this code |
+| First real pairs, 10 owner fixtures, canvas ≤ 1920 px (`benchmarks/2026-09-13-real-pairs.md`) | class routing 10 of 10; `edge_ratio` ≤ 0.55 on the smooth presets; endpoints 0 / 0; morph 1 s renders in 4.7–7.9 s |
+| Two iPhone HEIC files (6048×8064, ICC) | decode 1.9 s each; class A, 492 inliers, 63.7 px median displacement |
 
 ## 7. Risks and open questions, ranked
-1. **No real pair yet.** On a real re-shot the changed subject makes DIS chase content inside the
-   patch; how that looks in a morph is unknown. Slice TR2 measures it once `fixtures/MANIFEST.md`
-   has rows.
-2. **Class B is crude by design.** Unrelated pairs need anchors; an anchor editor is research E10.
+1. **Usability is the owner's call and still pending.** The first ten real pairs route correctly and
+   stay under the flicker gate, and the graffiti-box morph keeps its edges straight, but a non-rigid
+   subject ghosts (match_1, 64 px) and a large repaint doubles an edge mid-way (match_5, 103 px).
+   Whether that is "usable as-is" is the E2 rating in `benchmarks/2026-09-13-real-pairs.md`.
+2. **Class B is crude by design.** The box similarity lands a sun on a sun (mismatch_4) but scales
+   a sun onto a galaxy with a visible rectangular patch (mismatch_5). Anchors, semantic matches and
+   an anchor editor are slice TR9.
 3. **`edge_ratio` is sensitive to sub-level bias.** Smooth presets measure 0.3–0.8 on the harness
    pair; `snap-morph` measures 1.44, and 1.55 under the truncation mutation. The rounding contract
    exists for this reason.
@@ -155,7 +161,51 @@ tool (backlog T4, T9); timings were taken with other work running on the machine
 5. **No seam from Reveal.** `export_video --style morph` cannot reach this tool; adding a one-way
    lazy import to `reveal.py` is a Reveal-side change (backlog T10, slice TR3).
 
-## 8. Runbook
+## 8. Research artifact coverage (every module and experiment of `impossible-0.1.0`, as of 2026-09-13)
+Owner order (2026-09-13): "make sure we account ( maybe you already did ) for any useful content in
+`…/transitions-research/impossible-0.1.0/impossible` artifact prototype". Status values: **ported**
+(in `transitions.py`, TR1), **slice** (planned; `EXPLORATION_PLAN.md §TR`), **not ported by ruling**
+(`§4` above), **research first** (measure before code).
+
+| Artifact item | Status | Where |
+|---|---|---|
+| `grammar.py` TransitionSpec, curves, presets `morph dissolve flow-dissolve snap-morph iris luma`, clamp, `progress` | ported | Configuration section; `wipe` added |
+| `grammar.py` `dream` preset, `dreaminess`, `gen_window`, `seed`, `budget_minutes`; preset `auto` | slice TR6 | generative fields return with the first measured backend |
+| `grammar.py` MediaItem, SequenceSpec, the sequence JSON (`items`, `transitions`, `output`) | slice TR4 | clips and sequences |
+| `render.py` prepare / render_frames, endpoint pin | ported | Render section, streamed |
+| `warp.py` forward_splat, backward_warp, fill_holes, morph_frame, portal_mask | ported | Warp section |
+| `correspond.py` sparse_homography, homography-guided DIS, consistency weight, salient_box, similarity_from_boxes, mls_affine, invert_disp, class routing, anchors | ported | Correspondence section |
+| `correspond.py` `_roma_displacements`, `roma_available` (RoMa on MPS, download on first call) | slice TR5, not ported by ruling as written | warmup + manifest first; CPU measured first |
+| `color.py` Lab statistics path, `luma_mask` | ported | Color section; Lab cached per transition |
+| `media.py` load_rgb, cover, common_canvas | ported | Decode and canvas section |
+| `media.py` `is_video`, VIDEO extensions | slice TR4 | |
+| `video.py` probe, frames_between (PTS-exact), frame_at, `context` (frames around a cut), Writer (PyAV), count_frames | slice TR4 | PyAV decision T8 first |
+| `quality.py` warping_error, flicker with edge_ratio, endpoint_fidelity, assess, thumb_strip | ported | Quality section; proxy at 480 px |
+| `quality.py` `composite` ranking score | slice TR6 (E18 candidate sweep) | ranking only, never a verdict |
+| `generative.py` Enricher contract, NullEnricher, warp_noise_along_flow, frequency_split_blend, COST table, RES_LADDER, plan_generation, LTX-2 / Wan / DreamMover stubs | research first, slice TR6 | E14–E17 measurements come before code |
+| `cli.py` `pair`, `--anchors`, `--class`, `--max-long`, `--color`, `--warp`; `probe` | ported | `pair`, `check` |
+| `cli.py` `clips` (`--cut-a --cut-b --head-from --tail-to`), `sequence` | slice TR4 | |
+| `cli.py` `bench` (E1 synthetic timing) | replaced | `scripts/bench_transitions.py` runs the fixture catalogue (TR2); the profile lives in §6 |
+| `cli.py` `--dreaminess --backend --seed --budget-min` | slice TR6 | |
+| `impossible_harness.py` checks 1–16 | ported and extended | transitions harness 1–24 |
+| `impossible_harness.py` checks 17–22 (generative contracts) | slice TR6 | |
+| `impossible_harness.py` checks 23–29 (video I/O, clips, sequence) | slice TR4 | |
+| `RESEARCH-PLAN` E1 bench on the Mac | done 2026-09-13 | §6 |
+| E2 real pairs | slice TR2, started 2026-09-13 | `fixtures/`, `scripts/bench_transitions.py` |
+| E3 real clips, cuts, stitch; E8 stream-copy stitch | slice TR4 | |
+| E4 RoMa | slice TR5 | |
+| E5 splat quality vs the softmax-splatting reference; E6 MPS splat | E5 → slice TR8; E6 not pursued | CPU meets the E1 gates; TR7 covers speed |
+| E7 motion carry-over across a cut | slice TR4 follow-up (TR4b) | needs clips |
+| E9 SAM 2 + DINOv2 class B semantics; E10 anchor editor page | slice TR9 | class B is crude by design until then |
+| E11 depth camera-move path (Depth Anything V2, 2.5D dolly) | slice TR10 | |
+| E12 OKLab / optimal-transport color, 10-bit and HLG round trip | slice TR11 | 10-bit needs the video I/O of TR4 |
+| E13 SAM-mask portals and luma softness control | slice TR9 | |
+| E14–E17 generative backends and steering; E18 candidate sweep UI | slice TR6 | licenses: LTX-2 Community, Wan 2.2 Apache-2.0, DreamMover SD 1.5 |
+| Phase 4 product surface: sequence editor page, audio crossfade, presets as JSON | slice TR12 | after TR4 |
+| `REVEAL-BASELINE.sha256` isolation idea | ported as checks 1–3 and `git diff` on the roster files | |
+| `setup-impossible.sh`, `requirements-impossible.txt`, `.venv-impossible` | not ported by ruling | shared venv; PyAV is T8 |
+
+## 9. Runbook
 ```
 .venv/bin/python transitions.py check
 .venv/bin/python transitions.py pair out/before.jpg out/after_aligned.jpg --out out/tr --seconds 1.5 --preset flow-dissolve

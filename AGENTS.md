@@ -42,9 +42,11 @@ defaults or to the strict `reshot` profile is NOT in the lane — it needs its o
   the reference frame · convergence judged on inlier statistics, never pixel similarity · the
   residual field is low-order by construction · graceful degradation of optional layers · the
   operator surface stays `./setup.sh` + `./run.sh` + the page.
-- The first real pair's result (`HANDOFF.md §9.1`): sift, 458 inliers, 0.74 px rmse, box edge
-  straight to 0.54 px RMS. Re-measure it after any estimation or residual change — once the pair
-  is in the fixture catalogue (`.claude/conventions/verify.md §fixtures`, owner-blocked).
+- The first real pair's result (`HANDOFF.md §9.1`, fixture `match_4`): sift, 458 inliers, 0.74 px
+  rmse in the 2026-07-13 sandbox; 481 inliers, 0.79 px, confidence 94 on this laptop (OpenCV 5.0.0,
+  2026-09-13, `HANDOFF.md §11`); box edge straight to 0.54 px RMS (sandbox; not re-measured by the
+  CLI). Re-measure it after any estimation or residual change with
+  `scripts/bench_transitions.py --reveal --only match_4`.
 - The offline contract: no network call outside `cmd_warmup` (harness 80–82).
 
 ## Knowledge — search order (stop at first hit)
