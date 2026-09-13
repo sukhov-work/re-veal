@@ -1,0 +1,12 @@
+# Impossible (deterministic tier). Separate venv from Reveal by design.
+# Verified macOS arm64 wheels on PyPI, 2026-09-13. Python >= 3.12
+# (scipy 1.18 floor); setup-impossible.sh looks for 3.13/3.12.
+numpy==2.2.6
+opencv-python-headless==5.0.0.93
+Pillow==12.3.0
+pillow-heif==1.4.0
+rawpy==0.27.0
+av==18.1.0                      # PyAV: decode/encode with bundled libx264/libx265
+scipy==1.18.1
+# Optional dense matcher (phase 1, E4): pip install romatch torch kornia
+# Optional generative (phase 3, E14-E16): see RESEARCH-PLAN.md
