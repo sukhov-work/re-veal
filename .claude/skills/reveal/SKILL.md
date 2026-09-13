@@ -1,13 +1,16 @@
 ---
 name: reveal
 description: >
-  Universal work skill for Reveal, the local before/after photo aligner (reveal.py + harness.py).
-  Implementation, fixes, design, research, review, and whole-repo audits. Parallel-first,
-  evidence-cited, falsification-gated. Trigger on: "implement", "build", "add", "fix", "debug",
-  "design", "plan", "investigate", "research", "review", "critique", "double-check", "verify this
-  claim", "audit", "comprehensive review", a new matching mode, a new video transition or style,
-  an estimator or residual-field change, a harness or benchmark change, any EXPLORATION_PLAN.md
-  slice reference (e.g. "slice H2"), or any task spanning more than one reveal.py section.
+  Universal work skill for Reveal, the local before/after photo aligner (reveal.py + harness.py),
+  and for Transitions, the photo-to-photo transition renderer beside it (transitions.py +
+  transitions_harness.py). Implementation, fixes, design, research, review, and whole-repo
+  audits. Parallel-first, evidence-cited, falsification-gated. Trigger on: "implement", "build",
+  "add", "fix", "debug", "design", "plan", "investigate", "research", "review", "critique",
+  "double-check", "verify this claim", "audit", "comprehensive review", a new matching mode, a
+  new video transition, style or preset, a morph / correspondence / color-path change, a dense
+  matcher or generative backend, an estimator or residual-field change, a harness or benchmark
+  change, any EXPLORATION_PLAN.md slice reference (e.g. "slice H2", "TR5"), or any task spanning
+  more than one section of either module.
 argument-hint: <what to build, fix, investigate, review, or design>
 ---
 
@@ -15,9 +18,13 @@ argument-hint: <what to build, fix, investigate, review, or design>
 
 Reveal is a local before/after photo aligner: one Python file (`reveal.py`) warps an AFTER photo
 onto a BEFORE photo, serves a comparison slider on 127.0.0.1, and exports aligned stills plus a
-wipe/fade transition video. Canonical docs: `HANDOFF.md` (design of record — invariants §2,
-pipeline §3, decisions §6, harness coverage §7, risks §9), `.claude/claude-docs/EXPLORATION_PLAN.md`
-(work plan; DRAFT until the owner ranks it). Standards: `.claude/conventions/` (architecture ·
+wipe/fade transition video. Beside it, `transitions.py` renders the change between two photos as a
+morph / dissolve / portal / luma video (design of record `TRANSITIONS.md`); the two modules never
+import each other. Canonical docs, all under `.claude/claude-docs/`: `HANDOFF.md` (Reveal design of
+record — invariants §2, pipeline §3, decisions §6, harness coverage §7, risks §9, amendments §11),
+`TRANSITIONS.md` (transitions design of record — invariants §1, pipeline §2, harness §5, numbers §6),
+`EXPLORATION_PLAN.md` (work plan, ranked by the owner on 2026-09-13). Prose rule: `.claude/rules/prose.md`
+(every dev-facing text passes the `no-slop` skill before it is saved or shown). Standards: `.claude/conventions/` (architecture ·
 testing · naming · error-handling · verify · contracts). Known debt lives in exactly one place:
 `references/tracked-backlog.md`.
 
@@ -25,11 +32,11 @@ testing · naming · error-handling · verify · contracts). Known debt lives in
 
 | Generic term | In this repo |
 |---|---|
-| **artifact** | a section of `reveal.py` (the `# ----` blocks mapped in `conventions/architecture.md`), a lettered section of `harness.py`, a doc |
-| **gate** | Gate 0 `py_compile` · Gate 1 `harness.py` (82 checks) · Gate 2 `reveal.py check` |
-| **verify** | harness green, then a catalogued real pair through `align` or the page with `metrics.json` quoted |
+| **artifact** | a section of `reveal.py` or `transitions.py` (the `# ----` blocks mapped in `conventions/architecture.md`), a lettered section of `harness.py` or `transitions_harness.py`, a doc |
+| **gate** | Gate 0 `py_compile` (four files) · Gate 1 `harness.py` (82 checks) · Gate 1b `transitions_harness.py` (count in `TRANSITIONS.md §5`) · Gate 2 `reveal.py check` + `transitions.py check` |
+| **verify** | harnesses green, then a catalogued real pair (`fixtures/MANIFEST.md`) through `align` or the page with `metrics.json` quoted, or through `transitions.py pair` with `report.json` quoted and the strip looked at |
 | **live drive** | `reveal.py align` on a real pair, or the served page (`conventions/verify.md`) |
-| **the deploy** | none — laptop only; "shipped" = committed on `main` and pushed to `origin` |
+| **the deploy** | laptop only; "shipped" = committed on `main` and pushed to `origin main` by the agent at Phase 4 — no branches, no PRs (owner ruling 2026-09-13) |
 | **the backlog** | `references/tracked-backlog.md` |
 
 ## Workflow
@@ -62,9 +69,9 @@ order ⇒ **Audit**, not Review.
 
 | Tier | Trigger | What runs |
 |---|---|---|
-| **Quick** | one section; "see if…"; a one-function fix; a constant | No fan-out. Inline evidence. One refutation attempt. Inline answer. |
-| **Standard** | one pipeline stage plus its harness section; a normal plan slice; a new video style | Fan out only on real gaps (memory/docs first). Standard gate. |
-| **Deep** | a new matching mode or estimator (touches ladder + arbitration + harness + page + CLI); a residual-field change; a doc critique; "very heavy" | Full fan-out + escalation (see Heavy-task escalation). Full gate. |
+| **Quick** | one section; "see if…"; a one-function fix; a constant; a new transitions preset (a `PRESETS` entry + one section-F assertion) | No fan-out. Inline evidence. One refutation attempt. Inline answer. |
+| **Standard** | one pipeline stage plus its harness section; a normal plan slice; a new video style; a new transitions style (an `iter_frames` branch + a decoded-mp4 observable); a measured performance pass on one stage | Fan out only on real gaps (memory/docs first). Standard gate. |
+| **Deep** | a new matching mode or estimator (touches ladder + arbitration + harness + page + CLI); a residual-field change; a new correspondence method, dense matcher or generative backend in `transitions.py` (weights, device, offline proof); a doc critique; "very heavy" | Full fan-out + escalation (see Heavy-task escalation). Full gate. |
 
 Calibrate silently and record the tier as a tag in the DECISIONS line (`[tier: Standard]`). Two
 failure shapes: ballooning a "see if" into an XL apparatus; under-scoping a Deep task into a thin pass.
@@ -154,8 +161,11 @@ Never narrate parallelism you are not running.
    gate halts feature work until diagnosed.
 6. **Reversibility before the first edit.** Any change to observable behaviour states how it is
    turned off — a new `MODES` key or `--style` value (the experimental lane, default path
-   untouched), a `CFG` default, a clean revert commit, or "irreversible" (owner yes first). The
-   answer rides the DECISIONS line as `[revert: …]`.
+   untouched), a new `PRESETS` entry or `STYLES` branch in `transitions.py` (its lane; `morph`
+   untouched), a `CFG` / `TCFG` default, a clean revert commit, or "irreversible" (owner yes
+   first). The answer rides the DECISIONS line as `[revert: …]`. A performance change must leave
+   the rendered frames byte-identical (hash before and after on the harness pair) or say what
+   changed and by how many levels.
 7. **Nothing already built regresses.** Before touching a shared surface (the estimation ladder,
    `_arbitrate`, `export_video`, `Job.status`, the page), name the neighbouring behaviours it can
    break and check them after — the no-regression roster in `AGENTS.md` is struck from only by a
@@ -209,9 +219,11 @@ gets published* (into DECISIONS, memory and the canonical docs here).
 5. **Frame-challenge** — the request's own premise tested with the cheapest probe BEFORE heavy
    work (mostly a Phase-0/2 act; here you verify it happened).
 
-Then the prose gate: every deliverable gets a de-slop pass (`~/.agents/skills/no-slop` when
-installed) — no padding, numbers instead of adjectives, `HANDOFF.md`'s evidence labels
-(`[VERIFIED …]`, `[INFERRED]`). **"Not possible" is an acceptable answer.**
+Then the prose gate (`.claude/rules/prose.md`, owner order 2026-09-13): load the `no-slop` skill
+with the `Skill` tool and run its pass on every dev-facing text before it is saved or shown — the
+final message, DECISIONS lines, the handover, design docs, plan and backlog rows, memory leaves,
+commit messages. Numbers instead of adjectives, `HANDOFF.md`'s evidence labels (`[VERIFIED …]`,
+`[INFERRED]`). **"Not possible" is an acceptable answer.**
 
 ### Degrade-path visibility (any change touching the estimation ladder, arbitration, or an optional layer)
 A fallback that engages silently is a regression that stays invisible. Any added or touched
@@ -223,9 +235,11 @@ degrade path must (a) emit a visible INFO line when it engages (the `arbitration
 *"It ran here" ≠ verified.* The enum for this repo:
 `harness-tested · real-pair-VERIFIED · UNVERIFIED` (+ `[INFERRED]` on reasoning-only statements).
 ```
-harness-tested   every time:  .venv/bin/python -m py_compile reveal.py harness.py   # Gate 0
-                              .venv/bin/python harness.py                           # Gate 1, 82 checks
+harness-tested   every time:  .venv/bin/python -m py_compile reveal.py harness.py transitions.py transitions_harness.py   # Gate 0
+                              .venv/bin/python harness.py                           # Gate 1, 82 checks (~63 s, alone)
+                              .venv/bin/python transitions_harness.py               # Gate 1b (~5 s; count in TRANSITIONS.md §5)
                               .venv/bin/python reveal.py check                      # Gate 2
+                              .venv/bin/python transitions.py check
 ```
 Fix all failures before claiming success.
 
@@ -240,8 +254,10 @@ positive control AND its precondition pinned.
   claim (the score was rebuilt once because synthetic data misled it, decision 21).
 
 ### Exercise the real surface (gates alone ≠ verified)
-For any new pipeline, export or page behaviour: drive it with `reveal.py align` on a catalogued pair
-(or, if none is catalogued, say `verification_blocked` and put the fixture request in the handover);
+For any new pipeline, export or page behaviour: drive it with `reveal.py align` on a catalogued pair,
+or `transitions.py pair` for a transition (decode the mp4, quote `report.json`, look at `strip.jpg`)
+(if no pair is catalogued in `fixtures/MANIFEST.md`, say `verification_blocked` and put the fixture
+request in the handover);
 **run it twice when state is involved** (run 2 must reproduce); capture `metrics.json` numbers in
 the report and the DECISIONS line. A video change additionally decodes the mp4 (`cv2.VideoCapture`)
 and asserts the style's observable. Answer **every** surface the behaviour lives on (CLI flag +
@@ -266,10 +282,13 @@ at a time.
    advance "Next step" in `mem:core`. **Work discovered mid-session goes here, not into this
    session.**
 4. **Doc-sync** — a shipped behaviour change that contradicts `HANDOFF.md` gets a dated amendment
-   row there the SAME session (the `82 checks` count, the coverage paragraph §7, a new decision
-   row in §6 when a §6 alternative was reopened); the plan slice is marked; `conventions/contracts.md`
-   gains the new surface. **Volatile counts live ONCE** (check count → `HANDOFF.md §7`; everything
-   else says "as of <date>"). **Resolve stale pending-tags** after a ship.
+   row in its §11 the SAME session (the `82 checks` count, the coverage paragraph §7, a new decision
+   row in §6 when a §6 alternative was reopened); a transitions change updates `TRANSITIONS.md`
+   §5 (check count and coverage) and §6 (numbers); the plan slice is marked; `conventions/contracts.md`
+   gains the new surface. **Volatile counts live ONCE** (Reveal check count → `HANDOFF.md §7`;
+   transitions check count → `TRANSITIONS.md §5`; everything else says "as of <date>"). **Resolve
+   stale pending-tags** after a ship. Then commit on `main` and `git push origin main` (owner ruling
+   2026-09-13: direct to main, no branches) — never with a red gate.
 5. **Phase-boundary sweep** (era close only) — 3 parallel tracks: (a) `HANDOFF.md` + plan,
    (b) README + conventions, (c) memories — each armed with SAME-DAY ground-truth anchors. Then
    propose a DECISIONS compaction if the active era is large, and run the harness retrospection
@@ -315,3 +334,7 @@ remain the OUTER loop; the engine's gate complements them, never replaces them.
 | Changing behaviour with no stated way to undo it | `[revert: …]` in the DECISIONS line, or an explicit owner yes |
 | Killing the owner's browser, IDE, or other servers | Kill only the `serve` you started (match its cwd) |
 | Executing work you discovered mid-session | It goes into the handover; this session finishes its agenda |
+| A new preset or style judged by "looks right" in the strip | A decoded-mp4 observable in `transitions_harness.py` section H (seam monotone, endpoints within codec loss, no black frame) |
+| A performance change that alters frames silently | Hash the harness pair's frames before and after; byte-identical, or the DECISIONS line says what moved |
+| A model or device (MPS/MLX) added to `transitions.py` without an offline proof and a CPU-equivalence check | Warmup + manifest + refuse-to-download (decisions 24–27) and a harness check comparing device output to the CPU field on a fixture |
+| Presenting or saving dev-facing prose without the `no-slop` pass | `.claude/rules/prose.md`: load the skill, run the pass, then save |

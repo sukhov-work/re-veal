@@ -13,7 +13,8 @@ __pycache__/
 # agent artefacts — never let generated bulk reach a commit
 /verify-shots/
 /scratch/
-/fixtures/
+/fixtures/*
+!/fixtures/MANIFEST.md
 /benchmarks/runs/
 *.bak-*
 .env.bak*

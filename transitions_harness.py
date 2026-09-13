@@ -1,0 +1,373 @@
+#!/usr/bin/env python3
+"""
+Harness for transitions.py. Same working method as harness.py: numbered
+assertions, synthetic inputs with known ground truth, a real mp4 decoded
+back with cv2.VideoCapture. Run: .venv/bin/python transitions_harness.py
+
+Numbering: this file has its OWN check space (1..N), independent of
+harness.py's 1-82. Numbers here are never reused either; a new check takes
+the next number in the lettered section it belongs to.
+
+Independent of harness.py by contract: transitions.py never imports
+reveal, reveal.py never imports transitions (checks 1-2), and nothing in
+transitions.py can reach the network (check 3).
+"""
+
+import ast
+import contextlib
+import hashlib
+import io
+import json
+import logging
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import cv2
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+import transitions as T  # noqa: E402
+
+PASS = 0
+FAIL = 0
+
+
+def check(n, desc, cond):
+    global PASS, FAIL
+    ok = bool(cond)
+    PASS += ok
+    FAIL += (not ok)
+    print(f"  [{'ok' if ok else 'XX'}] {n:>3} {desc}")
+    return ok
+
+
+def textured(seed, w=640, h=400):
+    """Blurred noise + discs + a grid: SIFT-friendly, DIS-friendly."""
+    r = np.random.default_rng(seed)
+    img = cv2.GaussianBlur((r.random((h, w, 3)) * 255).astype(np.uint8),
+                           (0, 0), 5)
+    for _ in range(120):
+        cv2.circle(img, (int(r.integers(0, w)), int(r.integers(0, h))),
+                   int(r.integers(5, 30)),
+                   tuple(int(v) for v in r.integers(0, 255, 3)), -1)
+    for x in range(0, w, 80):
+        cv2.line(img, (x, 0), (x, h), (240, 240, 240), 1)
+    return img
+
+
+def mad(x, y):
+    return float(np.abs(x.astype(np.float32) - y.astype(np.float32)).mean())
+
+
+def affine_pair(seed=1, w=640, h=400, expose=True, patch=True):
+    """(A, B, M): B = A under the 2x3 affine M (A pixel a lands at M a),
+    plus an exposure change and a changed-content patch like reveal's
+    harness pair, so the color path and the morph both have work to do."""
+    A = textured(seed, w, h)
+    M = cv2.getRotationMatrix2D((w / 2, h / 2), 3.0, 1.06)
+    M[0, 2] += 12
+    B = cv2.warpAffine(A, M, (w, h), borderMode=cv2.BORDER_REFLECT)
+    if expose:
+        B = np.clip(B.astype(np.float32) * 1.25 + 12, 0, 255).astype(np.uint8)
+    if patch:
+        cv2.rectangle(B, (int(w * .35), int(h * .30)), (int(w * .65), int(h * .70)),
+                      (200, 40, 160), -1)
+    return A, B, M
+
+
+def frames_hash(frames):
+    hsh = hashlib.sha256()
+    for f in frames:
+        hsh.update(np.ascontiguousarray(f).tobytes())
+    return hsh.hexdigest()
+
+
+def decode_all(path):
+    cap = cv2.VideoCapture(str(path))
+    meta = {"fps": cap.get(cv2.CAP_PROP_FPS),
+            "n": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+            "w": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            "h": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}
+    frames = []
+    while True:
+        ok, f = cap.read()
+        if not ok:
+            break
+        frames.append(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
+    cap.release()
+    return meta, frames
+
+
+def _imports(path):
+    tree = ast.parse(Path(path).read_text())
+    names = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names += [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.append(node.module)
+    return names
+
+
+def run_cli(argv):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        rc = T.main(argv)
+    return rc, out.getvalue(), err.getvalue()
+
+
+TMP = Path(tempfile.mkdtemp(prefix="transitions-harness-"))
+inner = (slice(40, 400 - 40), slice(40, 640 - 40))
+
+# ===========================================================================
+print("== A. isolation and the offline contract ==")
+names_t = _imports(ROOT / "transitions.py")
+names_r = _imports(ROOT / "reveal.py")
+check(1, "transitions.py never imports reveal (AST-level)",
+      not any(n == "reveal" or n.startswith("reveal.") for n in names_t))
+check(2, "reveal.py never imports transitions (AST-level)",
+      not any(n == "transitions" or n.startswith("transitions.")
+              for n in names_r))
+NET = ("socket", "urllib", "http", "ssl", "requests", "torch", "kornia",
+       "torchvision", "huggingface_hub")
+leaks = sorted({n for n in names_t
+                if n.split(".")[0] in NET})
+check(3, f"transitions.py imports nothing that can reach the network or "
+         f"load weights ({', '.join(NET[:4])}, ..., torch, kornia)"
+         + (f" — LEAK: {leaks}" if leaks else ""), not leaks)
+
+# ===========================================================================
+print("== B. grammar ==")
+s = T.spec_from("morph", seconds=0.5, fps=24)
+check(4, "n_frames = round(seconds * fps) (0.5 s @ 24 -> 12)", s.n_frames() == 12)
+mono = True
+for cv in T.CURVES:
+    for wa in (1.0, 0.6, 0.0):
+        sp = T.spec_from("morph", seconds=0.5, fps=24, warp_curve=cv, warp_amount=wa)
+        tw = [sp.progress(i)[0] for i in range(sp.n_frames())]
+        mono &= (abs(tw[0]) < 1e-9 and abs(tw[-1] - 1) < 1e-9
+                 and all(b >= a - 1e-9 for a, b in zip(tw[:-1], tw[1:])))
+check(5, f"warp progress is monotone 0 -> 1 for all {len(T.CURVES)} curves x 3 warp amounts", mono)
+check(6, "seconds clamp to [0.1, 10]",
+      T.spec_from("morph", seconds=99).seconds == 10.0
+      and T.spec_from("morph", seconds=0.01).seconds == 0.1)
+bad = 0
+for kw in ({"preset": "nope"}, {"style": "nope"}, {"portal": "nope"},
+           {"force_class": "C"}):
+    try:
+        T.spec_from(kw.pop("preset", "morph"), **kw)
+    except T.TransitionError:
+        bad += 1
+    except Exception:
+        pass
+check(7, "unknown preset / style / portal / class -> TransitionError, never a crash", bad == 4)
+
+# ===========================================================================
+print("== C. warp ==")
+A = textured(1)
+h, w = A.shape[:2]
+Tf = np.zeros((h, w, 2), np.float32)
+Tf[..., 0], Tf[..., 1] = 17.0, -9.0
+out, cov = T.forward_splat(A, Tf, 1.0)
+ref = cv2.warpAffine(A, np.float32([[1, 0, 17], [0, 1, -9]]), (w, h),
+                     borderMode=cv2.BORDER_REFLECT)
+check(8, f"translation field reproduces warpAffine ({mad(out[inner], ref[inner]):.2f} levels < 0.5)",
+      mad(out[inner], ref[inner]) < 0.5)
+_, cov0 = T.forward_splat(A, Tf, 0.0, np.full((h, w), 0.6, np.float32))
+check(9, "importance weighting does not fake holes (coverage ~1 at t=0)",
+      (cov0 > 0.5).mean() > 0.99)
+id0, _ = T.forward_splat(A, Tf, 0.0)
+check(10, f"t=0 splat is the identity ({mad(id0[inner], A[inner]):.3f} levels)",
+      mad(id0[inner], A[inner]) < 0.01)
+check(11, "to_u8 ROUNDS (1.4 -> 1, 1.6 -> 2, 254.7 -> 255), never truncates",
+      T.to_u8(np.float32([1.4, 1.6, 254.7, -3.0])).tolist() == [1, 2, 255, 0])
+
+# ===========================================================================
+print("== D. correspondence ==")
+A, B, M = affine_pair(expose=False, patch=False)
+corr = T.dense_displacement(A, B)
+check(12, f"related pair routed to class A ({corr['method']}, "
+          f"{corr['diag']['sparse_inliers']} inliers >= {T.TCFG['min_inliers']})",
+      corr["cls"] == "A" and corr["diag"]["sparse_inliers"] >= T.TCFG["min_inliers"])
+gx, gy = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+tx = M[0, 0] * gx + M[0, 1] * gy + M[0, 2]
+ty = M[1, 0] * gx + M[1, 1] * gy + M[1, 2]
+gt = np.stack([tx - gx, ty - gy], -1)
+err = np.linalg.norm(corr["dAB"] - gt, axis=2)[inner]
+check(13, f"dense field matches the ground-truth affine (median err {np.median(err):.2f} px < 1.5)",
+      np.median(err) < 1.5)
+U = textured(9)[::-1, ::-1].copy()
+_logbuf = io.StringIO()
+_hd = logging.StreamHandler(_logbuf)
+T.log.addHandler(_hd)
+T.log.setLevel(logging.INFO)
+corr_u = T.dense_displacement(A, U)
+T.log.removeHandler(_hd)
+check(14, f"unrelated pair routed to class B ({corr_u['method']}) AND says so "
+          f"on the log (degrade path is visible)",
+      corr_u["cls"] == "B" and "class B" in _logbuf.getvalue())
+p = np.float32([[100, 100], [500, 100], [500, 300], [100, 300], [300, 200]])
+d0 = T.mls_affine(p, p, h, w)
+d1 = T.mls_affine(p, p + [25, -10], h, w)
+check(15, "MLS: identity anchors -> zero field; translated anchors -> that translation",
+      np.abs(d0).max() < 1e-3 and np.abs(d1[inner] - [25, -10]).max() < 0.5)
+corr_b = T.dense_displacement(A, U, anchors=(p, p + [25, -10]), force_class="B")
+check(16, "class B honours user anchors (MLS)", corr_b["method"] == "mls-anchors")
+corr_f = T.dense_displacement(A, U, force_class="A")
+check(17, f"--class A overrides routing on an unrelated pair ({corr_f['method']})",
+      corr_f["cls"] == "A" and corr_f["method"].startswith("dis"))
+try:
+    T.dense_displacement(A, A[:-2])
+    _mis = False
+except T.TransitionError:
+    _mis = True
+check(18, "mismatched canvases raise TransitionError", _mis)
+
+# ===========================================================================
+print("== E. color path ==")
+A, B, M = affine_pair()
+sA, sB = T.lab_stats(A), T.lab_stats(B)
+Ai, Bi = T.color_pair_at(A, B, sA, sB, 0.5, 1.0)
+check(19, "color path pulls both endpoints toward the midpoint statistic",
+      abs(T.lab_stats(Ai)[0, 0] - T.lab_stats(Bi)[0, 0]) < abs(sA[0, 0] - sB[0, 0]) + 1e-6)
+_same = np.abs(T.apply_stats(A, sA, sA, 1.0).astype(int) - A.astype(int))
+check(20, "strength 0 is a no-op; identical statistics give the input back "
+          f"(mean {_same.mean():.4f} < 0.02 levels, max {_same.max()} <= 1; "
+          f"truncating casts gave 0.92)",
+      np.array_equal(T.apply_stats(A, sA, sB, 0.0), A)
+      and _same.mean() < 0.02 and _same.max() <= 1)
+
+# ===========================================================================
+print("== F. render ==")
+all_ok = True
+for preset in T.PRESETS:
+    fr, rep = T.render_frames(A, B, T.spec_from(preset, seconds=0.4, fps=20))
+    q = T.assess(fr, A, B)
+    ok = (len(fr) == 8 and q["endpoint"]["first_vs_A"] == 0
+          and q["endpoint"]["last_vs_B"] == 0
+          and q["flicker"]["edge_ratio"] < 1.5 and q["flicker"]["max"] < 0.12)
+    all_ok &= ok
+    print(f"        {preset:<13} edge_ratio {q['flicker']['edge_ratio']:.2f}  "
+          f"max step {q['flicker']['max']*255:.1f} levels  {'ok' if ok else 'XX'}")
+check(21, f"every preset ({len(T.PRESETS)}): 8 frames, byte-exact endpoints, "
+          f"edge_ratio < 1.5, no step > 0.12", all_ok)
+approach = True
+for preset in T.PRESETS:
+    frp, _ = T.render_frames(A, B, T.spec_from(preset, seconds=0.4, fps=20))
+    seq = [mad(f, B) for f in frp]
+    approach &= (all(b <= a + 0.2 for a, b in zip(seq[:-1], seq[1:]))
+                 and mad(frp[-2], B) < mad(frp[-2], A))
+check(22, "every preset approaches B monotonically (MAD to B non-increasing frame "
+          "to frame) and its penultimate frame is nearer B than A", approach)
+fr, rep = T.render_frames(A, B, T.spec_from("morph", seconds=0.4, fps=20))
+fr2, _ = T.render_frames(A, B, T.spec_from("morph", seconds=0.4, fps=20))
+check(23, "rendering is deterministic (two runs, identical bytes)",
+      frames_hash(fr) == frames_hash(fr2))
+frd, _ = T.render_frames(A, B, T.spec_from("dissolve", seconds=1.0, fps=30, color_strength=0.0))
+g = [T._g(f) for f in frd]
+d = [float(np.abs(a - b).mean()) * 255 for a, b in zip(g[:-1], g[1:])]
+fl = T.flicker(frd)
+check(24, f"no manufactured endpoint step: clean dissolve, last step {d[-1]:.2f} levels "
+          f"< 0.1, edge_ratio {fl['edge_ratio']:.2f} < 0.2 (truncating casts gave 0.79 / 1.17)",
+      d[-1] < 0.1 and fl["edge_ratio"] < 0.2)
+
+# ===========================================================================
+print("== G. quality basket ==")
+cut = [A] + [B] * 9
+lin = [T.to_u8(A.astype(np.float32) * (1 - t) + B.astype(np.float32) * t)
+       for t in np.linspace(0, 1, 10)]
+er_cut, er_lin = T.flicker(cut)["edge_ratio"], T.flicker(lin)["edge_ratio"]
+check(25, f"hidden-cut detector: a cut hidden at the start scores {er_cut:.0f} (> 10), "
+          f"a linear dissolve {er_lin:.2f} (< 1.5)", er_cut > 10 and er_lin < 1.5)
+pan = [cv2.warpAffine(A, np.float32([[1, 0, 3 * i], [0, 1, 0]]), (w, h),
+                      borderMode=cv2.BORDER_REFLECT) for i in range(6)]
+rnd = [textured(s) for s in range(6)]
+we_pan, we_rnd = T.warping_error(pan), T.warping_error(rnd)
+check(26, f"warping error separates a coherent pan ({we_pan:.3f} < 0.03) from "
+          f"unrelated frames ({we_rnd:.3f} > 0.1)", we_pan < 0.03 and we_rnd > 0.1)
+
+# ===========================================================================
+print("== H. CLI + the real mp4 ==")
+pa, pb = TMP / "A.png", TMP / "B.png"
+cv2.imwrite(str(pa), cv2.cvtColor(A, cv2.COLOR_RGB2BGR))
+cv2.imwrite(str(pb), cv2.cvtColor(B, cv2.COLOR_RGB2BGR))
+out1 = TMP / "morph"
+rc, so, se = run_cli(["pair", str(pa), str(pb), "--out", str(out1),
+                      "--seconds", "1.0", "--preset", "morph"])
+rep = json.loads((out1 / "report.json").read_text()) if (out1 / "report.json").exists() else {}
+check(27, "pair: exit 0; transition.mp4 + strip.jpg + report.json written; "
+          f"report n_frames = 30 (got {rep.get('n_frames')})",
+      rc == 0 and (out1 / "transition.mp4").exists() and (out1 / "strip.jpg").exists()
+      and rep.get("n_frames") == 30)
+meta, dec = decode_all(out1 / "transition.mp4")
+check(28, f"mp4 decodes: {meta['w']}x{meta['h']} @ {meta['fps']:.0f} fps, "
+          f"{meta['n']} indexed / {len(dec)} decoded frames == 30",
+      meta["w"] == w and meta["h"] == h and abs(meta["fps"] - 30) < 0.5
+      and meta["n"] == 30 and len(dec) == 30)
+_gap = mad(A, B)
+ok_end = (len(dec) == 30 and mad(dec[0], A) < 6.0 and mad(dec[-1], B) < 6.0
+          and mad(dec[0], A) < 0.2 * _gap and mad(dec[-1], B) < 0.2 * _gap)
+check(29, "first decoded frame is A and the last is B "
+          f"({mad(dec[0], A) if dec else 99:.2f} / {mad(dec[-1], B) if dec else 99:.2f} levels: "
+          f"< 6 and < 20% of the A-B gap {_gap:.1f}; yuv420p alone costs ~3.5)",
+      ok_end)
+check(30, "no all-black frame in the mp4",
+      len(dec) == 30 and min(float(f.mean()) for f in dec) > 5.0)
+check(31, "report quality basket: byte-exact endpoints on the proxy and edge_ratio < 1.0 "
+          f"(got {rep.get('quality', {}).get('flicker', {}).get('edge_ratio')})",
+      rep.get("quality", {}).get("endpoint", {}).get("first_vs_A") == 0
+      and rep["quality"]["endpoint"]["last_vs_B"] == 0
+      and rep["quality"]["flicker"]["edge_ratio"] < 1.0)
+
+out2 = TMP / "wipe"
+rc, so, se = run_cli(["pair", str(pa), str(pb), "--out", str(out2),
+                      "--seconds", "1.0", "--preset", "wipe", "--color", "0"])
+_, decw = decode_all(out2 / "transition.mp4")
+seams = []
+for f in decw:
+    ca = np.abs(f.astype(np.float32) - A).mean(axis=(0, 2))
+    cb = np.abs(f.astype(np.float32) - B).mean(axis=(0, 2))
+    seams.append(int((cb < ca).sum()))            # columns already showing B
+check(32, f"wipe: the seam sweeps left -> right monotonically "
+          f"(B-columns {seams[0] if seams else '-'} -> {seams[-1] if seams else '-'} of {w})",
+      rc == 0 and len(seams) == 30 and seams[0] < 8 and seams[-1] > w - 8
+      and all(b >= a - 2 for a, b in zip(seams[:-1], seams[1:])))
+
+out3 = TMP / "morph2"
+rc, _, _ = run_cli(["pair", str(pa), str(pb), "--out", str(out3),
+                    "--seconds", "1.0", "--preset", "morph"])
+_, dec2 = decode_all(out3 / "transition.mp4")
+check(33, "two CLI runs decode to identical frames (end-to-end deterministic)",
+      rc == 0 and len(dec2) == len(dec) and frames_hash(dec) == frames_hash(dec2))
+
+rc, so, se = run_cli(["pair", str(TMP / "missing.jpg"), str(pb), "--out", str(TMP / "x")])
+check(34, "missing input -> exit 2, 'FAILED:' on stderr, no traceback",
+      rc == 2 and se.startswith("FAILED:") and "Traceback" not in se)
+rc, so, _ = run_cli(["pair", str(pa), str(pb), "--out", str(TMP / "tiny"),
+                     "--seconds", "0.01", "--fps", "30"])
+tiny = json.loads((TMP / "tiny" / "report.json").read_text())
+check(35, f"--seconds below the floor clamps to 0.1 s (3 frames; got {tiny['n_frames']})",
+      rc == 0 and tiny["spec"]["seconds"] == 0.1 and tiny["n_frames"] == 3)
+rc, so, _ = run_cli(["check"])
+check(36, "check exits 0 with every row OK", rc == 0 and "!!" not in so)
+
+# ===========================================================================
+print("== I. identity fence (the tool is called transitions; owner ruling 2026-09-13) ==")
+_src = (ROOT / "transitions.py").read_text()
+check(37, "persisted identifiers are pinned: module transitions.py, outputs transition.mp4 / "
+          "strip.jpg / report.json, logger 'transitions', argparse prog 'transitions.py'",
+      (ROOT / "transitions.py").exists() and T.log.name == "transitions"
+      and 'prog="transitions.py"' in _src
+      and all(n in _src for n in ('"transition.mp4"', '"strip.jpg"', '"report.json"'))
+      and rep.get("outputs") == ["transition.mp4", "strip.jpg", "report.json"])
+check(38, "the research codename never leaks into the shipped tool "
+          "(the word 'impossible' does not occur in transitions.py)",
+      "impossible" not in _src.lower())
+
+# ===========================================================================
+print(f"\n{PASS} passed, {FAIL} failed")
+shutil.rmtree(TMP, ignore_errors=True)
+sys.exit(1 if FAIL else 0)

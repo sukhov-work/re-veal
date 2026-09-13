@@ -11,7 +11,7 @@
       "Read(**)",
       "Edit(reveal.py)", "Write(reveal.py)",
       "Edit(harness.py)", "Write(harness.py)",
-      "Edit(README.md)", "Edit(HANDOFF.md)", "Edit(VERSION)",
+      "Edit(README.md)", "Edit(VERSION)",
       "Edit(.claude/**)", "Write(.claude/**)",
       "Edit(.serena/**)", "Write(.serena/**)",
       "mcp__serena__*"

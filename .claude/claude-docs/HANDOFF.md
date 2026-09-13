@@ -479,7 +479,7 @@ before/after photo pair has been through it yet.
 source .venv/bin/activate
 python reveal.py check            # dependency matrix
 python reveal.py align B.jpg A.jpg --out out/ --video --aspect 9:16
-python harness.py                 # 51 assertions, needs the venv deps
+python harness.py                 # Gate 1; the check count lives in section 7
 ```
 
 Working conventions for future agents: identical to the organizer's
@@ -487,3 +487,11 @@ HANDOFF.md section 13 (anchored edits with MISS detection, py_compile,
 harness before shipping behavior, VERSION bump minor/patch, zip + loose
 files every shipped turn, web-verify versioned facts, evidence labels,
 anti-slop prose, scope discipline).
+
+## 11. Amendments (dated rows; the sections above are the founding text and are not rewritten)
+
+| Date | Amendment | Where recorded |
+|---|---|---|
+| 2026-09-13 | This file moved from the repo root to `.claude/claude-docs/HANDOFF.md` (owner: "migrate and adjust as needed"). Citations of the form `HANDOFF.md §N` keep the short name. Section 10's runbook said "51 assertions" while section 7 said 82; the runbook now points at section 7 (backlog T7 closed). | DECISIONS 2026-09-13 |
+| 2026-09-13 | Invariant 5's ban on dense or masked flow applied to pixels is scoped to the ALIGNMENT output (`after_aligned.jpg`, the slider, the metrics). A second tool, `transitions.py` (design of record `TRANSITIONS.md`), animates the change between two photos and uses dense fields as the transition's motion. Reveal's pixels are untouched: neither module imports the other. Owner: "dense-flow decision - ok". | DECISIONS 2026-09-13 |
+| 2026-09-13 | Decision 9 (no MPS) stands for Reveal. For the transitions tool the device for model stages (dense matcher, generative) is decided per slice by measurement against a CPU run on a fixture; the deterministic tier stays on the CPU. Owner: "lets try to speed up all stages ( at reasonable degree ) … without compromising quality". | DECISIONS 2026-09-13; EXPLORATION_PLAN §TR |

@@ -5,8 +5,23 @@
 .venv/bin/python -m py_compile reveal.py harness.py       # Gate 0, seconds
 .venv/bin/python harness.py                                # Gate 1, 82 checks, ~63 s
 .venv/bin/python reveal.py check                           # Gate 2, ~19 s
+.venv/bin/python transitions_harness.py                    # Gate 1b, ~5 s (transitions.py; count in TRANSITIONS.md §5)
+.venv/bin/python transitions.py check
 ```
-Baseline 2026-09-13: 82/82 · all OK. Exit code 1 from the harness = at least one `[XX]` line.
+Baseline 2026-09-13: 82/82 · all OK · Gate 1b all green (38 that day). Exit code 1 from either
+harness = at least one `[XX]` line.
+Gate 0 compiles all four files: `reveal.py harness.py transitions.py transitions_harness.py`.
+
+## Transitions drive (the real surface of `transitions.py`)
+```
+.venv/bin/python reveal.py align <BEFORE> <AFTER> --out /tmp/reveal-out
+.venv/bin/python transitions.py pair /tmp/reveal-out/before.jpg /tmp/reveal-out/after_aligned.jpg \
+    --out /tmp/reveal-out/tr --seconds 1.5 --preset flow-dissolve
+cat /tmp/reveal-out/tr/report.json      # class · method · sparse_inliers · quality.flicker.edge_ratio · endpoint
+open /tmp/reveal-out/tr/strip.jpg       # eight tiles: the eye check
+```
+Quote `class`, `method`, `median_disp_px`, `edge_ratio` and `render_s` in the DECISIONS line. Run it
+twice: `report.json` and the decoded frames must be identical (harness 33 pins this on synthetic input).
 
 ## Headless drive of the real pipeline (the `real-pair-VERIFIED` recipe)
 ```
@@ -35,11 +50,12 @@ Then open `http://127.0.0.1:8400` for the visual check; kill only the server you
 | `_reveal/jobs` growing | past sessions' job dirs | `scripts/clean.sh --jobs` |
 
 ## Fixtures (owner-owned catalogue — rule: the inputs are part of the contract)
-`fixtures/` is gitignored (photos are large and personal). Its `MANIFEST.md`, when it exists, is
-the ONE catalogue: `id · before path · after path · mode · what it exercises · expected metrics
-(dated)`. Owner-blocked on 2026-09-13: no real pair is in the repo; the graffiti-box pair from
-`HANDOFF.md §9.1` is the first entry once the owner names its location. A harness or benchmark may
-not invent its own real inputs; synthetic pairs stay in `harness.py`.
+Location decided 2026-09-13 (owner: "gitignored fixtures INSIDE project"): `fixtures/` at the repo
+root; `.gitignore` has `/fixtures/*` and `!/fixtures/MANIFEST.md`, so photos stay local and the
+catalogue is tracked. `fixtures/MANIFEST.md` is the ONE catalogue: `id · before · after · mode ·
+class · exercises · expected (dated)`. As of 2026-09-13 it has no row: the graffiti-box pair from
+`HANDOFF.md §9.1` is the first entry once the owner copies it in. A harness or benchmark may not
+invent its own real inputs; synthetic pairs stay in the harnesses.
 
 ## Concurrency classes
 Gate 0 and Gate 2 may run alongside anything. Gate 1 binds a port and times the learned matcher —

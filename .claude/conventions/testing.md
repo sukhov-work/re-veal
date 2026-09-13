@@ -20,11 +20,22 @@ present).
   must ALIGN; a new mode gets its own three: one strict refuses / new aligns, one genuinely
   perturbed pair, one that must still pass in strict.
 
+## The second harness: `transitions_harness.py` (Gate 1b)
+Same working method, its OWN check space (1–38 as of 2026-09-13, never reused either), ~5 s, no
+port bound, may run alongside anything. Coverage paragraph and the paid mutation live in
+`TRANSITIONS.md §5` (the volatile count lives there). Its pair generator (`affine_pair`) carries
+the same exposure change and changed patch as `make_pair()` so the color path and the morph both
+have work to do; its ground truth is the 2×3 affine that made B. Real mp4s are decoded with
+`cv2.VideoCapture` frame by frame (count, size, fps, endpoints within yuv420p loss, seam
+monotonicity, determinism across two CLI runs) — the pattern slice H3 will reuse for Reveal's export.
+
 ## Can this check FAIL? (mandatory for every new assertion)
 Name the mutation that turns it red, and apply it once for one of them per slice. Refused shapes:
 an absolute the current value already satisfies · a capture that cannot disagree with itself ·
 a no-op that reads as success. Example from this repo: check 73 ("score no longer depends on raw
-SSIM") is red if a SSIM term is added back — that is its mutation.
+SSIM") is red if a SSIM term is added back — that is its mutation. In the transitions harness the
+paid mutation (2026-09-13) was making `to_u8` truncate instead of round: checks 11, 20, 21, 24 went
+red, reproducing the half-level endpoint step the fix removed.
 
 ## Measurement discipline for algorithm work
 - Numbers need DISTINCT inputs and a stated method; the peripheral-SSIM ceiling is scene-dependent

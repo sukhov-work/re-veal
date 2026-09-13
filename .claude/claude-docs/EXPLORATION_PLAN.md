@@ -1,8 +1,18 @@
-# Reveal — Exploration plan (DRAFT 2026-09-13 — the owner ranks; nothing below is decided)
+# Reveal + Transitions — Exploration plan (RANKED by the owner on 2026-09-13)
 
-Status: **DRAFT.** Authority: `HANDOFF.md` wins; a slice that contradicts a `§6` decision needs a new
-dated `DECISIONS.md` line before it starts. This file is iterated in place (dated amendment rows at
-the bottom), never forked.
+Status: **RANKED.** Authority: `HANDOFF.md` and `TRANSITIONS.md` (both under `.claude/claude-docs/`)
+win; a slice that contradicts a recorded decision needs a new dated `DECISIONS.md` line before it
+starts. This file is iterated in place (dated amendment rows at the bottom), never forked.
+
+## Rank (owner, 2026-09-13: "speed up phases so we have results including potential models quicker";
+## "i want to get to dense matcher upgrade and generative tier soon enough"; ordering within that: agent)
+1. **TR7** speed pass on the deterministic tier (measured hotspots below; nothing to wait for)
+2. **TR2** real pairs — starts the day the first row lands in `fixtures/MANIFEST.md`; runs beside TR7
+3. **TR5** dense matcher upgrade (RoMa) — offline warmup first, CPU measured, then the device question
+4. **TR6** generative tier — measure one backend on this Mac before any code
+5. **TR3** Reveal → transitions seam · **TR4** clips and sequences (PyAV decision T8)
+6. **H1 · H3 · H2** Reveal harness slices · **E1 · E2** Reveal algorithm work — after the above or
+   when a Reveal defect makes them urgent
 
 ## Owner's stated directions (verbatim, 2026-09-13)
 > "i want to keep exploring additional capabilities there ( e.g use and improve algorithms for
@@ -26,17 +36,38 @@ exploration itself (E-slices), each in the experimental lane (`AGENTS.md §Rever
 | **E2** algorithm improvements | a candidate estimator or refinement competing inside `estimate_alignment` (e.g. a second learned matcher, a better ECC seed, residual-field order/regularisation) | competes as a candidate; arbitrated on peripheral SSIM (decision 23) | ranking by inlier count; the score formula (decision 21); masked/dense flow (18, 20) | the H2 sheet before/after on every catalogued pair — no sheet, no claim |
 | **E3** video transitions | new `--style` values beyond `wipe`/`fade` (e.g. radial wipe, split/blinds, zoom-reveal, morph-through-residual) + easing/hold parameters | new style branch in `export_video`; `wipe` default untouched | the frames-piped renderer (decision 6 rules out the xfade filtergraph) | H3 checks for the style's observable, on a synthetic pair, before the page control exists |
 
-## Open decisions (the owner answers; each becomes a DECISIONS line)
-1. **Rank H1–H3 and E1–E3.** Proposed order: H1 → H3 → (T4 lands) H2 → E3 → E1 → E2 — cheapest
-   measurability first, then the direction whose gate (H3) exists.
-2. **Fixture location (T4):** where do the real pairs live (the graffiti-box pair of `§9.1` first)?
-   Proposed: a folder outside the repo, symlinked as `fixtures/` (gitignored), with `MANIFEST.md`.
-3. **Lint gate (T6):** none (status quo) or `ruff` added to the venv as Gate 3?
-4. **Push policy:** direct to `origin main` at Phase 4 (proposed for a solo repo), or branches + PRs?
-5. **`HANDOFF.md` role:** stays the design of record at the root, amended with dated rows (proposed),
-   or migrates under `.claude/claude-docs/`?
+## TR — the transitions engine (added 2026-09-13; supersedes E3's "new `--style` values" as the home of transition work)
+Owner order (verbatim, 2026-09-13): "we need to start building transitions feature/engine, alogside
+existing logic ( do not alter and regress it )". Reference: `.claude/claude-docs/transitions-research/`
+(the Impossible v0.1.0 artifact; its `RESEARCH-PLAN.md` E-numbers are cited below). Design of record:
+`TRANSITIONS.md`. Every slice: zero diff to `reveal.py` unless the slice says otherwise.
+| Slice | Goal (acceptance) | Seam | Revert | Gate / check | Size | Depends on | State |
+|---|---|---|---|---|---|---|---|
+| **TR1** deterministic core (rank: done) | `transitions.py pair A B --out DIR` renders morph / dissolve / flow-dissolve / snap-morph / iris / wipe / luma to mp4 + strip + report; harness with isolation, ground-truth field, byte-exact endpoints, decoded-mp4 checks | new files `transitions.py`, `transitions_harness.py` | `[revert: delete both files + the doc rows]` | Gate 1b 36/36; paid mutation (truncating casts → 4 red) | L | — | **DONE 2026-09-13** (synthetic only) |
+| **TR2** real pairs (research E2; rank 2) | ten catalogued pairs × {morph, flow-dissolve, snap-morph} × {1 s, 3 s}: one sheet of `report.json` rows + strips; class routing right on every related pair; `edge_ratio` ≤ 1.5 on the smooth presets; owner rates ≥ 6/10 "usable as-is" | a bench script over `fixtures/MANIFEST.md` (shares H2's catalogue) | `[revert: commit]` | the sheet reproduces on a second run | M | **T4** fixture location (owner) | OPEN |
+| **TR3** Reveal seam (rank 5) | `reveal.py align … --video --style morph` (and the page) renders through `transitions` when importable, else degrades to `wipe` with a visible INFO line | `export_video` gains a lazy `import transitions` branch; `wipe`/`fade` untouched | new `--style` value (experimental lane) | H3-style decoded-mp4 checks in `harness.py` section R; 82 → N/N | M | TR2 verdict; owner yes on the one-way import (backlog T10) | OPEN |
+| **TR4** clips and sequences (research E3, E8; rank 5) | `clips a.mov b.mov --cut-a --cut-b`, `sequence spec.json`, PTS-exact cuts, frame-exact stitch | new sections in `transitions.py`; video decode dependency | `[revert: commit]` | frame accounting vs `ffprobe -count_frames` | L | **T8** PyAV decision (duplicate `libavdevice` warning beside cv2, measured) | OPEN |
+| **TR5** dense matcher upgrade (research E4; rank 3) | RoMa as the class A field when installed, behind `transitions.py warmup` with manifest + refuse-to-download; measured on the CPU first, then on MPS with a CPU-equivalence check on a fixture (median field difference stated in px); adopted when it wins on ≥ 5 of 7 related pairs by warping error and the owner's eye | correspondence branch | new method value; default path untouched | harness: offline proof as Reveal 80–82; device equivalence check | L | T11; a `fixtures/` row for the equivalence check | OPEN |
+| **TR6** generative tier (research E14–E17) | measured s/frame and seed reproducibility for one backend on this Mac BEFORE any code lands; the device (MPS via torch, or MLX) is chosen by that measurement, with a CPU-equivalence check where a CPU run is feasible | — (research first) | — | the numbers in `TRANSITIONS.md §6` | XL | owner opt-in per backend (license, size) | OPEN — rank 4 |
+| **TR7** speed pass, deterministic tier | per-frame cost at 1080p from 0.160 s toward ≤ 0.10 s and at 4K from 0.69 s toward ≤ 0.45 s, frames byte-identical (hash before/after on the harness pair) or the DECISIONS line says what moved and by how many levels. Profile 2026-09-13 (morph, M3 Pro, per frame at 1080p / 4K): color path 0.055 / 0.243 s (34 %), hole fill + mix + cast 0.049 / 0.213 s (30 %), two forward splats 0.040 / 0.159 s (25 %), two backward warps 0.017 / 0.071 s (10 %); correspondence once 0.36 / 1.51 s; encode 0.037 / 0.064 s per frame. Levers in order: Lab of A and B converted once per transition instead of per frame; in-place hole fill; `cv2.blendLinear` for the per-pixel mix; skip the backward-warp fallback when coverage has no hole; splat both endpoints in one scatter | `transitions.py` Color / Warp / Render sections | `[revert: commit]`; output unchanged by contract | Gate 1b + the frame hash | M | — | **rank 1** |
+
+## Open decisions — answered by the owner on 2026-09-13 (verbatim; DECISIONS line of the same date)
+1. **Rank:** "speed up phases so we have results including potential models quicker" → the Rank
+   section above; TR slices before H/E slices.
+2. **Fixture location (T4):** "gitignored fixtures INSIDE project" → `fixtures/` at the repo root,
+   `/fixtures/*` ignored, `fixtures/MANIFEST.md` tracked.
+3. **Lint gate (T6):** "At your discretion , i want to get to dense matcher upgrade and generative
+   tier soon enough" → no lint gate now (agent's call: the two harnesses and `py_compile` are the
+   gates; revisit at the first phase boundary). Backlog T6 → DEFERRED.
+4. **Push policy:** "direct to `origin main` all the time , no need for branches" → the agent commits
+   on `main` and pushes at Phase 4; no branches, no PRs.
+5. **`HANDOFF.md` role:** "migrate and adjust as needed" → moved to `.claude/claude-docs/HANDOFF.md`
+   with a dated §11 Amendments section; `TRANSITIONS.md` lives beside it.
+Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.md §5`.
 
 ## Amendments
 | Date | Change | By |
 |---|---|---|
 | 2026-09-13 | Drafted at bootstrap from the owner's directions and `HANDOFF.md §7/§9`; unranked | bootstrap session |
+| 2026-09-13 | Added §TR (transitions engine, six slices) from the owner's order and the Impossible research artifact; TR1 shipped the same day; E3 stays as the Reveal-side `--style` lane and is now reached through TR3. H1/H3 unchanged, still unranked | transitions session |
+| 2026-09-13 | Owner answered the five open decisions (quoted above); plan RANKED; TR7 (speed pass) added with the measured profile; TR5/TR6 carry the device rule from `HANDOFF.md §11`; design docs moved under `.claude/claude-docs/` | transitions session, evening |

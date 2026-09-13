@@ -2,9 +2,14 @@
 
 Reveal is a local before/after photo aligner: one Python file (`reveal.py`) warps an AFTER photo
 onto a BEFORE photo, serves a comparison slider on 127.0.0.1, and exports aligned stills plus a
-wipe/fade transition video. Design of record: `HANDOFF.md` (repo root — invariants, pipeline,
-27-row decision log, harness coverage, risks); work plan: `.claude/claude-docs/EXPLORATION_PLAN.md`
-(DRAFT until the owner ranks it). Authority: `HANDOFF.md` wins over the plan; any new decision
+wipe/fade transition video. Since 2026-09-13 a second single-file tool, `transitions.py`, renders
+the change between two photos as a transition video (harness `transitions_harness.py`); the two
+modules never import each other. Design docs live under `.claude/claude-docs/` (moved there
+2026-09-13 by owner ruling): `HANDOFF.md` (Reveal design of record — invariants, pipeline, 27-row
+decision log, harness coverage, risks, amendments §11), `TRANSITIONS.md` (transitions design of
+record), `EXPLORATION_PLAN.md` (work plan, ranked by the owner on 2026-09-13). A bare `HANDOFF.md §N`
+or `TRANSITIONS.md §N` in any doc means that file there.
+Authority: `HANDOFF.md` wins over the plan; any new decision
 EXTENDS `.claude/claude-docs/DECISIONS.md` or supersedes a prior line by date — it never edits
 history. `HANDOFF.md §6` is the pre-bootstrap decision log; decisions from 2026-09-13 on go to
 `DECISIONS.md`, and `HANDOFF.md` gets a dated amendment row when a shipped change contradicts it.
@@ -31,6 +36,8 @@ defaults or to the strict `reshot` profile is NOT in the lane — it needs its o
 
 ## No-regression roster (struck from only by a recorded owner ruling)
 - `harness.py` 82/82 green (62.7 s wall on 2026-09-13) and `reveal.py check` all OK (18.5 s).
+- `transitions_harness.py` green (count in `TRANSITIONS.md §5`; 38 on 2026-09-13, ~5 s) and
+  `transitions.py check` all OK.
 - The seven invariants in `HANDOFF.md §2`: localhost only · originals never modified · BEFORE is
   the reference frame · convergence judged on inlier statistics, never pixel similarity · the
   residual field is low-order by construction · graceful degradation of optional layers · the
@@ -51,7 +58,9 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
 - Deps `./setup.sh` (`--learned` adds torch+kornia and fetches the 52 MB weights into `models/`)
   · Gate 1 `.venv/bin/python harness.py` (82 checks, ~63 s, needs the learned deps for 77–82)
   · Gate 2 `.venv/bin/python reveal.py check` (dependency + offline matrix, ~19 s)
-  · Gate 0 `.venv/bin/python -m py_compile reveal.py harness.py` (seconds; run before Gate 1)
+  · Gate 1b `.venv/bin/python transitions_harness.py` (~5 s; own numbering space; count in `TRANSITIONS.md §5`)
+  · Gate 0 `.venv/bin/python -m py_compile reveal.py harness.py transitions.py transitions_harness.py`
+  (seconds; run before Gate 1)
   · Run `./run.sh` (serves 127.0.0.1:8378 and opens the browser) · headless
   `.venv/bin/python reveal.py align BEFORE AFTER --out DIR [--mode loose] [--video --aspect 9:16 --style wipe|fade]`
   · Clean `scripts/clean.sh` (`--jobs` also empties `_reveal/jobs`).
@@ -62,6 +71,14 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
 ## Workflow
 `/reveal` for implement / fix / design / research / review / audit. Heavy design →
 `~/.agents/skills/pilot` if installed, else `/reveal` alone.
+- **Prose gate** (`.claude/rules/prose.md`, owner order 2026-09-13): every dev-facing text — the
+  final message, DECISIONS lines, handover, design docs, plan and backlog rows, memory, commit
+  messages — passes the `no-slop` skill (load it with the `Skill` tool, run its pass) before it is
+  saved or shown.
+- **Ship** (owner ruling 2026-09-13): Phase 4 ends with a commit on `main` and `git push origin main`.
+  No branches, no PRs. Never push with a red gate; never force-push.
+- **Fixtures** live in `fixtures/` inside the repo, gitignored except `fixtures/MANIFEST.md` (the
+  tracked catalogue; owner ruling 2026-09-13). The real-pair tier starts when the first row exists.
 
 ## Hard constraints (violations = bugs)
 - Server binds 127.0.0.1 only; no external request at runtime; the runtime never downloads
@@ -73,7 +90,11 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
   masked dense flow in the residual stage (decision 18); the strict `reshot` profile is never
   widened in response to loose-mode feedback (`§9.8`).
 - Engineer features go into the CLI or constants, not the UI (invariant 7).
-- Single file by design: `reveal.py` stays one module; helpers live in sections, not packages.
+- Single file by design: `reveal.py` stays one module, and so does `transitions.py` (a second
+  single-file tool by the 2026-09-13 decision); helpers live in sections, not packages.
+- `transitions.py` never imports `reveal`, `reveal.py` never imports `transitions`, and
+  `transitions.py` imports nothing that can reach the network or load weights (transitions
+  harness 1–3). The two tools share the venv and `requirements*.txt`; a new dependency is a decision.
 
 ## Recurring gotchas (cost real time — check before they bite)
 - `findTransformECC` maps TEMPLATE(A) → INPUT(B) coordinates; seed with `inv(H)` and invert back
