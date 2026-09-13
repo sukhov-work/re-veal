@@ -1,19 +1,21 @@
 # Real-pair sheet — 2026-09-13 (first run of slice TR2; Reveal rows double as the first H2 sheet)
 
 ## Method
-Ten pairs the owner placed in `fixtures/` (5 `match`, 5 `mismatch`; 18 JPEG + 2 HEIC; catalogue rows in
+Twelve pairs the owner placed in `fixtures/` (5 `match`, 7 `mismatch`; 21 JPEG + 2 HEIC + 1 PNG; catalogue rows in
 `fixtures/MANIFEST.md`). Command: `scripts/bench_transitions.py --out benchmarks/runs/2026-09-13 --reveal`.
 Reveal ran `align --mode reshot` at native resolution (loose would have run only if strict refused a
 matched pair; it never did). Transitions ran with the canvas capped at 1920 px, presets morph,
-flow-dissolve, snap-morph and dissolve at 1.0 s and morph at 3.0 s: 60 runs in all, M3 Pro, one job
-at a time. Strips and mp4s are local: open `benchmarks/runs/2026-09-13/index.html` (gitignored).
+flow-dissolve, snap-morph and dissolve at 1.0 s and morph at 3.0 s: 72 runs in all (60 on the first
+ten pairs, 12 on mismatch_6 and mismatch_7 added later the same evening), M3 Pro, one job at a time. Strips and mp4s are local: open `benchmarks/runs/2026-09-13/index.html` (gitignored).
 
 ## Verdict against research gate E2
-- Class routing: 10 of 10 as expected (5 match → A, 5 mismatch → B).
-- `edge_ratio` on morph, dissolve and flow-dissolve: maximum 0.55 (mismatch_2 dissolve), every run
+- Class routing: 11 of 12 as the owner labelled (5 match → A, 6 mismatch → B). mismatch_7 routed to
+  class A: the two photos share the city skyline (70 sparse inliers, homography sane), so the
+  routing is right by its own rule; the owner's label says the pair is only vaguely related.
+- `edge_ratio` on morph, dissolve and flow-dissolve: maximum 0.79 (mismatch_6 dissolve), every run
   below the 1.5 gate. snap-morph measures 1.23–1.99, which its hold-then-go curve produces by design.
 - Endpoints: 0 / 0 on every run.
-- Owner rating (gate: at least 6 of 10 pairs usable as-is at 1 s): **pending** — the owner reviews `index.html`.
+- Owner rating (gate: at least 6 of 10 pairs usable as-is at 1 s; 12 pairs now): **pending** — the owner reviews `index.html`.
 
 ## Observations (four strips looked at by the agent; not a rating)
 - match_4, the roster pair: the mural dissolves onto the box while wall and pavement stay put; the box
@@ -24,15 +26,24 @@ at a time. Strips and mp4s are local: open `benchmarks/runs/2026-09-13/index.htm
 - mismatch_4: the saliency similarity put the sun on the sun without anchors; the skylines cross-dissolve.
 - mismatch_5: the sun is scaled toward the galaxy core and a rectangular bright patch shows in frames 4–6.
   That is the class B box similarity being crude by design; anchors and semantic matching are slice TR9.
-- Reveal: strict passes all five matched pairs at confidence 90–97 and refuses all five mismatched pairs
-  with the plain message. On match_3 the ECC stage returned no rho and the feature homography was kept
+- mismatch_7 (same skyline, different skies): mean certainty 0.053, the lowest of the sheet. The morph
+  tears the clouds into blocky patches in the middle frames: the DIS residual chases unrelated sky
+  content, the same mechanism as Reveal's field defect #1. A class A pair with certainty this low
+  should fall back to the homography-only skeleton (proposed slice TR2b; waits for the rating).
+- mismatch_6 (day → night): class B with 0 sparse inliers; the rectangular saliency box shows during
+  the morph as on mismatch_5. The canvas is the small start frame (1146×1528).
+- Reveal: strict passes all five matched pairs at confidence 90–97, refuses six of the seven mismatched
+  pairs with the plain message, and passes mismatch_7 (78 inliers, 0.89 px, confidence 92): the
+  skyline is one scene from a similar spot, so strict mode accepted it although 34 % of the frame
+  changed. On match_3 the ECC stage returned no rho and the feature homography was kept
   (the designed degrade path; the pair still passed at 1059 inliers). The roster pair match_4 measures
   481 inliers and 0.79 px here against 458 and 0.74 in the 2026-07-13 sandbox; OpenCV is 5.0.0 here and
   no estimation code changed, so the delta is the environment, and this row is the new local baseline.
 
 ## Speed (canvas ≤ 1920 px, 1.3–2.8 MP)
-morph 1 s (30 frames): render 4.7–7.9 s, or 0.16–0.26 s per frame; morph 3 s: 13–23 s; correspondence
-0.4–0.65 s once per pair; Reveal `align` 2.2–7.7 s per pair at native resolution (48 MP HEIC: 7.7 s).
+morph 1 s (30 frames): render 4.7–13.4 s, or 0.16–0.45 s per frame (the 1920×1488 canvas of mismatch_7
+is the slowest); morph 3 s: 13–37 s; correspondence 0.4–0.65 s once per pair; Reveal `align` 2.2–16 s
+per pair at native resolution (48 MP HEIC: 7.7 s; mismatch_7 at 2535×3792 vs 2470×1914: 16.2 s).
 
 
 ## Reveal align (native resolution)
@@ -49,6 +60,8 @@ morph 1 s (30 frames): render 4.7–7.9 s, or 0.16–0.26 s per frame; morph 3 s
 | mismatch_3 | reshot | 2 | None | None | None | None | None | None | None | None | 5.4 | FAILED: Could not find enough common detail between the two photos. They need to |
 | mismatch_4 | reshot | 2 | None | None | None | None | None | None | None | None | 4.3 | FAILED: Could not find enough common detail between the two photos. They need to |
 | mismatch_5 | reshot | 2 | None | None | None | None | None | None | None | None | 5.0 | FAILED: Could not find enough common detail between the two photos. They need to |
+| mismatch_6 | reshot | 2 | None | None | None | None | None | None | None | None | 14.8 | FAILED: Could not find enough common detail between the two photos. They need to |
+| mismatch_7 | reshot | 0 | sift | 78 | 0.89 | None | 0.701 | False | 34.2 | 92 | 16.2 |  |
 
 ## Transitions (`transitions.py pair`)
 
@@ -104,3 +117,13 @@ morph 1 s (30 frames): render 4.7–7.9 s, or 0.16–0.26 s per frame; morph 3 s
 | mismatch_5 | snap-morph_1s | 0 | B | saliency-similarity | 36 | 367.85 | 0.5 | 1920x1080 | 30 | 1.25 | 5.65 | 8.4 | 0.0075 | 1.2323 | 0.0236 | 0.0/0.0 |
 | mismatch_5 | dissolve_1s | 0 | B | saliency-similarity | 36 | 367.85 | 0.5 | 1920x1080 | 30 | 1.25 | 2.7 | 5.4 | 0.0054 | 0.2732 | 0.0083 | 0.0/0.0 |
 | mismatch_5 | morph_3s | 0 | B | saliency-similarity | 36 | 367.85 | 0.5 | 1920x1080 | 90 | 1.25 | 16.37 | 19.3 | 0.0049 | 0.0703 | 0.0138 | 0.0/0.0 |
+| mismatch_6 | morph_1s | 0 | B | saliency-similarity | 0 | 232.19 | 0.5 | 1146x1528 | 30 | 1.29 | 8.75 | 11.2 | 0.0213 | 0.521 | 0.0372 | 0.0/0.0 |
+| mismatch_6 | flow-dissolve_1s | 0 | B | saliency-similarity | 0 | 232.19 | 0.5 | 1146x1528 | 30 | 1.24 | 8.77 | 11.1 | 0.0215 | 0.722 | 0.0383 | 0.0/0.0 |
+| mismatch_6 | snap-morph_1s | 0 | B | saliency-similarity | 0 | 232.19 | 0.5 | 1146x1528 | 30 | 1.29 | 8.59 | 11.0 | 0.02 | 1.1331 | 0.0365 | 0.0/0.0 |
+| mismatch_6 | dissolve_1s | 0 | B | saliency-similarity | 0 | 232.19 | 0.5 | 1146x1528 | 30 | 1.46 | 4.44 | 7.1 | 0.0173 | 0.7864 | 0.02 | 0.0/0.0 |
+| mismatch_6 | morph_3s | 0 | B | saliency-similarity | 0 | 232.19 | 0.5 | 1146x1528 | 90 | 1.25 | 23.55 | 26.2 | 0.0083 | 0.4358 | 0.0153 | 0.0/0.0 |
+| mismatch_7 | morph_1s | 0 | A | homography+dis | 70 | 249.85 | 0.053 | 1920x1488 | 30 | 0.65 | 13.44 | 15.4 | 0.012 | 0.2608 | 0.0476 | 0.0/0.0 |
+| mismatch_7 | flow-dissolve_1s | 0 | A | homography+dis | 70 | 249.85 | 0.053 | 1920x1488 | 30 | 0.67 | 12.96 | 14.8 | 0.0114 | 0.3044 | 0.0472 | 0.0/0.0 |
+| mismatch_7 | snap-morph_1s | 0 | A | homography+dis | 70 | 249.85 | 0.053 | 1920x1488 | 30 | 0.61 | 12.35 | 14.1 | 0.011 | 1.8519 | 0.0532 | 0.0/0.0 |
+| mismatch_7 | dissolve_1s | 0 | A | homography+dis | 70 | 249.85 | 0.053 | 1920x1488 | 30 | 0.63 | 6.59 | 8.4 | 0.0085 | 0.3719 | 0.0123 | 0.0/0.0 |
+| mismatch_7 | morph_3s | 0 | A | homography+dis | 70 | 249.85 | 0.053 | 1920x1488 | 90 | 0.64 | 36.85 | 38.9 | 0.0073 | 0.1045 | 0.0267 | 0.0/0.0 |

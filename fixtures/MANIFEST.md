@@ -27,6 +27,8 @@ Transitions ran with the canvas capped at 1920 px. Full sheet: `.claude/claude-d
 | mismatch_3 | mismatch_3_S.jpg | mismatch_3_F.jpg | refused | B | a crowded bar vs a lounge group; 889 px median displacement from the saliency boxes | Reveal refuses. Transitions B · 6 · 889.2 px · 0.31 |
 | mismatch_4 | mismatch_4_S.jpg | mismatch_4_F.jpg | refused | B | sunset over water → sunset over water: the sun-to-sun case | Reveal refuses. Transitions B · 9 · 269.3 px · 0.25 |
 | mismatch_5 | mismatch_5_S.jpg | mismatch_5_F.jpg | refused | B | portrait sunset (4128×6192) → landscape galaxy (3840×2160): the sun-to-galaxy case; the portrait is cover-cropped to 1920×1080 | Reveal refuses. Transitions B · 36 · 367.9 px · 0.26 |
+| mismatch_6 | mismatch_6_S.jpg | mismatch_6_F.jpg | refused | B | day → night: a day sky over the city (1146×1528) → a night sky with stars and a tree (3056×4064); the research plan's day→night category; canvas is the small start frame | Reveal refuses. Transitions B · 0 · 232.2 px · 0.52 |
+| mismatch_7 | mismatch_7_S.jpg | mismatch_7_F.png | reshot | A | the same city skyline under different skies, portrait vs landscape PNG; labelled mismatch by the owner, but the skyline matches: strict passes at 78 inliers, transitions route A with mean certainty 0.053 and the clouds tear in the morph | Reveal sift 78 · 0.89 px · 92 (ecc_rho None). Transitions A homography+dis · 70 · 249.9 px · 0.26 |
 
-Wanted next (research plan E2): 2 cityscape/landscape re-shots · 2 day→night pairs · DNG and ARW
+Wanted next (research plan E2): 2 cityscape/landscape re-shots · one more day→night pair · DNG and ARW
 files (never decoded from a real file in a test) · video clips for slice TR4.

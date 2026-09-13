@@ -142,7 +142,8 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Encode per frame, 1080p / 4K | 0.037 / 0.064 s |
 | Color cache + in-place hole fill (frames byte-identical, hash equal) | 1080p morph frame 0.163 → 0.151 s |
 | `REVEAL-BASELINE.sha256` in the artifact vs this repo | all nine files identical: the research targeted exactly this code |
-| First real pairs, 10 owner fixtures, canvas ≤ 1920 px (`benchmarks/2026-09-13-real-pairs.md`) | class routing 10 of 10; `edge_ratio` ≤ 0.55 on the smooth presets; endpoints 0 / 0; morph 1 s renders in 4.7–7.9 s |
+| First real pairs, 12 owner fixtures, canvas ≤ 1920 px (`benchmarks/2026-09-13-real-pairs.md`) | class routing 11 of 12 as labelled (mismatch_7 shares its skyline and routes A by rule); `edge_ratio` ≤ 0.79 on the smooth presets; endpoints 0 / 0; morph 1 s renders in 4.7–13.4 s |
+| Lowest certainty seen: mismatch_7 (same skyline, different skies) | mean certainty 0.053; the morph tears the clouds; a certainty floor for the DIS residual is proposed (TR2b) |
 | Two iPhone HEIC files (6048×8064, ICC) | decode 1.9 s each; class A, 492 inliers, 63.7 px median displacement |
 
 ## 7. Risks and open questions, ranked
@@ -151,8 +152,13 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
    subject ghosts (match_1, 64 px) and a large repaint doubles an edge mid-way (match_5, 103 px).
    Whether that is "usable as-is" is the E2 rating in `benchmarks/2026-09-13-real-pairs.md`.
 2. **Class B is crude by design.** The box similarity lands a sun on a sun (mismatch_4) but scales
-   a sun onto a galaxy with a visible rectangular patch (mismatch_5). Anchors, semantic matches and
-   an anchor editor are slice TR9.
+   a sun onto a galaxy with a visible rectangular patch (mismatch_5, mismatch_6). Anchors, semantic
+   matches and an anchor editor are slice TR9.
+2b. **Class A with near-zero certainty tears.** mismatch_7 shares a skyline, so it routes to class A
+   correctly, but its skies differ and the DIS residual chases cloud content (mean certainty 0.053).
+   Reveal met the same mechanism as field defect #1 and answered with a low-order field. Proposed
+   TR2b: below a certainty floor, drop the DIS residual and morph on the homography alone, with a
+   visible INFO line; the floor is calibrated on the sheet (match pairs 0.33–0.81, mismatch_7 0.05).
 3. **`edge_ratio` is sensitive to sub-level bias.** Smooth presets measure 0.3–0.8 on the harness
    pair; `snap-morph` measures 1.44, and 1.55 under the truncation mutation. The rounding contract
    exists for this reason.

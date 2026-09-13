@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Benchmark sheet over the fixture catalogue (slice TR2 / H2).
 
+Incremental: an existing sheet.json in --out is merged, so `--only mismatch_6` re-runs one pair
+and keeps the other rows (each row carries its own run_at).
+
 Pairs are found in fixtures/ by name: <group>_<N>_S.<ext> (start, BEFORE) and
 <group>_<N>_F.<ext> (finish, AFTER); groups are "match" and "mismatch". For every
 pair it runs `transitions.py pair` per preset and length, and optionally
@@ -84,9 +87,14 @@ def main():
         keep = set(a.only.split(","))
         pairs = [p for p in pairs if p[0] in keep]
     print(f"{len(pairs)} pairs")
-    runs = {"date": time.strftime("%Y-%m-%d %H:%M"), "max_long": a.max_long, "pairs": []}
+    # Merge into an existing sheet: pairs run now replace their earlier row, others are kept, so
+    # the catalogue can grow one pair at a time without re-running everything.
+    runs = load_json(out / "sheet.json") or {}
+    runs = {"date": time.strftime("%Y-%m-%d %H:%M"), "max_long": a.max_long,
+            "pairs": [r for r in runs.get("pairs", []) if r.get("id") not in {k for k, _, _ in pairs}]}
     for key, S, F in pairs:
-        row = {"id": key, "before": S.name, "after": F.name, "reveal": {}, "transitions": {}}
+        row = {"id": key, "before": S.name, "after": F.name, "run_at": time.strftime("%Y-%m-%d %H:%M"),
+               "reveal": {}, "transitions": {}}
         try:
             tS, szS = thumb(S); tF, szF = thumb(F)
             row["size_before"], row["size_after"] = list(szS), list(szF)
@@ -139,6 +147,7 @@ def main():
                   f"edge={q.get('flicker', {}).get('edge_ratio')} we={q.get('warping_error')} "
                   f"render={rep.get('render_s')}s total={wall}s")
         runs["pairs"].append(row)
+        runs["pairs"].sort(key=lambda r: (r["id"].split("_")[0], int(r["id"].split("_")[1])))
         (out / "sheet.json").write_text(json.dumps(runs, indent=2))
     write_sheet(out, runs)
     print(f"wrote {out/'sheet.json'}, {out/'sheet.md'}, {out/'index.html'}")
