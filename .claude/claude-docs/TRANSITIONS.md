@@ -190,8 +190,11 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
    the designed answer for that case and is measured next. Owner verdicts on the 24 RoMa clips
    (2026-09-15, `benchmarks/2026-09-14-real-pairs.md §Owner verdicts`): RoMa better on match_3
    only, DIS better on match_4, match_5 and mismatch_7 — not adopted as a drop-in. The owner
-   rejects both fields inside the changed region: DIS for "textures come from the right", RoMa
-   for "fades out and fades in, no transformations"; RoMa's background motion is liked. The next
+   rejects both fields' handling of the paint on the box: DIS for "textures come from the right",
+   RoMa for "fades out and fades in, no transformations"; the box holding its position (RoMa) and
+   RoMa's background motion are liked (owner, 2026-09-15: "i liked how the box itself holds
+   position"). Timing for experiments (owner, 2026-09-15): 3–5 min per pair is fine for tests, no
+   hard upper limit within reason. The next
    slice is TR14, a design pass on what the changed region should do (TR2d floor, a designed
    effect inside the changed mask over RoMa's background field, or the generative tier); the
    speed gate stays lifted ("below 1-2 min per pair is not that much issue for now").
