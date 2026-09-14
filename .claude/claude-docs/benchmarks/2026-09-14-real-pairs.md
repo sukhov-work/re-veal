@@ -22,9 +22,23 @@ canvas changed (match_5) or by wall time. `edge_ratio` on morph 1 s: match pairs
 mismatch pairs 0.13–0.66 (mismatch_6, day → night, 0.66; it was 0.52 with the whole-frame
 similarity, and its flow-dissolve reads 1.04, the only value above 1 on a smooth preset).
 
-## Owner picks
-Pending (the question in `NEXT_SESSION_PROMPT.md §5`): the six mismatch strips are the ones to
-look at first; a pick marks the closest variant, and a note says whether it is acceptable as-is.
+## Owner review (2026-09-15, verbatim)
+> regarding runs/2026-09-14 , i went through all and didn't notice much difference since first run ( at least it didn't get worse) , the only marginal improvement is mismatch_7 where you at least started to somewhat keep couple of focal buildings in between transitions , clouds are a mess though. other mismatches stayd more or less same  simple junky cross-dissolves  but at least you made it more subtle. Still none of the mismatch pairs can be accepted. Also same grading and remarks from first picks.json apply here for matches, as i said , if there are improvements they are marginal. For roma samples - create me full run with video transitions, it is very hard to judge low-res static frames
+
+Reading of the record against this review:
+- **mismatch_7 did not change.** It routes class A, so TR2c (a class B change) did not reach it; its
+  five clips have the same quality basket as on 2026-09-13 and the morph 1 s mp4 has the same md5
+  (`df5e516d…`) in both run folders. The improvement seen there is a difference in viewing, not in
+  code. The clouds tearing is the TR2b case (certainty 0.053), now expected to be answered by the
+  RoMa field (its certainty is low where content differs, so those regions dissolve in place).
+- **The mismatched pairs, TR2c's target:** the frame border is gone and the motion is "more subtle",
+  and the pairs stay "simple junky cross-dissolves"; none is accepted. E2 stays unmet. The object
+  and theme correspondence the owner wants there is slice TR9, unchanged.
+- **Matched pairs:** the 2026-09-14 picks and notes stand; class A was byte-identical by construction,
+  so nothing could have changed except match_5's canvas.
+- **Next review surface:** real clips from the RoMa field beside the DIS clips, six class A pairs,
+  four field-using variants (`benchmarks/runs/2026-09-14/roma/index.html`, built by
+  `scripts/research/compare_fields.py --render` and `--page`).
 
 ## Reveal align (native resolution)
 
@@ -107,3 +121,43 @@ look at first; a pick marks the closest variant, and a note says whether it is a
 | mismatch_7 | snap-morph_1s | 0 | A | homography+dis | 70 | 249.85 | 0.053 | - | 1920x1488 | 30 | 0.59 | 11.2 | 13.0 | 0.011 | 1.8519 | 0.0532 | 0.0/0.0 |
 | mismatch_7 | dissolve_1s | 0 | A | homography+dis | 70 | 249.85 | 0.053 | - | 1920x1488 | 30 | 0.6 | 5.87 | 7.6 | 0.0085 | 0.3719 | 0.0123 | 0.0/0.0 |
 | mismatch_7 | morph_3s | 0 | A | homography+dis | 70 | 249.85 | 0.053 | - | 1920x1488 | 90 | 0.61 | 33.09 | 35.1 | 0.0073 | 0.1045 | 0.0267 | 0.0/0.0 |
+
+## RoMa clips (2026-09-15) — `benchmarks/runs/2026-09-14/roma/index.html`
+Six class A pairs × four field-using variants rendered from the RoMa outdoor field (CPU, 35–55 s
+per pair for the field; certainty as the splat weight; everything else identical to the DIS clips
+above), each beside the DIS clip of this run. Endpoints 0 / 0 on all 24 clips; every clip decodes
+to its frame count. The `dissolve` variant is omitted (it uses no field). Verdicts pending
+(`roma_picks.json` from the page).
+
+| pair | variant | edge_ratio DIS → RoMa | warping error DIS → RoMa | RoMa render s |
+|---|---|---|---|---|
+| match_1 | morph_1s | 0.23 → 0.26 | 0.0064 → 0.0070 | 9.67 |
+| match_1 | flow-dissolve_1s | 0.23 → 0.64 | 0.0066 → 0.0083 | 10.04 |
+| match_1 | snap-morph_1s | 1.55 → 1.49 | 0.0058 → 0.0057 | 9.72 |
+| match_1 | morph_3s | 0.06 → 0.13 | 0.0034 → 0.0034 | 27.06 |
+| match_2 | morph_1s | 0.12 → 0.15 | 0.0109 → 0.0121 | 6.82 |
+| match_2 | flow-dissolve_1s | 0.12 → 0.50 | 0.0108 → 0.0129 | 6.89 |
+| match_2 | snap-morph_1s | 1.51 → 1.43 | 0.0082 → 0.0097 | 7.05 |
+| match_2 | morph_3s | 0.04 → 0.09 | 0.0084 → 0.0086 | 19.78 |
+| match_3 | morph_1s | 0.12 → 0.07 | 0.0038 → 0.0037 | 10.56 |
+| match_3 | flow-dissolve_1s | 0.48 → 0.70 | 0.0038 → 0.0038 | 10.6 |
+| match_3 | snap-morph_1s | 1.71 → 1.68 | 0.0037 → 0.0036 | 10.21 |
+| match_3 | morph_3s | 0.06 → 0.02 | 0.0017 → 0.0017 | 29.64 |
+| match_4 | morph_1s | 0.24 → 0.22 | 0.0102 → 0.0080 | 10.87 |
+| match_4 | flow-dissolve_1s | 0.43 → 0.79 | 0.0102 → 0.0082 | 10.96 |
+| match_4 | snap-morph_1s | 1.63 → 1.63 | 0.0098 → 0.0079 | 11.05 |
+| match_4 | morph_3s | 0.11 → 0.03 | 0.0043 → 0.0032 | 30.58 |
+| match_5 | morph_1s | 0.17 → 0.15 | 0.0195 → 0.0176 | 10.59 |
+| match_5 | flow-dissolve_1s | 0.26 → 0.66 | 0.0196 → 0.0196 | 10.85 |
+| match_5 | snap-morph_1s | 1.87 → 1.85 | 0.0160 → 0.0135 | 10.78 |
+| match_5 | morph_3s | 0.07 → 0.05 | 0.0120 → 0.0115 | 30.28 |
+| mismatch_7 | morph_1s | 0.26 → 0.19 | 0.0120 → 0.0194 | 12.91 |
+| mismatch_7 | flow-dissolve_1s | 0.30 → 0.58 | 0.0114 → 0.0190 | 12.82 |
+| mismatch_7 | snap-morph_1s | 1.85 → 1.41 | 0.0110 → 0.0185 | 12.1 |
+| mismatch_7 | morph_3s | 0.10 → 0.09 | 0.0073 → 0.0102 | 36.11 |
+
+Reading: warping error falls with RoMa on match_4 and match_5 on every variant and on match_3's
+morphs, is level on match_1 and match_2 (0.0064 → 0.0070 and 0.0109 → 0.0121 on morph 1 s) and
+rises on mismatch_7 (0.0120 → 0.0194): RoMa's field there is 350 px off the global motion at
+certainty 0.03, the TR2d case. `edge_ratio` on flow-dissolve rises with RoMa on every pair
+(0.23 → 0.64 on match_1); cause not established, the clips decide whether it is visible.

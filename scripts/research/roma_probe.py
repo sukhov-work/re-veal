@@ -58,4 +58,6 @@ for d in sys.argv[1:]:
            "frac_both_confident": round(float(both.mean()), 3),
            "frac_diff_gt_5px": round(float((diff > 5).mean()), 3),
            "roma_fb_err_median_px": round(float(np.median(fb)), 2)}
+    with open(os.path.join(d, "roma.json"), "w") as fh:
+        json.dump(out, fh)
     print(json.dumps(out), flush=True)
