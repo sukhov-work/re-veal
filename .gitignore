@@ -20,3 +20,6 @@ __pycache__/
 .env.bak*
 # OS
 .DS_Store
+
+# TR5 research probe weight cache (scripts/research/roma_probe.py; 1.6 GB, never committed)
+/roma_torch_home/

@@ -167,6 +167,7 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Class B frame border (T13), seven mismatched fixtures at ≤ 1920 px, mid frame t = 0.5, 2026-09-14 | before: the moved frame leaves 9–52 % of the canvas without one endpoint (mismatch_1 B 18.6 %, mismatch_3 B 36 %, mismatch_4 A 27 %); after `panzoom_field`: 0 % holes, min coverage 0.86 on every pair; pan fractions A / B: mismatch_1 0.20 / 0.87, _2 0.15 / 0.16, _3 0.06 / 0.06, _4 0.79 / 0.19, _5 0.15 / 0.34, _6 0.23 / 0.57, _7 0.14 / 1.00 (salient centers 107–720 px apart); field 0.03–0.15 s per pair |
 | Class A frames under the class B change | byte-identical: sha256 over all seven presets on the harness pair equal before and after |
 | Re-run of the twelve fixtures, 2026-09-14 (`benchmarks/2026-09-14-real-pairs.md`) | 60 runs, all exit 0, endpoints 0 / 0, routing unchanged; class B `saliency-panzoom` on the six mismatched pairs with median displacement 46–122 px (was 232–889) and `edge_ratio` on morph 1 s 0.13–0.66 (mismatch_6 0.66, was 0.52; its flow-dissolve 1.04, was 0.72); the `finish` policy changed four canvases (match_5 → 1438×1920: 89 inliers, 84.6 px); morph 1 s renders in 1.5–11.7 s |
+| RoMa vs the DIS field on match_2 / match_3 / match_5 (`scripts/research/`, 2026-09-14 late, timed alone; DECISIONS line of that time) | match 55.4 / 37.2 / 34.8 s per pair on the CPU; RoMa certainty mean 0.43 / 0.16 / 0.27 (DIS consistency 0.81 / 0.41 / 0.32); fields differ by 0.5 / 9.2 / 22.1 px median. Morph 1 s from each field, DIS → RoMa: warping error 0.0068 → 0.0068, 0.0038 → 0.0035, 0.0211 → 0.0162; `edge_ratio` 0.16 → 0.19, 0.13 → 0.09, 0.24 → 0.21. By eye: match_3's person stays coherent instead of smearing across the umbrella; match_5's boxes keep straight edges and stay in place; match_2 unchanged. Owner: timings "below 1-2 min per pair is not that much issue for now, lets achieve best quality" |
 | RoMa outdoor (romatch 0.1.2, torch 2.14, CPU, 12 threads) on match_4 at 1536×1920, scratch venv, 2026-09-14, concurrent with the sweep | weights 1,217,586,395 + 445,647,516 bytes (DINOv2 ViT-L/14 Apache-2.0, RoMa MIT), load 80 s incl. download; match 40.6–44.8 s per pair (4 runs) against 0.74 s for homography+DIS; the input is resized to 560×560 coarse and 864×864 for the field, aspect ignored; certainty mean 0.553 (62 % of pixels above 0.5); median displacement 9.9 px (DIS 15.1); median difference to the DIS field 0.57 px over the canvas, 0.20 px where both are confident (52 % of pixels) |
 
 ## 7. Risks and open questions, ranked
@@ -176,7 +177,11 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
    unrelated pair is "a naive cross-dissolve". The engine matches pixels, not themes. Order of
    remedies: a learned dense matcher (TR5), object and part correspondence with anchors (TR9), a
    generative backend for the intermediate transformations (TR6). Verbatim review and per-pair
-   mechanism: `benchmarks/2026-09-13-real-pairs.md`.
+   mechanism: `benchmarks/2026-09-13-real-pairs.md`. Measured 2026-09-14 (§6): RoMa's field fixes
+   match_3 (the person no longer smears) and match_5 (the boxes stay put) and leaves match_2 as it
+   is; its certainty is low exactly where content changed, so the splat lets those regions dissolve
+   in place — the effect TR2d was going to build by hand. TR5 integration is the next slice; the
+   owner lifted the speed gate ("below 1-2 min per pair is not that much issue for now").
 2. **Class B showed the warped frame's border** (owner, every mismatched pair: "next frame square
    borders … especially ugly"). Mechanism (measured 2026-09-14): the similarity moved the whole
    frame, and where the moved frame no longer covered the canvas the coverage-aware mix switched
