@@ -94,6 +94,12 @@ def main():
         runs = load_json(out / "sheet.json")
         if not runs:
             sys.exit("no sheet.json to render")
+        # Rows written before a report key existed pick it up from their report.json on disk.
+        for row in runs.get("pairs", []):
+            for r in row.get("transitions", {}).values():
+                if "pan_fraction" not in r and r.get("mp4"):
+                    r["pan_fraction"] = load_json(out / Path(r["mp4"]).parent / "report.json").get("pan_fraction")
+        (out / "sheet.json").write_text(json.dumps(runs, indent=2))
         picks = load_json(a.picks) if a.picks else {}
         write_sheet(out, runs, picks)
         print(f"re-rendered {out/'sheet.md'} and {out/'index.html'}")
@@ -151,6 +157,7 @@ def main():
                 "class": rep.get("class"), "method": rep.get("method"),
                 "sparse_inliers": rep.get("sparse_inliers"), "median_disp_px": rep.get("median_disp_px"),
                 "mean_certainty": rep.get("mean_certainty"), "canvas": rep.get("canvas"),
+                "pan_fraction": rep.get("pan_fraction"),
                 "n_frames": rep.get("n_frames"), "correspondence_s": rep.get("correspondence_s"),
                 "render_s": rep.get("render_s"), "total_s": rep.get("total_s"),
                 "warping_error": q.get("warping_error"),
@@ -218,14 +225,15 @@ def write_sheet(out, runs, picks=None):
                       f"{r.get('ecc_rho')} | {r.get('peripheral_ssim')} | {r.get('residual')} | {r.get('changed_pct')} | "
                       f"{r.get('confidence')} | {r['wall_s']} | {(r.get('error') or '')[:80]} |")
     md.append("\n## Transitions (`transitions.py pair`)\n")
-    md.append("| pair | preset | rc | class | method | inliers | median_disp_px | certainty | canvas | frames | corr s | render s | wall s | warping_err | edge_ratio | max_step | endpoint |")
-    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    md.append("| pair | preset | rc | class | method | inliers | median_disp_px | certainty | pan A/B | canvas | frames | corr s | render s | wall s | warping_err | edge_ratio | max_step | endpoint |")
+    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for row in runs["pairs"]:
         for tag, r in row["transitions"].items():
             cv = "x".join(str(v) for v in (r.get("canvas") or [])) or "-"
             ep = r.get("endpoint") or {}
+            pan = "/".join(f"{v:.2f}" for v in r["pan_fraction"]) if r.get("pan_fraction") else "-"
             md.append(f"| {row['id']} | {tag} | {r['rc']} | {r.get('class')} | {r.get('method')} | {r.get('sparse_inliers')} | "
-                      f"{r.get('median_disp_px')} | {r.get('mean_certainty')} | {cv} | {r.get('n_frames')} | {r.get('correspondence_s')} | "
+                      f"{r.get('median_disp_px')} | {r.get('mean_certainty')} | {pan} | {cv} | {r.get('n_frames')} | {r.get('correspondence_s')} | "
                       f"{r.get('render_s')} | {r['wall_s']} | {r.get('warping_error')} | {r.get('edge_ratio')} | {r.get('max_step')} | "
                       f"{ep.get('first_vs_A')}/{ep.get('last_vs_B')} |")
     if picks:
@@ -270,7 +278,7 @@ def write_sheet(out, runs, picks=None):
     html.append("</table><p class=note>style: <b>morph</b> = both photos forward-warped along the dense correspondence and cross-dissolved; "
                 "<b>warp-dissolve</b> = same with the warp scaled by warp_amount and the dissolve shifted by mix_delay; <b>dissolve</b> = no geometry, crossfade only. "
                 "Curves: <b>ease</b> = slow-fast-slow; <b>hold-then-go</b> = nothing for the first 35 %, then linear; <b>ease-in</b> = starts slow. "
-                "class A = a homography plus DIS residual flow was found between the photos; class B = no geometric correspondence, a similarity between the two salient blobs is used. "
+                "class A = a homography plus DIS residual flow was found between the photos; class B = no geometric correspondence: each photo zooms in 10 % about its salient blob and pans toward the other photo's blob as far as the zoom allows without its edge entering the frame (pan = the fraction of that distance each photo travels; since 2026-09-14, before that the whole frame moved by a similarity and its border showed). "
                 "certainty = mean forward-backward consistency of the dense field (1 = every pixel agrees both ways).</p>")
     html.append("<p><button onclick='exportPicks()'>Export picks</button> <span id=status class=note></span></p>")
     for row in runs["pairs"]:
@@ -286,8 +294,9 @@ def write_sheet(out, runs, picks=None):
         html.append(f"<textarea id='note_{row['id']}' rows=2 placeholder='what is wrong / what works' oninput='save()'>{pk.get('note', '')}</textarea>")
         for tag, r in row["transitions"].items():
             strip = r.get("strip_labeled", r["strip"])
+            pan = (" pan=" + "/".join(f"{v:.2f}" for v in r["pan_fraction"])) if r.get("pan_fraction") else ""
             html.append(f"<div class=run><div><code>{tag}</code> class={r.get('class')} {r.get('method')} inliers={r.get('sparse_inliers')} "
-                        f"disp={r.get('median_disp_px')}px certainty={r.get('mean_certainty')} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')} "
+                        f"disp={r.get('median_disp_px')}px certainty={r.get('mean_certainty')}{pan} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')} "
                         f"render={r.get('render_s')}s<br><img src='{strip}'></div>"
                         f"<video src='{r['mp4']}' controls loop muted playsinline preload=metadata></video></div>")
     html.append("""<script>

@@ -49,11 +49,19 @@ measured here. Decisions live in `DECISIONS.md` (dated lines from 2026-09-13); p
      the pre-aligned pair, composed back through `inv(H_BA)`, in both directions. Certainty per
      pixel is `exp(−e²/2σ²)` of the forward-backward error with σ = 3 px. Method
      `homography+dis`; `dis-only` when the class is forced and no usable H exists.
-   - **Class B, unrelated pair.** A similarity between the two salient blobs (gradient energy,
-     70th percentile, largest component), or the user's three or more anchor pairs through Moving
-     Least Squares (affine; Schaefer 2006). The inverse field comes from splat-and-inpaint.
-     Certainty is 0.5 everywhere because nothing photometric supports it. In class A, anchors
-     are blended over the dense field with weight 0.7.
+   - **Class B, unrelated pair.** One pan-and-zoom per frame (`panzoom_field`, method
+     `saliency-panzoom`, since 2026-09-14): each frame zooms in by `classb_zoom` (10 %) about
+     its own salient center (gradient energy, 70th percentile, largest component) and pans toward
+     the other frame's salient center as far as the zoom's slack allows, so a frame edge never
+     enters the canvas (defect T13). A zooms from 1 to 1.1 while it fades out; B settles from 1.1
+     to 1 so the last frame is B itself. The pan keeps its direction and is scaled by the largest
+     feasible fraction (`report.json` `pan_fraction`, one value per frame; 1.0 means the two
+     salient centers meet throughout). Before 2026-09-14 the field was one similarity between the
+     two salient boxes and its splat-and-inpaint inverse; the moved frame's rectangle was visible
+     on every mismatched fixture (`§7.2`). With three or more anchor pairs the field is Moving
+     Least Squares (affine; Schaefer 2006) with the splat-and-inpaint inverse, unchanged, and its
+     frame edge can still show. Certainty is 0.5 everywhere because nothing photometric supports
+     it. In class A, anchors are blended over the dense field with weight 0.7.
 4. **Per frame** (`iter_frames`). With `u = i/(n−1)`: `t_warp = curve(warp)·warp_amount +
    (1−warp_amount)·u` and `t_mix = curve(mix)(u − mix_delay)`.
    - **Color path.** Both endpoints move toward the Lab statistic interpolated at `u` (per-channel
@@ -114,7 +122,7 @@ Exit 0 on success, 2 with `FAILED: <message>` on stderr.
   starts with a measurement, not code.
 - **`clips` and `sequence`.** Wait for the PyAV decision (slice TR4).
 
-## 5. Harness: `transitions_harness.py`, 40 checks, about 5 s (as of 2026-09-14; own numbering)
+## 5. Harness: `transitions_harness.py`, 43 checks, about 8 s (as of 2026-09-14; own numbering)
 Coverage by section. A: isolation both ways and the no-network import set (1–3). B: grammar —
 frame count, monotone progress for every curve and warp amount, length clamp, unknown names fail
 cleanly (4–7). C: warp — a translation field equals `warpAffine` within 0.5 levels, no fake holes,
@@ -129,9 +137,15 @@ the decoded mp4 — files, frame count, size, fps, endpoints within codec loss, 
 report basket, monotone wipe seam, identical frames across two CLI runs, missing input exits 2,
 length floor, `check` (27–36). I: identity fence (37–38). J: canvas policy — the finish ratio wins
 without upscaling, `common` keeps the old rule, `max_long` caps, an unknown policy is refused (39–40).
+K: class B coverage (defect T13) — a positive control shows the old whole-frame shape leaves 12 %
+of the canvas without A and steps 56 levels at the exposed edge; `panzoom_field` keeps coverage
+≥ 0.81 at every t while moving the frame up to 64 px, pans 2 % of the way to a far target and
+100 % to a near one; end to end on two flat frames with one blob each, saliency finds the blob
+within 5 px, coverage stays ≥ 0.86 and the mid frame's largest 12-px profile step is 4 levels (41–43).
 
-Mutation applied on 2026-09-13: making `to_u8` truncate turned checks 11, 20, 21 and 24 red
-(32 of 36 at the time). Gaps: the harness inputs are synthetic by rule; the real-pair tier lives in
+Mutations applied: on 2026-09-13, making `to_u8` truncate turned checks 11, 20, 21 and 24 red
+(32 of 36 at the time); on 2026-09-14, removing the pan clip in `panzoom_field` turned 42 and 43
+red (coverage 0.00, a 56-level step). Gaps: the harness inputs are synthetic by rule; the real-pair tier lives in
 `fixtures/` and the dated sheets under `.claude/claude-docs/benchmarks/` (first sheet 2026-09-13, ten
 pairs); DNG and ARW have never been decoded from a real file; the owner's usability rating is pending.
 
@@ -150,6 +164,10 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Lowest certainty seen: mismatch_7 (same skyline, different skies) | mean certainty 0.053; the morph tears the clouds; a certainty floor for the DIS residual is proposed (TR2b) |
 | Two iPhone HEIC files (6048×8064, ICC) | decode 1.9 s each; class A, 492 inliers, 63.7 px median displacement |
 | Owner picks 2026-09-14 (`benchmarks/2026-09-13-real-pairs.md §Owner picks`) | 0 of 12 usable as-is; 3 pairs have a closest-to-intent pick (match_1 flow-dissolve 1 s, match_4 and match_5 morph 3 s), "very far from perfect"; E2 gate not met |
+| Class B frame border (T13), seven mismatched fixtures at ≤ 1920 px, mid frame t = 0.5, 2026-09-14 | before: the moved frame leaves 9–52 % of the canvas without one endpoint (mismatch_1 B 18.6 %, mismatch_3 B 36 %, mismatch_4 A 27 %); after `panzoom_field`: 0 % holes, min coverage 0.86 on every pair; pan fractions A / B: mismatch_1 0.20 / 0.87, _2 0.15 / 0.16, _3 0.06 / 0.06, _4 0.79 / 0.19, _5 0.15 / 0.34, _6 0.23 / 0.57, _7 0.14 / 1.00 (salient centers 107–720 px apart); field 0.03–0.15 s per pair |
+| Class A frames under the class B change | byte-identical: sha256 over all seven presets on the harness pair equal before and after |
+| Re-run of the twelve fixtures, 2026-09-14 (`benchmarks/2026-09-14-real-pairs.md`) | 60 runs, all exit 0, endpoints 0 / 0, routing unchanged; class B `saliency-panzoom` on the six mismatched pairs with median displacement 46–122 px (was 232–889) and `edge_ratio` on morph 1 s 0.13–0.66 (mismatch_6 0.66, was 0.52; its flow-dissolve 1.04, was 0.72); the `finish` policy changed four canvases (match_5 → 1438×1920: 89 inliers, 84.6 px); morph 1 s renders in 1.5–11.7 s |
+| RoMa outdoor (romatch 0.1.2, torch 2.14, CPU, 12 threads) on match_4 at 1536×1920, scratch venv, 2026-09-14, concurrent with the sweep | weights 1,217,586,395 + 445,647,516 bytes (DINOv2 ViT-L/14 Apache-2.0, RoMa MIT), load 80 s incl. download; match 40.6–44.8 s per pair (4 runs) against 0.74 s for homography+DIS; the input is resized to 560×560 coarse and 864×864 for the field, aspect ignored; certainty mean 0.553 (62 % of pixels above 0.5); median displacement 9.9 px (DIS 15.1); median difference to the DIS field 0.57 px over the canvas, 0.20 px where both are confident (52 % of pixels) |
 
 ## 7. Risks and open questions, ranked
 1. **Object-level correspondence is the top gap (owner review, 2026-09-13).** Three matched pairs
@@ -159,11 +177,16 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
    remedies: a learned dense matcher (TR5), object and part correspondence with anchors (TR9), a
    generative backend for the intermediate transformations (TR6). Verbatim review and per-pair
    mechanism: `benchmarks/2026-09-13-real-pairs.md`.
-2. **Class B shows the warped frame's border** (owner, every mismatched pair: "next frame square
-   borders … especially ugly"). The similarity warp moves the whole finish frame and the hole fill
-   exposes its rectangular edge. Defect T13, slice TR2c, first in the queue. Beyond that, class B
-   is crude by design: the box similarity lands a sun on a sun (mismatch_4) but the object and
-   theme correspondence the owner wants is slice TR9.
+2. **Class B showed the warped frame's border** (owner, every mismatched pair: "next frame square
+   borders … especially ugly"). Mechanism (measured 2026-09-14): the similarity moved the whole
+   frame, and where the moved frame no longer covered the canvas the coverage-aware mix switched
+   to the other endpoint, a rectangle of pure B (or A) inside the picture. Fixed the same day
+   (`§2.3`, harness K): each frame keeps covering the canvas by construction. Cost: the pan is
+   capped by the 10 % zoom's slack, so on far-apart salient blobs (mismatch_3: 720 px) the motion
+   is mostly the zoom and the two blobs no longer meet (mismatch_4's two suns stay 64 px apart at
+   mid-transition). `classb_zoom` is the one knob; the owner's picks on the re-rendered mismatch
+   strips decide whether it moves. Class B stays crude by design: the object and theme
+   correspondence the owner wants is slice TR9; the anchors path (MLS) still moves the whole frame.
 2c. **Directional texture inflow and subject shift on the box pairs** (match_4, match_5). Inside a
    repainted region no true correspondence exists; the DIS residual still chooses a direction and
    the splat follows it. Slice TR2d scales displacement by certainty so such regions dissolve in

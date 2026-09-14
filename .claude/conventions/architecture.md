@@ -33,7 +33,7 @@ each other (transitions harness 1–2). Its design of record is `TRANSITIONS.md`
 |---|---|---|
 | Configuration | 98–218 | `TCFG`, `CURVES`, `STYLES`, `PORTALS`, `TransitionSpec` (`n_frames`, `clamp`, `progress`), `PRESETS`, `spec_from`, `TransitionError` |
 | Decode and canvas | 219–324 | `load_image_rgb` (re-implemented), `gray_of`, `even`, `to_u8` (rounding cast), `cover`, `common_canvas`, `_grid` |
-| Correspondence | 325–548 | `sparse_homography`, `_sane`, `_dis`, `_homography_guided`, `consistency_weight`, `salient_box`, `similarity_from_boxes`, `mls_affine`, `_affine_to_disp`, `_invert_disp`, `dense_displacement` (class A/B routing, INFO line on B) |
+| Correspondence | 325–548 | `sparse_homography`, `_sane`, `_dis`, `_homography_guided`, `consistency_weight`, `salient_box`, `_box_center`, `panzoom_field` (class B, coverage-preserving pan-and-zoom, 2026-09-14), `mls_affine`, `_invert_disp`, `dense_displacement` (class A/B routing, INFO line on B) |
 | Warp | 549–676 | `backward_warp`, `forward_splat` (1/4-res coordinate splat → one remap), `fill_holes`, `morph_frame`, `portal_mask` |
 | Color path | 677–730 | `lab_stats`, `lerp_stats`, `apply_stats` (float correction, rounded once), `color_pair_at`, `luma_mask` |
 | Quality basket | 731–827 | `warping_error`, `flicker` (`edge_ratio` = hidden-cut detector), `endpoint_fidelity`, `assess`, `proxy_of`, `StreamStats` |

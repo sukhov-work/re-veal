@@ -118,6 +118,10 @@ TCFG = {
     "hole_thresh": 0.05,       # coverage below this is a true hole
     "mix_blur": 3.0,           # px, softens the coverage-aware mix
     "anchor_blend": 0.7,       # class A: weight of user anchors over the field
+    "classb_zoom": 0.10,       # class B: each frame zooms in by this much about its
+                               # salient center; the pan toward the other frame's
+                               # salient center is capped by the zoom's slack so a
+                               # frame edge never enters the canvas (defect T13)
     # color path
     "color_gain_clip": (0.4, 2.5),
     # quality basket (computed on a proxy so 4K stays cheap)
@@ -352,8 +356,9 @@ def _grid(h, w):
 # Two classes of pair. Class A (related: same or similar scene) gets a
 # homography pre-alignment plus residual DIS flow, in both directions, with
 # forward-backward consistency as per-pixel certainty. Class B (unrelated:
-# no geometric correspondence exists) gets a similarity between the two
-# salient blobs, or the user's anchor points through Moving Least Squares.
+# no geometric correspondence exists) gets one pan-and-zoom per frame about
+# its salient blob, capped so the frame keeps covering the canvas, or the
+# user's anchor points through Moving Least Squares.
 # ---------------------------------------------------------------------------
 
 def sparse_homography(gA, gB, cfg=TCFG):
@@ -445,17 +450,35 @@ def salient_box(img):
     return int(x), int(y), int(w), int(h)
 
 
-def similarity_from_boxes(boxA, boxB):
-    """2x3 similarity mapping A's box center/size onto B's (uniform scale
-    = geometric mean of the size ratios, clipped to [0.3, 3])."""
-    xa, ya, wa, ha = boxA
-    xb, yb, wb, hb = boxB
-    s = float(np.sqrt((wb / max(wa, 1)) * (hb / max(ha, 1))))
-    s = float(np.clip(s, 0.3, 3.0))
-    ca = np.array([xa + wa / 2, ya + ha / 2])
-    cb = np.array([xb + wb / 2, yb + hb / 2])
-    return np.array([[s, 0, cb[0] - s * ca[0]],
-                     [0, s, cb[1] - s * ca[1]]], np.float64)
+def _box_center(box):
+    x, y, w, h = box
+    return (x + w / 2.0, y + h / 2.0)
+
+
+def panzoom_field(h, w, pivot, toward, zoom):
+    """Displacement of a frame that zooms in by `zoom` about `pivot` and
+    pans toward `toward`, capped so the frame keeps covering the canvas:
+        x -> x + zoom * (x - pivot) + tau
+    The frame's left edge lands at tau - zoom * px and its right edge at
+    w + zoom * (w - px) + tau, so the canvas stays covered at every
+    fraction t of the field iff -zoom * (w - px) <= tau <= zoom * px (the
+    same in y). The wanted pan keeps its direction and is scaled by the
+    largest feasible fraction. Returns (disp float32 HxWx2, pan_fraction)."""
+    px, py = float(pivot[0]), float(pivot[1])
+    want = np.array([toward[0] - px, toward[1] - py], np.float64)
+    lo = np.array([-zoom * (w - px), -zoom * (h - py)])
+    hi = np.array([zoom * px, zoom * py])
+    frac = 1.0
+    for i in range(2):
+        if want[i] > 1e-9:
+            frac = min(frac, hi[i] / want[i])
+        elif want[i] < -1e-9:
+            frac = min(frac, lo[i] / want[i])
+    frac = max(0.0, frac)
+    tau = want * frac
+    gx, gy = _grid(h, w)
+    disp = np.stack([zoom * (gx - px) + tau[0], zoom * (gy - py) + tau[1]], -1)
+    return disp.astype(np.float32), float(frac)
 
 
 def mls_affine(p_src, p_dst, h, w, alpha=1.0, stride=8):
@@ -483,13 +506,6 @@ def mls_affine(p_src, p_dst, h, w, alpha=1.0, stride=8):
     f = np.einsum("mi,mij->mj", v - pstar, T) + qstar
     disp = (f - v).reshape(len(ys), len(xs), 2).astype(np.float32)
     return cv2.resize(disp, (w, h), interpolation=cv2.INTER_LINEAR)
-
-
-def _affine_to_disp(M, h, w):
-    gx, gy = _grid(h, w)
-    x2 = M[0, 0] * gx + M[0, 1] * gy + M[0, 2]
-    y2 = M[1, 0] * gx + M[1, 1] * gy + M[1, 2]
-    return np.stack([x2 - gx, y2 - gy], -1).astype(np.float32)
 
 
 def _invert_disp(d):
@@ -549,18 +565,30 @@ def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG):
     else:
         if n_anchor >= 3:
             dAB = mls_affine(anchors[0], anchors[1], h, w)
+            dBA = _invert_disp(dAB)
             method = "mls-anchors"
+            steer = ""
         else:
-            M = similarity_from_boxes(salient_box(A), salient_box(B))
-            dAB = _affine_to_disp(M, h, w)
-            method = "saliency-similarity"
-        dBA = _invert_disp(dAB)
+            # Each frame zooms in about its own salient center and pans
+            # toward the other frame's as far as the zoom's slack allows,
+            # so neither frame's edge enters the canvas (defect T13). A
+            # zooms from 1 to 1+z while it fades out; B settles from 1+z
+            # to 1 so the last frame is B itself. The two salient centers
+            # meet throughout only when neither pan is capped.
+            cA, cB = _box_center(salient_box(A)), _box_center(salient_box(B))
+            z = cfg["classb_zoom"]
+            dAB, fA = panzoom_field(h, w, cA, cB, z)
+            dBA, fB = panzoom_field(h, w, cB, cA, z)
+            method = "saliency-panzoom"
+            diag["pan_fraction"] = [round(fA, 2), round(fB, 2)]
+            steer = (f"; zoom {z:.0%}, pan {fA:.0%} / {fB:.0%} of the way "
+                     f"between the salient centers")
         wA = np.full((h, w), 0.5, np.float32)   # honest: no photometric proof
         wB = wA.copy()
         # the degrade path is visible, never silent
         log.info("correspondence: class B (%s) — no geometric correspondence "
-                 "(%d sparse inliers); pass --anchors to steer the morph",
-                 method, diag["sparse_inliers"])
+                 "(%d sparse inliers)%s; pass --anchors to steer the morph",
+                 method, diag["sparse_inliers"], steer)
     diag.update({"mean_certainty": round(float(wA.mean()), 3),
                  "median_disp_px": round(float(np.median(
                      np.linalg.norm(dAB, axis=2))), 2)})

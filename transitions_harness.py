@@ -120,6 +120,42 @@ def _refused_policy():
         return True
 
 
+def profile_step(frame, ref, win=12):
+    """Largest jump of the mean |frame - ref| between the `win` columns (or
+    rows) on either side of any position. A frame edge inside the canvas
+    reads as a step of about half the A-B gap; scene content moves it by a
+    few levels."""
+    d = np.abs(frame.astype(np.float32) - ref.astype(np.float32))
+    best = 0.0
+    for prof in (d.mean(axis=(0, 2)), d.mean(axis=(1, 2))):
+        c = np.cumsum(np.insert(prof, 0, 0.0))
+        n = len(prof)
+        left = (c[win:n - win + 1] - c[:n - 2 * win + 1]) / win
+        right = (c[2 * win:] - c[win:n - win + 1]) / win
+        best = max(best, float(np.abs(right - left).max()))
+    return best
+
+
+def blob_pair(w=640, h=400):
+    """Two unrelated flat frames, each with one textured blob: A dark with
+    the blob left of center, B bright with it right of center. Saliency
+    has exactly one thing to find in each."""
+    A = np.full((h, w, 3), 60, np.uint8)
+    B = np.full((h, w, 3), 200, np.uint8)
+    r = np.random.default_rng(3)
+    pa, pb = (140, 200), (500, 210)
+    for img, (cx, cy) in ((A, pa), (B, pb)):
+        for _ in range(60):
+            ang, rad = r.random() * 2 * np.pi, r.random() * 55
+            cv2.circle(img, (int(cx + rad * np.cos(ang)), int(cy + rad * np.sin(ang))),
+                       int(r.integers(3, 9)), tuple(int(v) for v in r.integers(0, 255, 3)), -1)
+    return A, B, pa, pb
+
+
+def min_coverage(img, disp, ts):
+    return min(float(T.forward_splat(img, disp, t)[1].min()) for t in ts)
+
+
 def run_cli(argv):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -375,6 +411,51 @@ _w3, _h3 = T.common_canvas(_S, _F, max_long=500)
 check(40, f"common policy keeps the old rule ({_w2}x{_h2}, expect 1000x1500); "
           f"max_long caps the finish canvas ({_w3}x{_h3}, expect 500x500); unknown policy refused",
       (_w2, _h2) == (1000, 1500) and (_w3, _h3) == (500, 500) and _refused_policy())
+
+# ===========================================================================
+print("== K. class B keeps both frames covering the canvas (defect T13, 2026-09-14) ==")
+_h, _w = 400, 640
+_A0 = np.full((_h, _w, 3), 60, np.uint8)
+_B0 = np.full((_h, _w, 3), 200, np.uint8)
+_shift = np.zeros((_h, _w, 2), np.float32)
+_shift[..., 0] = 160.0
+_half = np.full((_h, _w), 0.5, np.float32)
+_corr_old = {"dAB": _shift, "dBA": -_shift, "wA": _half, "wB": _half}
+_hole = float((T.forward_splat(_A0, _shift, 0.5)[1] < T.TCFG["hole_thresh"]).mean())
+_mid_old = T.morph_frame(_A0, _B0, _corr_old, 0.5, 0.5)
+_step_old = profile_step(_mid_old, _B0)
+check(41, "positive control: a whole-frame translation (the old class B shape) leaves "
+          f"{_hole:.0%} of the canvas without A and its mid frame steps {_step_old:.0f} levels "
+          "at the exposed edge (> 10 % and > 40): the border the owner saw",
+      _hole > 0.10 and _step_old > 40)
+_ts = (0.25, 0.5, 0.75, 1.0)
+_dfar, _ffar = T.panzoom_field(_h, _w, (100, 200), (600, 200), 0.10)
+_dback, _fback = T.panzoom_field(_h, _w, (600, 200), (100, 200), 0.10)
+_dnear, _fnear = T.panzoom_field(_h, _w, (300, 200), (330, 210), 0.10)
+_cov = min(min_coverage(_A0, _dfar, _ts), min_coverage(_B0, _dback, _ts),
+           min_coverage(_A0, _dnear, _ts))
+check(42, f"panzoom_field keeps the frame covering the canvas at t = 0.25..1 (min coverage "
+          f"{_cov:.2f} >= 0.5) while moving it (max {np.abs(_dfar).max():.0f} px >= 8); a far "
+          f"target is panned {_ffar:.0%} of the way (the 10 % zoom's slack), a near one "
+          f"{_fnear:.0%} so the pivot lands on it",
+      _cov >= 0.5 and np.abs(_dfar).max() >= 8 and 0 < _ffar < 0.05 and _fnear == 1.0
+      and np.abs(_dnear[200, 300] - [30, 10]).max() < 1e-3)
+_Ab, _Bb, _pa, _pb = blob_pair()
+_corr_b = T.dense_displacement(_Ab, _Bb)
+_boxc = T._box_center(T.salient_box(_Ab))
+_cov_b = min(min_coverage(_Ab, _corr_b["dAB"], _ts[:3]),
+             min_coverage(_Bb, _corr_b["dBA"], _ts[:3]))
+_mid_b = T.morph_frame(_Ab, _Bb, _corr_b, 0.5, 0.5)
+_step_b = max(profile_step(_mid_b, _Bb), profile_step(_mid_b, _Ab))
+check(43, f"class B end to end ({_corr_b['method']}): saliency finds the blob "
+          f"({np.hypot(_boxc[0] - _pa[0], _boxc[1] - _pa[1]):.0f} px from it, < 30), the field "
+          f"moves (max {np.abs(_corr_b['dAB']).max():.0f} px >= 8), no hole at t = 0.25..0.75 "
+          f"(min coverage {_cov_b:.2f} >= 0.5) and the mid frame's largest profile step is "
+          f"{_step_b:.0f} levels (< 30; the whole-frame shape measured {_step_old:.0f})",
+      _corr_b["cls"] == "B" and _corr_b["method"] == "saliency-panzoom"
+      and np.hypot(_boxc[0] - _pa[0], _boxc[1] - _pa[1]) < 30
+      and np.abs(_corr_b["dAB"]).max() >= 8 and _cov_b >= 0.5 and _step_b < 30
+      and "pan_fraction" in _corr_b["diag"])
 
 # ===========================================================================
 print("== I. identity fence (the tool is called transitions; owner ruling 2026-09-13) ==")
