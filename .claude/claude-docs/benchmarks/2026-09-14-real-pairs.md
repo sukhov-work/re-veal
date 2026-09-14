@@ -126,8 +126,7 @@ Reading of the record against this review:
 Six class A pairs × four field-using variants rendered from the RoMa outdoor field (CPU, 35–55 s
 per pair for the field; certainty as the splat weight; everything else identical to the DIS clips
 above), each beside the DIS clip of this run. Endpoints 0 / 0 on all 24 clips; every clip decodes
-to its frame count. The `dissolve` variant is omitted (it uses no field). Verdicts pending
-(`roma_picks.json` from the page).
+to its frame count. The `dissolve` variant is omitted (it uses no field). Verdicts below (`roma_picks.json`, 2026-09-15).
 
 | pair | variant | edge_ratio DIS → RoMa | warping error DIS → RoMa | RoMa render s |
 |---|---|---|---|---|
@@ -161,3 +160,28 @@ morphs, is level on match_1 and match_2 (0.0064 → 0.0070 and 0.0109 → 0.0121
 rises on mismatch_7 (0.0120 → 0.0194): RoMa's field there is 350 px off the global motion at
 certainty 0.03, the TR2d case. `edge_ratio` on flow-dissolve rises with RoMa on every pair
 (0.23 → 0.64 on match_1); cause not established, the clips decide whether it is visible.
+
+## Owner verdicts on the RoMa clips (2026-09-15, `benchmarks/runs/2026-09-14/roma/roma_picks.json`, verbatim)
+Score: RoMa better 1 (match_3) · same 1 (match_1) · DIS better 3 (match_4, match_5, mismatch_7) ·
+neither usable 1 (match_2). The plan's adoption rule for TR5 (RoMa wins on at least 5 of 7 related
+pairs) is not met; RoMa is not adopted as a drop-in class A field.
+
+| pair | verdict | note (verbatim) |
+|---|---|---|
+| match_1 | same | both ok-ish , can't see visible improvement with RoMa |
+| match_2 | neither usable | they look similar , both just do a lateral move as before ( see my complaint in previous picks file for this match_2 ) , roma did worse here as side edges become more distorted |
+| match_3 | roma better | This is one case where roma transition looks more natural (as if person grows, although still quite messy, especially person's edges) |
+| match_4 | dis better | roma does better transition for background here ( like wall and floor, more natural movement) , but box itself looks a bit boring as if prev image on it simply  fades out and new one fades in, no transformations ( although this may be useful as transition mode in our reveal app)  |
+| match_5 | dis better | as in previous match_4, same issue - box itself looks a bit boring as if prev image on it simply  fades out and new one fades in, no transformations |
+| mismatch_7 | dis better | roma here look very unnatural , as if after image unwraps with some cheap 3d cloth effect with lots of artifacts and visible edges. Dis version partially suffers as well and both are unusable but it at least more promising |
+
+What the notes say beyond the score:
+- **match_4 / match_5:** the basket and the agent's eye had scored "boxes stay put" as the win; the
+  owner reads the same thing as "boring, as if prev image on it simply fades out and new one fades
+  in, no transformations". The box must stay in place AND its paint must transform. RoMa's
+  background motion ("wall and floor, more natural movement") is liked. The fade-in-place look
+  "may be useful as transition mode in our reveal app".
+- **match_3:** RoMa "more natural (as if person grows)", edges still messy.
+- **match_2:** both slide; RoMa distorts the side edges more.
+- **mismatch_7:** RoMa "cheap 3d cloth effect with lots of artifacts and visible edges" — the 350 px
+  low-certainty field predicted above; DIS "more promising", both unusable.

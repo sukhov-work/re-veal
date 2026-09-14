@@ -187,8 +187,14 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
    content is moved less. The certainty itself only weights splat collisions and does not hold a
    region in place: on mismatch_7 (certainty 0.03) RoMa's field is 350 px off the global motion and
    its clip is expected to be worse than DIS. Scaling the displacement by the certainty (TR2d) is
-   the designed answer for that case and is measured next. TR5 integration is the next slice; the
-   owner lifted the speed gate ("below 1-2 min per pair is not that much issue for now").
+   the designed answer for that case and is measured next. Owner verdicts on the 24 RoMa clips
+   (2026-09-15, `benchmarks/2026-09-14-real-pairs.md §Owner verdicts`): RoMa better on match_3
+   only, DIS better on match_4, match_5 and mismatch_7 — not adopted as a drop-in. The owner
+   rejects both fields inside the changed region: DIS for "textures come from the right", RoMa
+   for "fades out and fades in, no transformations"; RoMa's background motion is liked. The next
+   slice is TR14, a design pass on what the changed region should do (TR2d floor, a designed
+   effect inside the changed mask over RoMa's background field, or the generative tier); the
+   speed gate stays lifted ("below 1-2 min per pair is not that much issue for now").
 2. **Class B showed the warped frame's border** (owner, every mismatched pair: "next frame square
    borders … especially ugly"). Mechanism (measured 2026-09-14): the similarity moved the whole
    frame, and where the moved frame no longer covered the canvas the coverage-aware mix switched
