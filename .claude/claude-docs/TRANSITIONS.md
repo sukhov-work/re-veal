@@ -175,6 +175,9 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | TR6 first measurement, SD 1.5 inpainting (diffusers, torch 2.14.0, MPS fp16) as a masked SDEdit pass on match_4's `hold` mid frame, 512×640, strength 0.5, 20 scheduled steps (10 run), 2026-09-15 (`§10.7`) | 1.43–1.62 s per step, 14.3–16.2 s per image, model load 49.8 s including the 2.0 GB download, peak RSS 2.41 GB; the same seed reproduces byte for byte (max abs diff 0), another seed differs by 13.0 levels mean; output: a coherent painted panel inside the mask, the wall untouched, no temporal coherence across frames |
 | TR6, LTX-2.3 int4 keyframe through the `dgrauet/ltx-2-mlx` port (MLX, dev transformer + CFG 3.0, 1.1 distilled LoRA for stage 2), match_4 A → B at 384×512, seed 0, 2026-09-15 (`§10.7`) | 25 frames 335.7 s wall, peak RSS 9.8 GB (stage 1: 20 guided steps at 12.9–13.3 s; stage 2: 3 steps; decode 7.8 s); 49 frames 436.1 s, 13.0 GB (stage 1 at 17.6 s per step); the same seed byte-identical (one md5 for the two 25-frame mp4s); `--low-ram` costs 16–18 s per step and needs the pre-fused distilled transformer for stage 2. Both clips are a cut (the finish photo takes over at frame 14 of 25 and 18 of 49; adjacent step 34 levels = the A–B gap); endpoints re-encoded (MAD 21 / 16 levels) |
 | TR6, LTX-2.3 int4 keyframe levers, match_4 A → B, 49 frames at 384×512, seed 0, 2026-09-15 late (`§10.7`; clips in `benchmarks/runs/2026-09-15/ltx/`) | motion prompt alone ("time-lapse: a street artist paints over the graffiti …"): still a cut, now at frame 7 (step 38.6 levels), then a slow drift toward B (MAD to B 22.9 → 15.7 over 40 frames), 479.8 s. Start/end conditioning strength 0.8 (default prompt): a CONTINUOUS clip — distance to A rises 21.6 → 35.6 and to B falls 37.0 → 16.2 monotonically over the 49 frames, largest adjacent step 4.23 levels (no cut); the graffiti thins while the mosaic emerges under it, the box and wall hold; 539.7 s wall (stage 1 at 21 s per step beside another run), peak RSS 14.4 GB |
+| TR6-A, the bridge on the skeleton: SD 1.5 inpainting SDEdit over the tool's skeleton frames, three pairs, 30 frames at 512 px, 2026-09-15 fourth session (`benchmarks/2026-09-15-generative.md §1`; page `benchmarks/runs/2026-09-15/gen/`) | Mean adjacent step, skeleton → fresh noise → warped noise at strength 0.4 (levels): mismatch_1 3.36 → 11.88 → 9.19, mismatch_4 2.08 → 7.21 → 6.91, match_4 2.06 → 9.45 → 4.75. Strength ramp 0.6 · sin(πu) + flow-guided filter: 3.86 / 2.89 / 2.65 (1.15× / 1.39× / 1.29× the skeleton), steps into B 3.1 / 2.6 / 2.9, content 11.6 / 7.7 / 7.9 levels from the skeleton; lifted to the native canvas 4.58 / 3.40 / 3.68 against skeletons 4.00 / 2.69 / 3.18. Same seed byte-identical (5 frames, max abs diff 0). Generator 6.0–13.4 s per frame at 0.4, 13.3–18.0 at 0.6, beside other GPU jobs; peak RSS ≤ 0.8 GB. Over the depth skeleton the warped clip's step is 13.6 / 13.3 (mismatch_4 / mismatch_1) against 6.9 / 9.2 over the pan-zoom skeleton |
+| TR10, depth camera move v0 (Depth Anything V2 Small on MPS via transformers 5.17; the pan-zoom field × (0.5 + disparity), near wins the splat), mismatch_1 / mismatch_4, 2 s clips, 2026-09-15 (`§4` of the same sheet) | depth 0.3–2.7 s per image at the native canvas; mid-frame holes ≤ 0.9 % of the canvas at 10 % and 25 % zoom; mean step 1.61 / 1.05 (10 %) and 2.24 / 1.38 (25 %) against the uniform pan-zoom 1.79 / 1.15 and 2.60 / 1.61; warping error equal or lower; render 14–34 s per 60 frames |
+| TR6-B and TR6-A2, 2026-09-15 fourth session (`§2–3` of the same sheet; clips under `benchmarks/runs/2026-09-15/{ltx,morphers}/`) | LTX keyframe 0.8 on mismatch_1 / mismatch_4: cut at frame 28 (38 levels) / 31 (21 levels), 1849 / 1961 s beside two GPU jobs, endpoints 5.3 / 5.3 and 7.4 / 10.7; match_4 at 0.6: continuous, max step 4.8, 736 s. LTX `generate` with five skeleton frames anchored, mismatch_1: continuous, mean step 2.28, max 3.87, endpoints 4.4 / 8.4, 11.3 levels from the skeleton clip, 1107 s, RSS 13.8 GB. DreamMover on MPS: 18.2 / 12.0 min (mismatch_1, two runs) and 8.8 min (mismatch_4), memory footprint 18–20 GB, endpoints 6.6 / 4.5 and 3.7 / 4.6 levels off, deterministic to 1 level, no licence. DiffMorpher: weights 404 (gated, not granted), 0.502 s per UNet step and 2.43 s per LoRA step → 42 min per pair at the README's recipe, 7.5 min minimal |
 
 ## 7. Risks and open questions, ranked
 1. **Object-level correspondence is the top gap (owner review, 2026-09-13).** Three matched pairs
@@ -467,6 +470,47 @@ intermediate but no coherence. Neither is adoptable yet; the strength-0.8 clip i
 generative candidate for a verdict, and the q8 pack and strengths 0.6 / 0.9 are the next levers.
 Gate for adopting any of it (unchanged from the plan): a fixed seed reproduces, s/frame stated
 on this Mac, the license recorded, the weights behind warmup + manifest + refuse-to-download.
+Fourth session, 2026-09-15 (sheet `benchmarks/2026-09-15-generative.md`; scripts
+`scripts/research/gen_bridge.py` and `depth_dolly.py`; the research artifact's `warp_noise_along_flow`
+and `frequency_split_blend` ported into the script): the bridge on the skeleton was measured, and
+the strength ramp with a flow-guided filter is the first configuration that passes the research
+plan's E17 gate on every pair tried. Five facts:
+1. SDEdit from the skeleton frames (SD 1.5 inpainting, 512 px long edge, guidance 6) at strength
+   0.4 re-draws the skeleton's double exposure into one scene, but flickers at 2.7–3.5× the
+   skeleton's adjacent step with fresh noise per frame. Noise carried along the skeleton's
+   displacement (frame 0's noise, nearest-neighbour warp at pixel resolution, 8×8 block sums to
+   the latent grid) cuts that by 4 % (mismatch_4), 23 % (mismatch_1) and 50 % (match_4), and the
+   same seed reproduces byte for byte. The last generated frame still jumps 7–15 levels into B.
+2. Ramping the strength as 0.6 · sin(πu) removes the endpoint jump (steps into B 3–4 levels), and a
+   filter along the skeleton's flow (each frame averaged with two neighbours each side warped into
+   it, weights 1 2 3 2 1) brings the mean adjacent step to 1.15× (mismatch_1), 1.39× (mismatch_4)
+   and 1.29× (match_4) the skeleton's, with the content 7.7–11.6 levels from the skeleton (not a
+   collapse back to it). Lifted to the native canvas with the frequency split (σ 3 px) the ratios
+   are 1.15–1.26×. Generator cost 3.5–6.5 min per 30-frame clip beside other GPU jobs.
+3. What the basket does not see, by the agent's eye: match_4 gets a different mural in every frame
+   (a per-frame model has no memory), mismatch_4 at 512×288 gets blocky tiles in the sky and water,
+   mismatch_1 is the one clip that reads as a transformation. The TR10 depth skeleton (Depth
+   Anything V2 Small, 0.3–2.7 s per image; a pan-zoom scaled by 0.5 + disparity) doubles the
+   flicker under the bridge and, alone, is a crossfade with parallax: no tearing, holes ≤ 0.9 %.
+4. LTX-2.3 keyframe interpolation at endpoint strength 0.8 is a cut on both mismatched pairs
+   (mismatch_1 frame 28, 38 levels; mismatch_4 frame 31, 21 levels) after each photo drifts
+   toward the other's composition; strength 0.6 on match_4 is continuous like 0.8 (largest step
+   4.8). With five skeleton frames anchored (`generate --image`, strengths 0.8 / 0.6 / 0.6 / 0.6
+   / 0.8) mismatch_1 is continuous (mean step 2.28, max 3.87, endpoints 4.4 / 8.4, 1107 s beside
+   the SD batch) and copies the skeleton's double exposure instead of resolving it.
+5. The two published two-image morphers fail the E16 gate: DreamMover (SD 1.5, five MPS patches)
+   takes 8.8–18.2 min per pair, re-draws the endpoints (3.7–6.6 levels off) and has no licence
+   file, so it cannot be vendored; DiffMorpher's SD 2.1-base weights are gated and return 404 to
+   the owner's token, and its measured step costs give 42 min per pair. DreamMover's sun-to-sun
+   clip is the most morph-like result of the session (the sun travels with its reflection).
+Reading: the per-frame SD bridge is the cheapest route that passes the plan's own gate and the
+only one whose endpoints are the tool's byte-exact frames. Its two visible defects need either
+the video model with the skeleton as a weak guide (anchor strengths below 0.6, or `retake` on the
+skeleton clip; the first `retake` run was in flight at the end of the session) or an
+auto-regressive input (the previous generated frame warped by the skeleton's displacement as the
+next frame's input). Nothing is adopted until the owner's picks; if one is, the shape is a
+research script behind `transitions.py` with the weights under warmup + manifest (decisions
+24–27), the generator on the 512 px canvas and the lift to the native canvas.
 
 ### 10.9 Found on the way, not TR14's
 `hold` on mismatch_7 exposes the start frame's moved border as a rectangle at mid-transition:
