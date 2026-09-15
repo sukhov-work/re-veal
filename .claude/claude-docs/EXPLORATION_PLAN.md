@@ -26,6 +26,38 @@ lands behind warmup + manifest + refuse-to-download (`HANDOFF.md §11`) and its 
 PyAV for TR4: approved ("`T8 PyAV before slice TR4 ...` - ok"). Order within the rank: TR2c first
 (small, the owner's most repeated complaint), then TR5 with TR2d measured beside it.
 
+### Rank, revised 2026-09-15 (late) — the owner's direction after the TR14 picks
+Owner (verbatim): "schedule everything relevant above for next session and to proceed with the plan , i
+am ok with any experiments , tests and additional resources as long as we have more options to test.
+While we want to imporve and make match pairs more interesting , the main problem remains with
+mismatches , the still more reseble simple crossfades with various cheap effects on top and not
+truthful continous transformations ( i guess this is where we will venture into generative area but i
+want it also to keep all good computational,  flow and other tech aspects and math  we have in project
+if this helps to keep as many details from both pictures and bridge them with unexpected cool flowing
+transition - this is just my rant, not some specific instructions for you , simply to give you piece
+of my mind, we still have .claude/claude-docs/transitions-research/impossible-0.1.0/impossible/RESEARCH-PLAN.md,
+see where we can push it even more". Reading: mismatched pairs are the main problem; the generative
+tier is the route, with the deterministic skeleton (fields, splat, color path, masks) kept as the
+steering and the detail source (research E17: SDEdit from the skeleton frames, warped noise along the
+skeleton's flow, frequency-split lift). Experiments, tests and resources are approved in blanket.
+1. **TR6-A, the generative bridge on the skeleton** (research E17 + E14/E16 gates): SD 1.5 inpainting
+   on MPS (installed, 15 s per 512-px frame) over the class B / `hold-dis` skeleton frames of
+   mismatch_1 and mismatch_4 (+ match_4 as the control): independent noise vs warped noise along the
+   skeleton's displacement (`generative.warp_noise_along_flow`, ported into the research script),
+   then the frequency-split lift to the native canvas; measure adjacent-frame steps and warping error
+   against the skeleton's flow; clips on a page. Then DiffMorpher (SD 2.1-base, S-Lab non-commercial:
+   personal use, license recorded; gated weights need the owner's Hugging Face click-through) and
+   DreamMover (SD 1.5) as the two published two-image morphers: minutes per pair on this Mac, look.
+2. **TR6-B, LTX-2.3 levers** (background, 6–8 min each): motion prompt, end-frame strengths 0.8, 97
+   frames, the q8 pack. Park the video route if none yields an in-between.
+3. **TR10 depth camera move** (research E11): Depth Anything V2 Small on MPS, a 2.5D dolly from A into
+   B on a mismatched pair — a continuous camera motion that keeps both photos' detail; s/frame.
+4. **TR9 semantics** (research E9/E13): SAM 2 + DINOv2 anchors so the salient subjects land on each
+   other; SAM-mask portals.
+5. **TR14 second probe on the match pairs**: partial-strength luma over `dis` / `hold-dis`, a stroke-flow
+   along the new content's structure, RoMa + partial luma on match_3.
+Then TR2b/TR5 as components, TR7 speed only when iteration time blocks 1–5, TR3/TR4/H/E as before.
+
 ## H — harness before exploration (evidence: `HANDOFF.md §7`, `harness.py`, backlog T2–T5)
 | Slice | Goal (acceptance) | Seam | Revert | Gate / check | Size | Depends on |
 |---|---|---|---|---|---|---|
@@ -89,6 +121,7 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-14 | Owner picks ingested (0 of 12 usable as-is, 3 closest-to-intent picks; E2 not met); canvas ruling "finish target ratio wins" implemented as the default policy; TR2c (class B border defect), TR2d (certainty-weighted warp), TR13 (canvas modes) added; blanket approval to fetch backends; PyAV approved | transitions session, 2026-09-14 |
 | 2026-09-13 | Rank revised after the owner's first review of the sheet: TR5 → TR9 → TR6 → TR7 → TR2b → TR3/TR4 → H/E (quotes in §Rank) | transitions session, night |
 | 2026-09-14 | TR2c shipped (class B pan-and-zoom within the coverage slack; T13 closed); TR5 preparation started in a scratch venv (romatch 0.1.2, MIT; DINOv2 backbone Apache-2.0; two weight files) | transitions session, 2026-09-14 evening |
+| 2026-09-15 | Rank revised after the owner's direction (mismatches first, generative bridge on the deterministic skeleton, blanket approval for experiments and resources); TR6-A/TR6-B, TR10, TR9, TR14 second probe scheduled | transitions session, 2026-09-15 (third, late) |
 | 2026-09-15 | Owner picks on the TR14 page ingested: 0 of 4 acceptable; the position hold reads as a fade; next probe = motion-bearing field + partial luma + stroke-flow; `melt` out | transitions session, 2026-09-15 (third, late) |
 | 2026-09-15 | TR14 design written (`TRANSITIONS.md §10`): TR2d as written rejected, `hold` (residual form) is the floor, three deterministic effects + `hold-dis` on the review page for the owner's picks; TR6 researched and first-measured (SD 1.5 inpainting on MPS; LTX-2.3 MLX keyframe fetched) | transitions session, 2026-09-15 (third) |
 | 2026-09-15 | Owner verdicts on the RoMa clips: 1 better / 1 same / 3 DIS better / 1 neither → TR5 not adopted as a drop-in; TR14 (changed-region transformation) added as the next design pass; rank now TR14 design → TR2d measure → TR6 measurement → TR9 → TR5 hybrid | transitions session, 2026-09-15 |

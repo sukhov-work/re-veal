@@ -205,6 +205,10 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
    and is rejected; `hold` (camera motion + residual × certainty) is the floor and fixes
    mismatch_7's tearing; three deterministic effects and a weight-free `hold-dis` are on the
    review page for the owner's picks; the generative tier is researched and first-measured (§10.7).
+   Owner picks 2026-09-15: 0 of 4 acceptable, "hardly see any improbements since previous runs";
+   the owner's direction (verbatim in `EXPLORATION_PLAN.md §Rank, revised 2026-09-15 late`): the
+   mismatched pairs are the main problem, the generative tier is the route, and the deterministic
+   skeleton stays as the steering and detail source; experiments and resources approved in blanket.
 2. **Class B showed the warped frame's border** (owner, every mismatched pair: "next frame square
    borders … especially ugly"). Mechanism (measured 2026-09-14): the similarity moved the whole
    frame, and where the moved frame no longer covered the canvas the coverage-aware mix switched
