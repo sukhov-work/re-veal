@@ -500,7 +500,9 @@ plan's E17 gate on every pair tried. Five facts:
    the SD batch) and copies the skeleton's double exposure instead of resolving it. `retake` of the
    skeleton clip's middle latents (pixel frames 9–32, 30 steps) is a re-encoding of the skeleton:
    continuous (mean step 1.97), endpoints 4.4 / 4.0, and 4.6 levels from the skeleton where it
-   regenerated against 2.4 where it kept (the codec), 1505 s.
+   regenerated against 2.4 where it kept (the codec), 1505 s. The same five-anchor recipe on
+   mismatch_4 (512×256): continuous, mean step 1.32, endpoints 7.6 / 12.7, 11.7 levels from the
+   skeleton, two suns visible mid-clip as in the skeleton, 512 s alone.
 5. The two published two-image morphers fail the E16 gate: DreamMover (SD 1.5, five MPS patches)
    takes 8.8–18.2 min per pair, re-draws the endpoints (3.7–6.6 levels off) and has no licence
    file, so it cannot be vendored; DiffMorpher's SD 2.1-base weights are gated and return 404 to
