@@ -391,6 +391,17 @@ once the video route is measured (§10.7).
 - Reversibility: `[revert: option value; default flow untouched]`; the experimental lane of
   `AGENTS.md` (a new option value, the default path byte-identical).
 
+**Owner picks, 2026-09-15 (`benchmarks/2026-09-15-real-pairs.md §Owner picks`, verbatim there):**
+acceptable as-is 0 of 4; overall "hardly see any improbements since previous runs". match_4 → `dis`,
+match_5 → `hold-dis`, match_3 → `roma`, mismatch_7 → none; `melt` "too wobly"; the wanted direction
+on the box pairs is "even more transformation" with "a bit luma" mixed in, and the owner suspects
+`dis`/`hold-dis` + `luma` "work only because it is very close match". Effect on the recommendation:
+the position hold is necessary (match_5's pick is the held field) but reads as a fade on its own;
+the next probe combines a motion-bearing field with the `luma` reveal at partial strength
+(`reveal_strength` k: mix = crossfade × (1 − k) + luma order × k), and adds a stroke-flow motion
+along the new content's structure; `melt` is dropped. `hold` stays the named "fade in place" mode.
+The `changed` option shape above stands; which values ship waits for a pick that is acceptable.
+
 ### 10.7 The generative tier
 Research first (`scratchpad/tr6_backends.md`, primary sources only, 2026-09-15), then one
 measurement. Facts that decide the shape:
@@ -453,8 +464,8 @@ a large camera motion (match_5: a 35 px band at one edge at mid-frame). A canvas
 Recorded as backlog T14.
 
 ### 10.8 Open questions for the owner
-1. On the page: which variant per pair is closest, and is any acceptable as-is? If none, what
-   should the paint do — the note field.
+1. Answered 2026-09-15 (picks above): none acceptable; "even more transformation", `dis`/`hold-dis`
+   + "a bit luma" is the direction; the next page carries the partial-strength luma and a stroke-flow.
 2. `hold` (RoMa) against `hold-dis` (DIS + mask): is the background motion RoMa gives on match_4
    worth the dense matcher, or is the weight-free `hold-dis` enough?
 3. TR6: which backend may be fetched first (license and size in §10.7).

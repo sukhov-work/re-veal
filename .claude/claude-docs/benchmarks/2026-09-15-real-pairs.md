@@ -118,5 +118,31 @@ worst of the clip's frames at t = ¼, ½, ¾; the rest is the tool's basket.
 - Render cost: the effects add 0–1 s per 30 frames over `hold`; `hold-dis` and `melt-soft` rows
   carry 1–3 s more because they ran beside another job.
 
-## Owner picks
-Pending (`tr14_picks.json` next to the page: closest variant per pair, "acceptable as-is", note).
+## Owner picks (2026-09-15, `benchmarks/runs/2026-09-15/tr14/tr14_picks.json`, verbatim)
+Acceptable as-is: **0 of 4**. Owner, overall (verbatim): "hardly see any improbements since previous runs".
+
+| pair | closest | acceptable as-is | note (verbatim) |
+|---|---|---|---|
+| match_4 | `dis` | no | I want even more transformation, but if i could mix dis + maybe a bit luma looks promising ( obviousuly keep researching other stuff) , melt is too wobly . And even dis and luma i suspect work only becouse it is very close match |
+| match_5 | `hold-dis` | no | I want even more transformation, but if i could mix - hold-dis + maybe a bit luma looks promising ( obviousuly keep researching other stuff) , melt is too wobly . And even hold-dis and luma i suspect work only becouse it is very close match |
+| match_3 | `roma` | no | other approaches still just fade out - fade in of a person ( e.g hold-dis in this case)  , only roma somewhat resambles fluid upper motion  ( still with artifacts on person edges) , all other distorts person too much |
+| mismatch_7 | `none` | no | hold and hold-dis , nice attempt to transform clouds at least( no better then previous runs, too chaotic)  , everything else is either simple crossfades with additional montion or too noisy. also still can see hard edges  of start frame in transition |
+
+What the picks say against the agent's reading above:
+- **The position hold is not the improvement the owner grades.** On match_4 the pick is `dis`, the
+  variant with the most motion inside the box and the one rejected on 2026-09-14 for its directional
+  inflow; on match_5 it is `hold-dis`. In both notes the wanted direction is "even more
+  transformation" with "a bit luma" mixed in, and the owner doubts both work beyond "a very close
+  match". So the floor (`hold`) reads as a fade, exactly as RoMa did; the owner wants motion inside
+  the changed region plus a structured reveal, not stillness.
+- **`melt` is out** ("too wobly"), both feathers.
+- **match_3:** only `roma` "somewhat resembles fluid upper motion"; every `hold`-based variant is a
+  fade of the person. The person's motion is RoMa's field, edges aside: TR9 with the RoMa field.
+- **mismatch_7:** `hold` / `hold-dis` are a "nice attempt to transform clouds at least" but "no
+  better than previous runs, too chaotic"; the "hard edges of start frame" the owner still sees is
+  backlog T14, confirmed by the owner's eye.
+- Next candidates, cheapest first: (1) the motion-bearing field (`dis`, or `hold-dis` where the
+  object must not shift) with the `luma` reveal at partial strength (a `reveal_strength` knob:
+  mix = crossfade × (1 − k) + luma order × k); (2) a designed in-mask motion that follows the new
+  content's structure (a stroke-flow along B's gradient orientation, the candidate skipped in this
+  pass); (3) the generative levers of `TRANSITIONS.md §10.7`. Recorded in the plan (TR14) and the handover.
