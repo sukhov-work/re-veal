@@ -173,6 +173,7 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | RoMa outdoor (romatch 0.1.2, torch 2.14, CPU, 12 threads) on match_4 at 1536×1920, scratch venv, 2026-09-14, concurrent with the sweep | weights 1,217,586,395 + 445,647,516 bytes (DINOv2 ViT-L/14 Apache-2.0, RoMa MIT), load 80 s incl. download; match 40.6–44.8 s per pair (4 runs) against 0.74 s for homography+DIS; the input is resized to 560×560 coarse and 864×864 for the field, aspect ignored; certainty mean 0.553 (62 % of pixels above 0.5); median displacement 9.9 px (DIS 15.1); median difference to the DIS field 0.57 px over the canvas, 0.20 px where both are confident (52 % of pixels) |
 | TR14 probe, nine variants on match_3 / match_4 / match_5 / mismatch_7, morph 1 s (+ 3 s on the box pairs), 2026-09-15 (`benchmarks/2026-09-15-real-pairs.md`, `§10`) | 66 clips, endpoints 0 / 0. Median displacement inside the changed mask, match_4: `dis` 20.9 px, `roma` 3.1, `roma-x-cert` 1.0, `hold` 5.2 (= the camera motion); match_5: 79.7 / 74.3 / 2.9 / 72.8 (camera 72.8); mismatch_7: 312 / 489 / 0.4 / 330 (camera 330). Box-edge straightness (p90 of the harness O tracker), match_4 photo 2.54 px: `dis` 6.3, `roma` 2.4, `hold` 2.54, `hold-dis` 4.4, `luma` 3.96, `edge-grow` 3.49, `melt` 5.31, `melt-soft` 2.42. Warping error on mismatch_7: `dis` 0.012, `roma` 0.0194, `hold` 0.0081. Effects add 0–1 s per 30 frames |
 | TR6 first measurement, SD 1.5 inpainting (diffusers, torch 2.14.0, MPS fp16) as a masked SDEdit pass on match_4's `hold` mid frame, 512×640, strength 0.5, 20 scheduled steps (10 run), 2026-09-15 (`§10.7`) | 1.43–1.62 s per step, 14.3–16.2 s per image, model load 49.8 s including the 2.0 GB download, peak RSS 2.41 GB; the same seed reproduces byte for byte (max abs diff 0), another seed differs by 13.0 levels mean; output: a coherent painted panel inside the mask, the wall untouched, no temporal coherence across frames |
+| TR6, LTX-2.3 int4 keyframe through the `dgrauet/ltx-2-mlx` port (MLX, dev transformer + CFG 3.0, 1.1 distilled LoRA for stage 2), match_4 A → B at 384×512, seed 0, 2026-09-15 (`§10.7`) | 25 frames 335.7 s wall, peak RSS 9.8 GB (stage 1: 20 guided steps at 12.9–13.3 s; stage 2: 3 steps; decode 7.8 s); 49 frames 436.1 s, 13.0 GB (stage 1 at 17.6 s per step); the same seed byte-identical (one md5 for the two 25-frame mp4s); `--low-ram` costs 16–18 s per step and needs the pre-fused distilled transformer for stage 2. Both clips are a cut (the finish photo takes over at frame 14 of 25 and 18 of 49; adjacent step 34 levels = the A–B gap); endpoints re-encoded (MAD 21 / 16 levels) |
 
 ## 7. Risks and open questions, ranked
 1. **Object-level correspondence is the top gap (owner review, 2026-09-13).** Three matched pairs
@@ -421,7 +422,24 @@ figure, flowers), the wall untouched: an intermediate that is neither photo, whi
 "dream" the research plan describes. What it does not give: temporal coherence (each frame is an
 independent sample; a 30-frame clip at 15 s per frame is 7.5 min and would flicker), so the
 video route (LTX-2 keyframe, or warped-noise steering, research E17) is the next measurement.
-LTX-2.3 int4 pack subset (transformer-dev, distilled LoRA 1.1, connector, VAEs, upscalers, audio VAE, vocoder: 29.5 GB) and Gemma-3-12B 4-bit (8.1 GB) fetched into the session scratchpad on 2026-09-15; the first `keyframe` run (match_4 A → B, 384×512, 25 frames at 25 fps, seed 0, `--low-ram`, run twice) is recorded in the handover and, when it finishes, as a §6 row.
+LTX-2.3 int4 through the MLX port, measured 2026-09-15 (match_4 A → B, 384×512, 25 fps, seed 0,
+`--dev-transformer transformer-dev.safetensors --cfg-scale 3.0`, the 1.1 distilled LoRA for
+stage 2, no `--low-ram`; the pack subset 29.5 GB + the pre-fused distilled transformer 11.3 GB +
+Gemma-3-12B 4-bit 8.1 GB in the session scratchpad): 25 frames in 335.7 s wall (Gemma 3.9 s, prompt
+15.8 s, stage 1 twenty guided steps at 12.9–13.3 s each, stage 2 three steps at 12–19 s, decode
+7.8 s), peak RSS 9.8 GB; 49 frames in 436.1 s (stage 1 at 17.6 s per step, stage 2 51 s), peak
+RSS 13.0 GB; with `--low-ram` stage 1 ran at 16–18 s per step and stage 2 refused without the
+pre-fused distilled file. The same seed reproduces byte for byte (the two 25-frame mp4s have one
+md5). The clips are a CUT, not a transition: the start photo holds (gray MAD to A 21, to B 37 at
+384×512) and the finish photo takes over at frame 14 of 25 and frame 18 of 49 (MAD to A 36, to B 16)
+with an adjacent-frame step of 34 levels, the size of the A–B gap; no frame lies between the two
+photos. Endpoints are not the inputs (MAD 21 / 16 levels: the pipeline re-encodes and re-grades
+them). Not established why: the prompt ("static camera"), the conditioning strengths (1.0 both
+ends), the int4 pack and the port's keyframe recipe are each untested levers (`--start-strength`
+/ `--end-strength` below 1, a prompt that names the change as motion, 97 frames, the q8 pack).
+Reading: at 6–7 min per clip the video route is affordable under the owner's timing rule, and its
+first result gives the transformation nothing; the masked SD 1.5 pass gives an intermediate but
+no coherence. Neither is adoptable yet.
 Gate for adopting any of it (unchanged from the plan): a fixed seed reproduces, s/frame stated
 on this Mac, the license recorded, the weights behind warmup + manifest + refuse-to-download.
 
