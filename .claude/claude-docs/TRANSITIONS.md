@@ -174,6 +174,7 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | TR14 probe, nine variants on match_3 / match_4 / match_5 / mismatch_7, morph 1 s (+ 3 s on the box pairs), 2026-09-15 (`benchmarks/2026-09-15-real-pairs.md`, `§10`) | 66 clips, endpoints 0 / 0. Median displacement inside the changed mask, match_4: `dis` 20.9 px, `roma` 3.1, `roma-x-cert` 1.0, `hold` 5.2 (= the camera motion); match_5: 79.7 / 74.3 / 2.9 / 72.8 (camera 72.8); mismatch_7: 312 / 489 / 0.4 / 330 (camera 330). Box-edge straightness (p90 of the harness O tracker), match_4 photo 2.54 px: `dis` 6.3, `roma` 2.4, `hold` 2.54, `hold-dis` 4.4, `luma` 3.96, `edge-grow` 3.49, `melt` 5.31, `melt-soft` 2.42. Warping error on mismatch_7: `dis` 0.012, `roma` 0.0194, `hold` 0.0081. Effects add 0–1 s per 30 frames |
 | TR6 first measurement, SD 1.5 inpainting (diffusers, torch 2.14.0, MPS fp16) as a masked SDEdit pass on match_4's `hold` mid frame, 512×640, strength 0.5, 20 scheduled steps (10 run), 2026-09-15 (`§10.7`) | 1.43–1.62 s per step, 14.3–16.2 s per image, model load 49.8 s including the 2.0 GB download, peak RSS 2.41 GB; the same seed reproduces byte for byte (max abs diff 0), another seed differs by 13.0 levels mean; output: a coherent painted panel inside the mask, the wall untouched, no temporal coherence across frames |
 | TR6, LTX-2.3 int4 keyframe through the `dgrauet/ltx-2-mlx` port (MLX, dev transformer + CFG 3.0, 1.1 distilled LoRA for stage 2), match_4 A → B at 384×512, seed 0, 2026-09-15 (`§10.7`) | 25 frames 335.7 s wall, peak RSS 9.8 GB (stage 1: 20 guided steps at 12.9–13.3 s; stage 2: 3 steps; decode 7.8 s); 49 frames 436.1 s, 13.0 GB (stage 1 at 17.6 s per step); the same seed byte-identical (one md5 for the two 25-frame mp4s); `--low-ram` costs 16–18 s per step and needs the pre-fused distilled transformer for stage 2. Both clips are a cut (the finish photo takes over at frame 14 of 25 and 18 of 49; adjacent step 34 levels = the A–B gap); endpoints re-encoded (MAD 21 / 16 levels) |
+| TR6, LTX-2.3 int4 keyframe levers, match_4 A → B, 49 frames at 384×512, seed 0, 2026-09-15 late (`§10.7`; clips in `benchmarks/runs/2026-09-15/ltx/`) | motion prompt alone ("time-lapse: a street artist paints over the graffiti …"): still a cut, now at frame 7 (step 38.6 levels), then a slow drift toward B (MAD to B 22.9 → 15.7 over 40 frames), 479.8 s. Start/end conditioning strength 0.8 (default prompt): a CONTINUOUS clip — distance to A rises 21.6 → 35.6 and to B falls 37.0 → 16.2 monotonically over the 49 frames, largest adjacent step 4.23 levels (no cut); the graffiti thins while the mosaic emerges under it, the box and wall hold; 539.7 s wall (stage 1 at 21 s per step beside another run), peak RSS 14.4 GB |
 
 ## 7. Risks and open questions, ranked
 1. **Object-level correspondence is the top gap (owner review, 2026-09-13).** Three matched pairs
@@ -452,9 +453,18 @@ photos. Endpoints are not the inputs (MAD 21 / 16 levels: the pipeline re-encode
 them). Not established why: the prompt ("static camera"), the conditioning strengths (1.0 both
 ends), the int4 pack and the port's keyframe recipe are each untested levers (`--start-strength`
 / `--end-strength` below 1, a prompt that names the change as motion, 97 frames, the q8 pack).
-Reading: at 6–7 min per clip the video route is affordable under the owner's timing rule, and its
-first result gives the transformation nothing; the masked SD 1.5 pass gives an intermediate but
-no coherence. Neither is adoptable yet.
+Levers, 2026-09-15 late (49 frames each): the motion prompt alone keeps the cut (frame 7) and
+adds a slow drift toward B; start/end conditioning strength 0.8 removes the cut: a continuous clip
+whose distance to A rises and to B falls monotonically (largest adjacent step 4.2 levels), the
+graffiti thinning while the mosaic emerges under it, box and wall holding (`benchmarks/runs/2026-09-15/ltx/
+match_4_kf49_strength08.mp4`, strip beside it). So the video route works with the endpoints held
+at 0.8, at 6–9 min per 49-frame clip; whether the in-between reads as a transformation or a
+graded fade is the owner's verdict; the endpoints are re-encoded (MAD 21 / 16), so the tool's
+byte-exact endpoints must come from the skeleton (splice the model's frames between frame 1 and
+n−2, or blend the first/last few frames toward the photos). Reading: the video route is affordable
+under the owner's timing rule and now produces an in-between; the masked SD 1.5 pass gives an
+intermediate but no coherence. Neither is adoptable yet; the strength-0.8 clip is the first
+generative candidate for a verdict, and the q8 pack and strengths 0.6 / 0.9 are the next levers.
 Gate for adopting any of it (unchanged from the plan): a fixed seed reproduces, s/frame stated
 on this Mac, the license recorded, the weights behind warmup + manifest + refuse-to-download.
 
