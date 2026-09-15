@@ -497,7 +497,10 @@ plan's E17 gate on every pair tried. Five facts:
    toward the other's composition; strength 0.6 on match_4 is continuous like 0.8 (largest step
    4.8). With five skeleton frames anchored (`generate --image`, strengths 0.8 / 0.6 / 0.6 / 0.6
    / 0.8) mismatch_1 is continuous (mean step 2.28, max 3.87, endpoints 4.4 / 8.4, 1107 s beside
-   the SD batch) and copies the skeleton's double exposure instead of resolving it.
+   the SD batch) and copies the skeleton's double exposure instead of resolving it. `retake` of the
+   skeleton clip's middle latents (pixel frames 9–32, 30 steps) is a re-encoding of the skeleton:
+   continuous (mean step 1.97), endpoints 4.4 / 4.0, and 4.6 levels from the skeleton where it
+   regenerated against 2.4 where it kept (the codec), 1505 s.
 5. The two published two-image morphers fail the E16 gate: DreamMover (SD 1.5, five MPS patches)
    takes 8.8–18.2 min per pair, re-draws the endpoints (3.7–6.6 levels off) and has no licence
    file, so it cannot be vendored; DiffMorpher's SD 2.1-base weights are gated and return 404 to
@@ -506,7 +509,7 @@ plan's E17 gate on every pair tried. Five facts:
 Reading: the per-frame SD bridge is the cheapest route that passes the plan's own gate and the
 only one whose endpoints are the tool's byte-exact frames. Its two visible defects need either
 the video model with the skeleton as a weak guide (anchor strengths below 0.6, or `retake` on the
-skeleton clip; the first `retake` run was in flight at the end of the session) or an
+skeleton clip re-encoded it, so the guide has to be weaker than 0.6 or a different kind) or an
 auto-regressive input (the previous generated frame warped by the skeleton's displacement as the
 next frame's input). Nothing is adopted until the owner's picks; if one is, the shape is a
 research script behind `transitions.py` with the weights under warmup + manifest (decisions

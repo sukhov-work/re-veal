@@ -158,7 +158,7 @@ would have to re-implement. DiffMorpher's cost model rules it out before the lic
 | `mismatch_4_kf49_s08` | 1961 s / 7.7 GB | 7.4 / 10.7; 32.6 | 3.8 / 21.1 (31) | a cut at frame 31 after the sun and its reflection drift toward B's composition (distance to A 7 → 30) |
 | `match_4_kf49_s06` (start/end strength 0.6) | 736 s beside the SD batch / 14.6 GB | 22.4 / 16.8; 34.4 | 4.0 / 4.8 (41) | continuous like 0.8: distance to A rises 22 → 36 and to B falls 37 → 17 monotonically; the endpoints are no closer to the photos than at 0.8 |
 | `mismatch_1_anchors5` (`generate --two-stage` with the skeleton's frames 0 / 12 / 24 / 36 / 48 anchored at strengths 0.8 / 0.6 / 0.6 / 0.6 / 0.8) | 1107 s beside the SD batch / 13.8 GB | 4.4 / 8.4; 54.6 | 2.28 / 3.87 (29) | no cut, monotone; the clip follows the skeleton's crossfade (11.3 levels from the 49-frame skeleton clip on average, 3–15 per frame) and reproduces its double exposure at frames 24–32 instead of resolving it: the middle anchors at 0.6 carry the crossfade into the model |
-| `mismatch_1_retake` (`retake` of latent frames 2–4 = pixel frames 9–32 of the 49-frame skeleton clip) | PENDING | | | |
+| `mismatch_1_retake` (`retake` of latent frames 2–4 = pixel frames 9–32 of the 49-frame skeleton clip, 30 steps, CFG 3.0) | 1505 s beside the SD batch / 15.0 GB | 4.4 / 4.0; 54.6 | 1.97 / 2.73 (11) | continuous and monotone, and a re-encoding of the skeleton: the regenerated frames are 4.6 levels from the skeleton clip on average (the kept frames 2.4, which is the codec), so the model kept the skeleton's crossfade instead of re-dreaming the middle |
 | `mismatch_4_anchors5` | PENDING | | | |
 
 Not run this session (dropped for the skeleton-conditioned modes above; the owner's priority is
