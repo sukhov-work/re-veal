@@ -212,7 +212,39 @@ owner objects to; its value is as the generator's skeleton (§1, the `-depth25` 
    owner's account and its cost model is 42 min per pair. DreamMover's sun-to-sun clip is still
    the most morph-like result of the session and is on the page for the owner's eye.
 
-## 6. Owner picks
+## 6. Owner picks (2026-09-22 `benchmarks/runs/2026-09-15/gen/gen_bridge_picks.json`; 2026-09-23 message)
 
-Pending. Export `gen_bridge_picks.json` from the bridge page and `depth_dolly_picks.json` from the
-depth page; verdicts on the LTX clips and the DreamMover clips by name.
+Bridge page: all five pairs `none`, acceptable as-is unticked. Note on mismatch_1, mismatch_4,
+mismatch_1-depth25 and mismatch_4-depth25 (one text): "motion transformation is horrible neural
+slop very low resolution transitions with neural network heavy halucinations artifacts in almost
+all intermediate frames which preserve no features and make both images unrecognizable  ( except
+skeletons, which are again dumb crossfades) ". Note on match_4: "motion transformation is horrible
+neural slop transitions with neural network heavy halucinations artifacts in all intermediate
+frames which do even more harm because boxes are pretty closely matched , they do generate random
+(changing )images on boxes for all intermediate frames  ( except skeletons, which are too
+resembling  to some simple  crossfades) ". Message (2026-09-23): "overall experience was horrible,
+heavy neural arifacts, or halucinated intermediate images, noise, chaotic and same crossdes", with
+three screenshots: a hallucinated pier and building in a mismatch_4 frame, a blurred and noisy
+mismatch_1 frame (its caption "skeleton-flow 0.0229 · warping 0.0244" is `lift-smooth_s0.6`), and
+a hallucinated box image on match_4.
+
+Depth page (message, 2026-09-23): "regarding `TR10 — a depth-aware camera move for unrelated
+pairs` i really liked the effect on all individual images especially z25 … Transitions still mostly
+simple crossfades , nothing imporoved there but this depth animation added really cool dynamics to
+before and after images , i think we can utilize that in addition to anything else ( at least as
+option )". No `depth_dolly_picks.json` was exported.
+
+Effect: TR6-A as measured is rejected; the E17 gate measured flicker, not the hallucinations the
+owner sees, so the basket needs a feature-preservation number before any further generative run
+(candidate: SIFT matches between each in-between frame and the nearer endpoint, against the
+skeleton's own count). TR10 moves to the top of the plan as an option to build; the `ramp` control
+(§4, added 2026-09-23) is on the depth page beside the model's clips for the owner's eye.
+
+Added 2026-09-23 to §4: `ramp_z10` / `ramp_z25` = the same modulation with a top-to-bottom ramp
+in place of the model (disparity 0 at the top row, 1 at the bottom; correlation with the model's
+disparity 0.62 / 0.82 on mismatch_1 A / B and 0.93 / 0.83 on mismatch_4): mismatch_1 step
+1.94 / 2.75 (z10) and 2.83 / 4.08 (z25), mismatch_4 1.15 / 1.61 and 1.58 / 2.24, holes 0 / 0,
+warping error 0.0066 / 0.0083 and 0.0039 / 0.0045. Depth Anything V2 Small re-timed in a fresh
+environment (torch 2.14.0, transformers, the image processor resizes to 518 px so the cost barely
+depends on the input): CPU 0.34 s per image at 1024 px long edge (12 threads), MPS 0.08–0.09 s
+after a 1.5 s warm-up; 24.8 M parameters, 99 MB fp32, Apache-2.0.

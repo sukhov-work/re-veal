@@ -11,8 +11,9 @@ either tool.
         Small (`depth-anything/Depth-Anything-V2-Small-hf`, Apache-2.0) on MPS over GEN/<pair>/A.png
         and B.png -> OUT/<pair>/disp_A.npy, disp_B.npy (relative inverse depth, 0 far .. 1 near, at the
         native canvas), disp_A.jpg / disp_B.jpg, depth.json (s per image, model, sizes)
-  --render GEN OUT PAIR...    (.venv) four clips per pair, 2 s at 30 fps, morph preset: the tool's
-        pan-and-zoom at 10 % and 25 % zoom, and the depth-modulated field at the same two zooms;
+  --render GEN OUT PAIR...    (.venv) six clips per pair, 2 s at 30 fps, morph preset: the tool's
+        pan-and-zoom at 10 % and 25 % zoom, the depth-modulated field at the same two zooms, and
+        a weight-free control (`ramp`: disparity 0 at the top row, 1 at the bottom) at both zooms;
         OUT/<pair>/<variant>/{transition.mp4, strip.jpg, mid.jpg, report.json}; OUT/depth_dolly.json
   --page OUT PAIR...          (.venv) OUT/index.html with a pick per pair
   --export GEN OUT PAIR...    (.venv) hand the depth field (25 % zoom) to the generative bridge: writes
@@ -119,17 +120,22 @@ def render(gen, out, pairs):
         for z in ZOOMS:
             pz_AB, fA = T.panzoom_field(h, w, cA, cB, z)
             pz_BA, fB = T.panzoom_field(h, w, cB, cA, z)
-            for variant in ("panzoom", "depth"):
+            ramp = np.repeat(np.linspace(0, 1, h, dtype=np.float32)[:, None], w, 1)
+            for variant in ("panzoom", "depth", "ramp"):
                 tag = f"{variant}_z{int(z * 100)}"
                 if variant == "panzoom":
                     dAB, dBA = pz_AB, pz_BA
                     wA = np.full((h, w), 0.5, np.float32)
                     wB = wA.copy()
                 else:
-                    dAB = pz_AB * (1 - GAIN / 2 + GAIN * dA)[..., None]
-                    dBA = pz_BA * (1 - GAIN / 2 + GAIN * dB)[..., None]
-                    wA = (W_FLOOR + (1 - W_FLOOR) * dA).astype(np.float32)
-                    wB = (W_FLOOR + (1 - W_FLOOR) * dB).astype(np.float32)
+                    # ramp: a weight-free stand-in for the depth map — disparity 0 at the top row,
+                    # 1 at the bottom (a landscape prior; correlates 0.62–0.93 with the model's
+                    # disparity on mismatch_1 / mismatch_4, measured 2026-09-23)
+                    dA_, dB_ = (dA, dB) if variant == "depth" else (ramp, ramp)
+                    dAB = pz_AB * (1 - GAIN / 2 + GAIN * dA_)[..., None]
+                    dBA = pz_BA * (1 - GAIN / 2 + GAIN * dB_)[..., None]
+                    wA = (W_FLOOR + (1 - W_FLOOR) * dA_).astype(np.float32)
+                    wB = (W_FLOOR + (1 - W_FLOOR) * dB_).astype(np.float32)
                 corr = {"dAB": dAB.astype(np.float32), "dBA": dBA.astype(np.float32), "wA": wA, "wB": wB,
                         "cls": "B", "method": tag, "diag": {}}
                 o = OUT / pid / tag
@@ -207,7 +213,8 @@ def page(out, pairs):
             "<div class=hint><b>What varies: the zoom (10 % = the tool today, 25 %) and whether a depth map shapes the motion.</b> "
             "<code>panzoom</code> is the tool's class B skeleton: each photo zooms about its salient center and pans toward the other's, "
             "the same motion at every depth. <code>depth</code> multiplies that motion by the photo's own depth (Depth Anything V2 Small): "
-            "the nearest content moves 1.5×, the farthest 0.5×, and near content wins where the warp overlaps. Every clip is the "
+            "the nearest content moves 1.5×, the farthest 0.5×, and near content wins where the warp overlaps. <code>ramp</code> is the "
+            "same modulation with no model at all: disparity 0 at the top row and 1 at the bottom (a landscape prior). Every clip is the "
             "<code>morph</code> preset, 2 s, native canvas. Numbers: hole = the share of the canvas a side leaves uncovered at the "
             "mid frame (the tool fills it by stretching); the rest is the tool's basket. Pick the clip closest to what you want per pair, "
             "tick <b>acceptable as-is</b> only if it is, say what is wrong, then <b>Export picks</b> (depth_dolly_picks.json).</div>",
