@@ -516,6 +516,14 @@ auto-regressive input (the previous generated frame warped by the skeleton's dis
 next frame's input). Nothing is adopted until the owner's picks; if one is, the shape is a
 research script behind `transitions.py` with the weights under warmup + manifest (decisions
 24–27), the generator on the 512 px canvas and the lift to the native canvas.
+Owner verdict, 2026-09-22/23 (sheet §6): every bridge clip rejected ("horrible neural slop …
+halucinations artifacts in almost all intermediate frames which preserve no features"), and the
+LTX clips too ("animated in weird way … individual before/after images but transition between
+animations are usually a cut or dumb fade so this defeats all purpose ( at least for that test
+run )"). The generative tier is parked as measured. The one thing the owner liked is the TR10
+depth camera move ("really liked the effect on all individual images especially z25 … at least as
+option"), approved on 2026-09-23 with its model leg ("yes to model, and run it on matched pairs
+too ( as a test, need to compare)"): it becomes a `transitions.py` option (plan §Rank 2026-09-23).
 
 ### 10.9 Found on the way, not TR14's
 `hold` on mismatch_7 exposes the start frame's moved border as a rectangle at mid-transition:

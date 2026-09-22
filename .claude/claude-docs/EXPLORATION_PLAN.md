@@ -78,14 +78,18 @@ liked, and it is asked for as an option.
    behind `transitions.py warmup` + manifest + refuse-to-download, CPU by default (0.34 s per image
    at 1024 px), MPS only with a CPU-equivalence check (`HANDOFF.md §11`); `--zoom` exposed (the
    owner liked 25 %). Harness: offline proof as Reveal 80–82, frame hash for `flat`, a decoded-mp4
-   check that near rows move more than far rows under `ramp`. Whether the move also runs on class A
-   pairs ("in addition to anything else") is a second option, after the owner answers.
+   check that near rows move more than far rows under `ramp`. Owner 2026-09-23: "yes to model, and
+   run it on matched pairs too ( as a test, need to compare)" → the `model` leg is approved; the
+   class A use is a research render first (the matched fixtures through the class B camera move,
+   and a push-in that is zero at both ends on top of the class A field), one page, the owner's eye,
+   then the option's class A semantics.
 2. **A feature-preservation number in the basket** before any generative run: SIFT matches from
    each in-between frame to the nearer endpoint against the skeleton's count; the owner's three
    screenshots are the calibration cases.
 3. **TR9 semantics** (research E9/E13) as before.
-4. **Generative route**: parked as measured (TR6-A, TR6-B, TR6-A2 all rejected or failed their
-   gates); the remaining levers (auto-regressive input, weaker LTX anchors, 768 px canvas) only
+4. **Generative route**: parked as measured (TR6-A rejected by the picks; TR6-B rejected 2026-09-23:
+   "transition between animations are usually a cut or dumb fade so this defeats all purpose";
+   TR6-A2 failed its gate); the remaining levers (auto-regressive input, weaker LTX anchors, 768 px canvas) only
    after item 2 exists and only if the owner asks.
 
 ## H — harness before exploration (evidence: `HANDOFF.md §7`, `harness.py`, backlog T2–T5)

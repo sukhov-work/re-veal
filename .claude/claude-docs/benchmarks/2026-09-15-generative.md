@@ -240,6 +240,16 @@ owner sees, so the basket needs a feature-preservation number before any further
 skeleton's own count). TR10 moves to the top of the plan as an option to build; the `ramp` control
 (§4, added 2026-09-23) is on the depth page beside the model's clips for the owner's eye.
 
+Owner answers (2026-09-23, verbatim): "yes to model, and run it on matched pairs too ( as a test,
+need to compare) , also note to you:  i watched some videos in benchmarks/runs/2026-09-15/ltx folder,
+what it did mostly animated in weird way(generated some content, somewhat realistic but unasked
+for)  individual before/after images but transition between animations are usually a cut or dumb
+fade so this defeats all purpose ( at least for that test run )  . Prepare for next session".
+Effect: the `model` leg of the TR10 option is approved (torch + `transformers` + the 99 MB weight
+behind warmup + manifest); the depth move is to be rendered on the matched pairs as a comparison
+test before its class A semantics are fixed; the LTX clips are rejected as measured (§3 stays as
+the record; the video route is parked with the rest of the generative tier).
+
 Added 2026-09-23 to §4: `ramp_z10` / `ramp_z25` = the same modulation with a top-to-bottom ramp
 in place of the model (disparity 0 at the top row, 1 at the bottom; correlation with the model's
 disparity 0.62 / 0.82 on mismatch_1 A / B and 0.93 / 0.83 on mismatch_4): mismatch_1 step
