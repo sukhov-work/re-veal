@@ -1,7 +1,8 @@
 #!/bin/bash
 # One-time setup. Run from this folder:   ./setup.sh
-# Optional:  ./setup.sh --learned   also installs the neural matcher
-#            (bigger download; only helps with very difficult photo pairs)
+# Optional:  ./setup.sh --learned   also installs the neural matcher (Reveal) and
+#            the depth model behind `transitions.py pair --camera model`
+#            (bigger download; the matcher only helps with very difficult photo pairs)
 set -e
 cd "$(dirname "$0")"
 say() { printf "\n\033[1m== %s ==\033[0m\n" "$1"; }
@@ -24,17 +25,19 @@ echo "Using $($PY --version)"
 say "2/3 Creating the Python environment and installing packages (2-4 min)"
 [ -d .venv ] || "$PY" -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip wheel >/dev/null
-pip install -r requirements.txt
+python -m pip install --upgrade pip wheel >/dev/null
+python -m pip install -r requirements.txt
 if [ "$1" = "--learned" ]; then
-  echo "Installing the optional neural matcher (this one is big, ~2 GB)..."
-  pip install -r requirements-learned.txt
-  echo "Downloading its model files once, so it never needs the internet later..."
+  echo "Installing the optional neural matcher and depth model deps (this one is big, ~2 GB)..."
+  python -m pip install -r requirements-learned.txt
+  echo "Downloading their model files once, so they never need the internet later..."
   python reveal.py warmup
+  python transitions.py warmup
 fi
 
 say "3/3 Self-test"
 python reveal.py check
+python transitions.py check
 
 echo
 echo "Setup finished. Start it any time with:  ./run.sh"

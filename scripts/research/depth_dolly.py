@@ -19,6 +19,13 @@ either tool.
   --export GEN OUT PAIR...    (.venv) hand the depth field (25 % zoom) to the generative bridge: writes
         GEN/<pair>-depth25/ in gen_bridge.py's pair-dir layout (30 frames, 1 s) so `gen_bridge.py
         --generate / --measure / --page` run on it unchanged
+  --matched SWEEP OUT PAIR... (.venv, 2026-09-23; needs `transitions.py warmup`) the owner's matched-pair
+        comparison: for each class A fixture pair, the class A morph (2 s) with a depth push-in that is
+        zero at both ends (zoom 0.25 * sin(pi u) about the canvas center, each photo's own disparity
+        from the tool's `model_disparity`, near content moves more and wins the splat) and the same
+        push-in without depth as the control; OUT/<pair>/<variant>/{transition.mp4, strip.jpg, report.json};
+        OUT/index.html puts them beside the sweep's `morph_2s` (class A) and `morph_2s_model_z25_B`
+        (forced class B camera move) clips from SWEEP/<pair>/ with a pick per pair
 
 Depth modulation (v0): disp_depth(p) = disp_panzoom(p) * (1 - g/2 + g * d(p)) with d in [0, 1] and
 g = 1: the nearest content moves 1.5x, the farthest 0.5x, the mean about 1x. Coverage holes that the
@@ -193,6 +200,170 @@ def export(gen, out, pairs, zoom=0.25):
         GB.write_pair_dir(Path(gen), tag, A, B, corr, np.full((h, w), 255, np.uint8), meta)
 
 
+# ---- matched pairs: the class A morph + a depth push-in that is zero at both ends (.venv) ----
+
+PUSH_ZOOM = 0.25
+
+
+def _pushin_frame(T, A, B, corr, zA, zB, t_warp, t_mix, cfg):
+    """morph_frame with an extra per-frame field: A's splat follows t*dAB + zA, B's (1-t)*dBA + zB."""
+    import numpy as np
+    dAB, dBA = corr["dAB"], corr["dBA"]
+    fA_field = (t_warp * dAB + zA).astype(np.float32)
+    fB_field = ((1.0 - t_warp) * dBA + zB).astype(np.float32)
+    IA, cA = T.forward_splat(A, fA_field, 1.0, corr["wA"], cfg)
+    IB, cB = T.forward_splat(B, fB_field, 1.0, corr["wB"], cfg)
+    fA = T.backward_warp(A, -fA_field).astype(np.float32)
+    fB = T.backward_warp(B, -fB_field).astype(np.float32)
+    th = cfg["hole_thresh"]
+    IA = T.fill_holes(IA, cA, fA, th)
+    IB = T.fill_holes(IB, cB, fB, th)
+    mix = np.full(cA.shape, t_mix, np.float32)
+    mix = np.where(cA < th, 1.0, mix)
+    mix = np.where(cB < th, 0.0, mix)
+    import cv2
+    mix = cv2.GaussianBlur(mix, (0, 0), cfg["mix_blur"])[..., None]
+    return T.to_u8(IA * (1 - mix) + IB * mix)
+
+
+def matched(sweep, out, pairs):
+    import math
+    import cv2
+    sys.path.insert(0, str(ROOT))
+    import transitions as T
+    OUT = Path(out)
+    fx = ROOT / "fixtures"
+    summary_path = OUT / "matched.json"
+    summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+    for pid in pairs:
+        S = next(fx.glob(f"{pid}_S.*")); F = next(fx.glob(f"{pid}_F.*"))
+        spec = T.spec_from("morph", seconds=SECONDS, max_long_edge=1920)
+        A, B, corr = T.prepare(T.load_image_rgb(S), T.load_image_rgb(F), spec)
+        h, w = A.shape[:2]
+        n = spec.n_frames()
+        t0 = time.time()
+        dA, dB = T.model_disparity(A), T.model_disparity(B)
+        depth_s = round(time.time() - t0, 2)
+        rows = summary.setdefault(pid, {"canvas": [w, h], "class": corr["cls"], "method": corr["method"],
+                                        "sparse_inliers": corr["diag"].get("sparse_inliers"), "depth_s": depth_s,
+                                        "disparity_mean": [round(float(dA.mean()), 3), round(float(dB.mean()), 3)]})
+        (OUT / pid).mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(OUT / pid / "disp_A.jpg"), cv2.resize((dA * 255).astype(np.uint8), (w // 4, h // 4)))
+        cv2.imwrite(str(OUT / pid / "disp_B.jpg"), cv2.resize((dB * 255).astype(np.uint8), (w // 4, h // 4)))
+        c = (w / 2.0, h / 2.0)
+        pz, _ = T.panzoom_field(h, w, c, c, PUSH_ZOOM)          # a pure zoom about the center, pan 0
+        for variant in ("pushin-depth", "pushin-flat"):
+            if variant == "pushin-depth":
+                zA_full, wA = T.depth_modulate(pz, dA); zB_full, wB = T.depth_modulate(pz, dB)
+            else:
+                zA_full = zB_full = pz; wA, wB = corr["wA"], corr["wB"]
+            corr_v = dict(corr, wA=wA if variant == "pushin-depth" else corr["wA"],
+                          wB=wB if variant == "pushin-depth" else corr["wB"])
+            cache = T.color_cache(A, B)
+            sA, sB = T.lab_stats(A, lab=cache[0]), T.lab_stats(B, lab=cache[2])
+            frames = []
+            t1 = time.time()
+            for i in range(n):
+                if i == 0:
+                    frames.append(A.copy()); continue
+                if i == n - 1:
+                    frames.append(B.copy()); continue
+                tw, tm, u = spec.progress(i)
+                amp = math.sin(math.pi * u)                      # zero at both ends
+                Ai, Bi = T.color_pair_at(A, B, sA, sB, u, spec.color_strength, T.TCFG, cache)
+                frames.append(_pushin_frame(T, Ai, Bi, corr_v, amp * zA_full, amp * zB_full, tw, tm, T.TCFG))
+            render_s = round(time.time() - t1, 2)
+            o = OUT / pid / variant
+            o.mkdir(parents=True, exist_ok=True)
+            written, q = encode_clip(T, cv2, frames, o / "transition.mp4", spec.fps, A, B)
+            cv2.imwrite(str(o / "mid.jpg"), cv2.cvtColor(frames[n // 2], cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 90])
+            rep = {"pair": pid, "variant": variant, "push_zoom": PUSH_ZOOM, "n_frames": written, "render_s": render_s,
+                   "quality": q}
+            (o / "report.json").write_text(json.dumps(rep, indent=2))
+            rows[variant] = {"n_frames": written, "render_s": render_s, "warping_error": q["warping_error"],
+                             "edge_ratio": q["flicker"]["edge_ratio"], "step_mean": round(q["flicker"]["mean"] * 255, 3),
+                             "step_max": round(q["flicker"]["max"] * 255, 3),
+                             "endpoint": [q["endpoint"]["first_vs_A"], q["endpoint"]["last_vs_B"]]}
+            print(pid, variant, json.dumps(rows[variant]), flush=True)
+            summary_path.write_text(json.dumps(summary, indent=2))
+    matched_page(sweep, OUT, pairs)
+
+
+def matched_page(sweep, OUT, pairs):
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from bench_transitions import label_strip, load_json
+    SW = Path(sweep)
+    summary = json.loads((OUT / "matched.json").read_text())
+    rel = lambda p: os.path.relpath(p, OUT)
+    html = ["<!doctype html><meta charset=utf-8><title>TR10 on matched pairs — the comparison</title>",
+            "<style>body{font:14px system-ui;margin:16px;background:#111;color:#ddd;max-width:1750px}h2{margin-top:40px;border-top:1px solid #333;padding-top:16px}"
+            ".top{display:flex;gap:12px;align-items:flex-start;margin:8px 0}.top img{height:160px}"
+            ".row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0 18px;padding:8px;background:#181818;border-radius:6px}"
+            ".cell video{width:100%;max-height:560px;background:#000}.cell img{max-width:100%;display:block;margin-top:6px}"
+            "code{color:#9cf}.pick label{margin-right:12px}textarea{width:100%;max-width:900px;background:#222;color:#ddd;border:1px solid #444}button{padding:6px 12px}"
+            ".note{color:#bbb}.hint{background:#26210a;padding:10px;border-radius:6px;margin:12px 0}</style>",
+            "<h1>TR10 on matched pairs — the owner's comparison (2026-09-23)</h1>",
+            "<div class=hint><b>What varies: what the camera does on a pair that has a real correspondence.</b> "
+            "<code>morph_2s</code> is the tool's class A morph (the dense field, no camera). <code>morph_2s_model_z25_B</code> forces the pair "
+            "into class B and runs the shipped camera move (<code>--class B --camera model --zoom 0.25</code>): a depth-shaped pan-and-zoom "
+            "and a crossfade, the correspondence ignored. <code>pushin-depth</code> keeps the class A morph and adds a depth push-in that is "
+            "zero at both ends (25 % zoom about the center at mid-transition, times sin(&pi;u); each photo's own depth, near content moves more). "
+            "<code>pushin-flat</code> is the same push-in without depth. All 2 s, canvas &le; 1920 px, endpoints byte-exact. Pick the clip "
+            "closest to what you want per pair, tick <b>acceptable as-is</b> only if it is, say what is wrong, then <b>Export picks</b> (matched_picks.json).</div>",
+            "<p><button onclick='exportPicks()'>Export picks</button> <span id=status class=note></span></p>"]
+    for pid in pairs:
+        s = summary.get(pid, {})
+        html.append(f"<h2 id='{pid}'>{pid} <small>canvas {s.get('canvas')} · class {s.get('class')} {s.get('method')} · {s.get('sparse_inliers')} inliers · disparity means {s.get('disparity_mean')} · depth {s.get('depth_s')} s</small></h2>")
+        html.append(f"<div class=top><img src='{rel(OUT / pid / 'disp_A.jpg')}' title='A depth (bright = near)'><img src='{rel(OUT / pid / 'disp_B.jpg')}' title='B depth'></div>")
+        cells, keys = [], []
+        for tag in ("morph_2s", "morph_2s_model_z25_B"):
+            d = SW / pid / tag
+            r = load_json(d / "report.json")
+            if not r:
+                continue
+            keys.append(tag)
+            q = r.get("quality", {})
+            if (d / "strip.jpg").exists() and not (d / "strip_labeled.jpg").exists():
+                label_strip(d / "strip.jpg", d / "strip_labeled.jpg", r["n_frames"], SECONDS)
+            cells.append(f"<div class=cell><code>{tag}</code> · class {r.get('class')} {r.get('method')} · camera {r.get('camera', '-')} · "
+                         f"step {round(q['flicker']['mean'] * 255, 2)} / {round(q['flicker']['max'] * 255, 2)} · warping {q.get('warping_error')} · edge_ratio {q['flicker']['edge_ratio']}"
+                         f"<br><video src='{rel(d / 'transition.mp4')}' controls loop muted playsinline preload=metadata></video>"
+                         f"<img src='{rel(d / 'strip_labeled.jpg')}'></div>")
+        for variant in ("pushin-depth", "pushin-flat"):
+            r = s.get(variant)
+            if not r:
+                continue
+            keys.append(variant)
+            o = OUT / pid / variant
+            if (o / "strip.jpg").exists() and not (o / "strip_labeled.jpg").exists():
+                label_strip(o / "strip.jpg", o / "strip_labeled.jpg", r["n_frames"], SECONDS)
+            cells.append(f"<div class=cell><code>{variant}</code> · class A morph + push-in 25 % · step {r['step_mean']} / {r['step_max']} · "
+                         f"warping {r['warping_error']} · edge_ratio {r['edge_ratio']} · endpoints {r['endpoint']}"
+                         f"<br><video src='{rel(o / 'transition.mp4')}' controls loop muted playsinline preload=metadata></video>"
+                         f"<img src='{rel(o / 'strip_labeled.jpg')}'></div>")
+        html.append(f"<div class=pick><b>Closest to what you want:</b> " + " ".join(
+            f"<label><input type=radio name='pick_{pid}' value='{k}' onchange='save()'> {k}</label>" for k in keys)
+            + f" <label><input type=radio name='pick_{pid}' value='none' onchange='save()'> none</label>"
+            + f" &nbsp; <label><input type=checkbox id='ok_{pid}' onchange='save()'> <b>acceptable as-is</b></label></div>")
+        html.append(f"<textarea id='note_{pid}' rows=2 placeholder='does the camera add to the matched pair, or fight the morph?' oninput='save()'></textarea>")
+        for i in range(0, len(cells), 2):
+            html.append("<div class=row>" + "".join(cells[i:i + 2]) + "</div>")
+    html.append("""<script>
+const KEY='matched_picks:'+location.pathname;
+function collect(){const p={};document.querySelectorAll('h2[id]').forEach(h=>{const id=h.id;const r=document.querySelector(`input[name='pick_${id}']:checked`);
+ const n=document.getElementById('note_'+id);const ok=document.getElementById('ok_'+id);
+ if((r&&r.value)||(n&&n.value)||(ok&&ok.checked))p[id]={pick:r?r.value:'',acceptable_as_is:!!(ok&&ok.checked),note:n?n.value:''};});return p;}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(collect()));document.getElementById('status').textContent='saved locally '+new Date().toLocaleTimeString();}catch(e){}}
+function restore(){try{const p=JSON.parse(localStorage.getItem(KEY)||'{}');for(const id in p){const r=document.querySelector(`input[name='pick_${id}'][value='${p[id].pick}']`);if(r)r.checked=true;
+ const n=document.getElementById('note_'+id);if(n&&p[id].note)n.value=p[id].note;const ok=document.getElementById('ok_'+id);if(ok)ok.checked=!!p[id].acceptable_as_is;}}catch(e){}}
+function exportPicks(){const blob=new Blob([JSON.stringify({date:new Date().toISOString(),page:'matched',picks:collect()},null,2)],{type:'application/json'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='matched_picks.json';a.click();document.getElementById('status').textContent='matched_picks.json downloaded';}
+restore();
+</script>""")
+    (OUT / "index.html").write_text("\n".join(html))
+    print(f"wrote {OUT / 'index.html'}")
+
+
 # ---- page (.venv) ------------------------------------------------------------------------
 
 def page(out, pairs):
@@ -276,5 +447,7 @@ if __name__ == "__main__":
         page(a[1], a[2:])
     elif len(a) > 3 and a[0] == "--export":
         export(a[1], a[2], a[3:])
+    elif len(a) > 3 and a[0] == "--matched":
+        matched(a[1], a[2], a[3:])
     else:
         sys.exit(__doc__)

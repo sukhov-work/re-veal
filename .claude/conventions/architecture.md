@@ -28,18 +28,20 @@ each other (transitions harness 1–2). Its design of record is `TRANSITIONS.md`
 | Frontend | 1753–2404 | one embedded HTML/CSS/JS string |
 | CLI | 2405–2570 | `cmd_check`, `cmd_warmup`, `cmd_align`, `main` |
 
-## `transitions.py` section map (line anchors as of 2026-09-13, v0.1.0 — re-grep `^# ---` after edits)
+## `transitions.py` section map (line anchors as of 2026-09-23 — re-grep `^# ---` after edits)
 | Section | Lines | Owns |
 |---|---|---|
-| Configuration | 98–218 | `TCFG`, `CURVES`, `STYLES`, `PORTALS`, `TransitionSpec` (`n_frames`, `clamp`, `progress`), `PRESETS`, `spec_from`, `TransitionError` |
-| Decode and canvas | 219–324 | `load_image_rgb` (re-implemented), `gray_of`, `even`, `to_u8` (rounding cast), `cover`, `common_canvas`, `_grid` |
-| Correspondence | 325–548 | `sparse_homography`, `_sane`, `_dis`, `_homography_guided`, `consistency_weight`, `salient_box`, `_box_center`, `panzoom_field` (class B, coverage-preserving pan-and-zoom, 2026-09-14), `mls_affine`, `_invert_disp`, `dense_displacement` (class A/B routing, INFO line on B) |
-| Warp | 549–676 | `backward_warp`, `forward_splat` (1/4-res coordinate splat → one remap), `fill_holes`, `morph_frame`, `portal_mask` |
-| Color path | 677–730 | `lab_stats`, `lerp_stats`, `apply_stats` (float correction, rounded once), `color_pair_at`, `luma_mask` |
-| Quality basket | 731–827 | `warping_error`, `flicker` (`edge_ratio` = hidden-cut detector), `endpoint_fidelity`, `assess`, `proxy_of`, `StreamStats` |
-| Render | 828–894 | `prepare` (canvas + correspondence once), `iter_frames` (generator, endpoints pinned), `render_frames` (in-memory convenience) |
-| Encode | 895–978 | `FrameEncoder` (imageio-ffmpeg rawvideo pipe → libx264), `render_pair` (the whole job: mp4 + strip + report) |
-| CLI | 979–1076 | `cmd_check`, `parse_anchors`, `cmd_pair`, `main` (exit 0 / 2) |
+| Configuration | 106–252 | `TCFG` (incl. `zoom_range`, `depth_*`), `CURVES`, `STYLES`, `PORTALS`, `CAMERAS`, `TransitionSpec` (`n_frames`, `clamp`, `progress`; `camera`, `zoom`), `PRESETS`, `spec_from`, `TransitionError` |
+| Decode and canvas | 253–376 | `load_image_rgb` (re-implemented), `gray_of`, `even`, `to_u8` (rounding cast), `cover`, `common_canvas`, `_grid` |
+| Correspondence | 377–560 | `sparse_homography`, `_sane`, `_dis`, `_homography_guided`, `consistency_weight`, `salient_box`, `_box_center`, `panzoom_field` (class B, coverage-preserving pan-and-zoom, 2026-09-14), `mls_affine`, `_invert_disp` |
+| Depth (2026-09-23) | 561–786 | the offline shape of Reveal's decisions 24–27 on the transitions surface: `MODELS_DIR`, `DEPTH_DIR` (`HF_HOME`), `DEPTH_MANIFEST`, `DEPTH_MODEL`, `DEPTH_PREP`, `_pin_hf_home`, `depth_available`, `depth_manifest`, `_depth_files`, `depth_weights_cached`, `_depth_status`, `_depth_model` (lazy torch/transformers, refuses without the manifest), `_dpt_size`, `model_disparity`, `_normalize_disparity`, `ramp_disparity`, `depth_modulate`, `_selftest_scene`, `depth_selftest` |
+| Correspondence (cont.) | 787–875 | `dense_displacement` (class A/B routing, the camera move on the class B pan-and-zoom, INFO lines on B and on an ignored camera) |
+| Warp | 876–1004 | `backward_warp`, `forward_splat` (1/4-res coordinate splat → one remap), `fill_holes`, `morph_frame`, `portal_mask` |
+| Color path | 1005–1079 | `lab_stats`, `lerp_stats`, `apply_stats` (float correction, rounded once), `color_pair_at`, `luma_mask` |
+| Quality basket | 1080–1176 | `warping_error`, `flicker` (`edge_ratio` = hidden-cut detector), `endpoint_fidelity`, `assess`, `proxy_of`, `StreamStats` |
+| Render | 1177–1245 | `prepare` (canvas + correspondence once, passes `camera`/`zoom`), `iter_frames` (generator, endpoints pinned), `render_frames` (in-memory convenience) |
+| Encode | 1246–1329 | `FrameEncoder` (imageio-ffmpeg rawvideo pipe → libx264), `render_pair` (the whole job: mp4 + strip + report) |
+| CLI | 1330–1505 | `cmd_check` (incl. the depth row), `cmd_warmup`, `parse_anchors`, `cmd_pair`, `main` (exit 0 / 2; `pair`, `check`, `warmup`) |
 
 Seams: a **new preset** = a `PRESETS` entry + a harness assertion in section F (byte-exact
 endpoints, `edge_ratio`, monotone approach) — nothing else changes; a **new style** = a branch in
@@ -47,7 +49,11 @@ endpoints, `edge_ratio`, monotone approach) — nothing else changes; a **new st
 observable (the wipe's monotone seam is the model, check 32); a **new correspondence method** =
 a branch in `dense_displacement` that fills `dAB dBA wA wB method` and a section-D check against a
 known field; any **model or weights** first need Reveal's warmup + manifest + refuse-to-download
-shape (decisions 24–27) — no download path exists in `transitions.py` and check 3 keeps it so.
+shape (decisions 24–27) — the Depth section (2026-09-23) is the worked example (`_pin_hf_home`,
+`depth_weights_cached`, `_depth_model`, `cmd_warmup`; harness 48–51), and check 3 allows the lazy
+torch / transformers imports inside those four functions only, never at module level; a **new
+camera** = a `CAMERAS` value, a disparity function beside `ramp_disparity` / `model_disparity`, and
+a section-L check on the bottom-vs-top displacement ratio and the mid-frame hole fraction.
 
 ## Extension seams (the experimental lane, `AGENTS.md §Reversibility`)
 - **New matching mode** → a new key in `MODES` (overrides only; `reshot` stays `{}`), a harness

@@ -13,8 +13,10 @@ repository and the same virtualenv. Contract (transitions_harness.py pins
 it):
   * this module never imports reveal, and reveal.py never imports this
     module; a Reveal change cannot break a transition or the reverse.
-  * everything runs locally, on the CPU, offline; no model weights, no
-    network call anywhere.
+  * everything runs locally, on the CPU, offline. The one optional model
+    (Depth Anything V2 Small behind --camera model) is fetched ONCE by
+    `transitions.py warmup` into models/depth/ and recorded in a manifest;
+    a run never downloads and refuses to start the model without it.
   * the inputs are never modified; every output is a new file in --out.
   * the first and last frame of a transition are the two input photos,
     byte-exact, whatever the color path did in between.
@@ -28,9 +30,11 @@ built until it has been measured):
   MAGSAC++ homography, then DIS residual flow on the pre-aligned pair, both
   directions, forward-backward consistency as certainty; class B: no
   geometric correspondence, saliency similarity or user anchors through
-  Moving Least Squares) -> per frame: time-varying Lab color path, forward
-  splat of both endpoints toward the intermediate frame, coverage-aware
-  cross-dissolve -> frames piped to the bundled ffmpeg as rawvideo ->
+  Moving Least Squares; --camera ramp|model scales the class B pan-and-zoom
+  by a disparity so near content moves more than far content) -> per
+  frame: time-varying Lab color path, forward splat of both endpoints
+  toward the intermediate frame, coverage-aware cross-dissolve -> frames
+  piped to the bundled ffmpeg as rawvideo ->
   libx264 mp4, plus an 8-tile thumbnail strip and report.json with the
   quality basket (warping error, flicker with the hidden-cut detector,
   endpoint fidelity).
@@ -40,14 +44,18 @@ Usage:
         [--preset morph|dissolve|flow-dissolve|snap-morph|iris|wipe|luma]
         [--fps 30] [--color 0.7] [--warp 1.0] [--max-long 0]
         [--anchors "ax,ay,bx,by;..."] [--class A|B]
+        [--camera flat|ramp|model] [--zoom 0.10]
   python transitions.py check
+  python transitions.py warmup      # fetch + verify the depth model once
 """
 
 import argparse
+import hashlib
 import io
 import json
 import logging
 import math
+import os
 import subprocess
 import sys
 import time
@@ -122,6 +130,15 @@ TCFG = {
                                # salient center; the pan toward the other frame's
                                # salient center is capped by the zoom's slack so a
                                # frame edge never enters the canvas (defect T13)
+    "zoom_range": (0.02, 0.5), # --zoom is clamped to this
+    # camera move (TR10, 2026-09-23): the class B pan-and-zoom is scaled by
+    # (1 - gain/2 + gain * d) with d = disparity, 0 far .. 1 near, so the nearest
+    # content moves 1.5x and the farthest 0.5x (parallax), and near content
+    # wins the splat's collisions through the importance below
+    "depth_gain": 1.0,
+    "depth_w_floor": 0.2,      # splat importance = floor + (1 - floor) * d
+    "depth_percentiles": (2, 98),  # the model's raw output clipped to this range -> 0..1
+    "depth_long": 1024,        # long edge handed to the model (it resizes to 518 itself)
     # color path
     "color_gain_clip": (0.4, 2.5),
     # quality basket (computed on a proxy so 4K stays cheap)
@@ -143,6 +160,8 @@ CURVES = {
 
 STYLES = ("morph", "dissolve", "warp-dissolve", "portal", "luma")
 PORTALS = ("iris", "wipe")
+CAMERAS = ("flat", "ramp", "model")   # class B: no parallax | a top-to-bottom
+                                      # disparity ramp | Depth Anything V2 Small
 
 
 def curve(name, u):
@@ -167,6 +186,8 @@ class TransitionSpec:
     canvas: str = "finish"         # canvas policy: finish | common
     anchors: list = field(default_factory=list)   # [[ax, ay, bx, by], ...] canvas px
     force_class: str = ""          # "", "A", "B"
+    camera: str = "flat"           # class B camera move: one of CAMERAS
+    zoom: float = TCFG["classb_zoom"]   # class B zoom fraction, clamped to zoom_range
 
     def n_frames(self):
         return max(2, int(round(self.seconds * self.fps)))
@@ -178,6 +199,11 @@ class TransitionSpec:
         self.warp_amount = float(min(1.0, max(0.0, self.warp_amount)))
         self.color_strength = float(min(1.0, max(0.0, self.color_strength)))
         self.portal_feather = float(min(0.5, max(0.005, self.portal_feather)))
+        lo, hi = TCFG["zoom_range"]
+        self.zoom = float(min(hi, max(lo, self.zoom)))
+        if self.camera not in CAMERAS:
+            raise TransitionError(f"Unknown camera {self.camera!r}. "
+                                  f"Cameras: {', '.join(CAMERAS)}")
         if self.style not in STYLES:
             raise TransitionError(f"Unknown style {self.style!r}. "
                                   f"Styles: {', '.join(STYLES)}")
@@ -531,13 +557,248 @@ def _invert_disp(d):
     return cv2.GaussianBlur(inv, (0, 0), 2)
 
 
-def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG):
-    """Returns dict: dAB, dBA (float32 HxWx2 px), wA, wB (certainty 0..1),
-    cls ('A' | 'B'), method, diag.
+
+# ---------------------------------------------------------------------------
+# Depth: the disparity behind --camera (TR10, 2026-09-23)
+#
+# `ramp` is weight-free: disparity 0 at the top row and 1 at the bottom, a
+# landscape prior (correlates 0.62-0.93 with the model on the two landscape
+# fixtures). `model` is Depth Anything V2 Small (Apache-2.0, 24.8 M
+# parameters, 99 MB) through transformers, on the CPU, with the same offline
+# shape as reveal.py's learned matcher (its decisions 24-27): the weights
+# live in models/depth/ (HF_HOME pinned there), `transitions.py warmup` is
+# the ONLY command that downloads, it proves the model with a real forward
+# pass and records every file's sha256 in models/DEPTH_MANIFEST.json, and a
+# run refuses to start the model without an intact manifest. torch and
+# transformers are imported lazily inside this section only (harness 3).
+# ---------------------------------------------------------------------------
+
+MODELS_DIR = Path(__file__).resolve().parent / "models"
+DEPTH_DIR = MODELS_DIR / "depth"               # HF_HOME for this tool
+DEPTH_MANIFEST = MODELS_DIR / "DEPTH_MANIFEST.json"
+DEPTH_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
+# The model card's preprocessor_config.json (DPTImageProcessor): resize so
+# the scale is as close to 1 as possible (the short side lands on 518),
+# both sides a multiple of 14, bicubic, no padding, ImageNet statistics.
+# Done here with cv2 so the tool needs no torchvision; warmup checks the
+# card's file against these constants.
+DEPTH_PREP = {"size": 518, "multiple": 14,
+              "mean": (0.485, 0.456, 0.406), "std": (0.229, 0.224, 0.225)}
+_ALLOW_DOWNLOAD = False   # ONLY `transitions.py warmup` ever flips this
+_DEPTH = None             # the loaded model, once per process
+
+
+def _pin_hf_home():
+    """Pin the Hugging Face cache INSIDE the project (models/depth/), so the
+    project folder is self-contained and no cache cleaner can force a
+    silent re-download mid-job. Offline is declared to the library as
+    well; the manifest gate below is the guard that matters."""
+    DEPTH_DIR.mkdir(parents=True, exist_ok=True)
+    os.environ["HF_HOME"] = str(DEPTH_DIR)
+    os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+    os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+    if not _ALLOW_DOWNLOAD:
+        os.environ["HF_HUB_OFFLINE"] = "1"
+    for name in ("httpx", "huggingface_hub", "transformers"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    return DEPTH_DIR
+
+
+def depth_available():
+    try:
+        import torch  # noqa: F401
+        import transformers  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def depth_manifest():
+    """The record `warmup` writes after downloading AND verifying the model
+    with a real forward pass. Its presence is the only proof that
+    --camera model is offline-ready."""
+    try:
+        return json.loads(DEPTH_MANIFEST.read_text())
+    except Exception:
+        return None
+
+
+def _depth_files():
+    """(files, links) under the cache: regular files as (relative name,
+    size, sha256), symlinks as (name, target). huggingface_hub 1.x keeps
+    a large blob in a shared store (hub/blobs/<xx>/<hash>) and links the
+    repo's blob to it, so the whole hub folder is walked, not the repo's
+    folder alone; locks and dot-files are bookkeeping and skipped."""
+    files, links = [], []
+    root = DEPTH_DIR / "hub"
+    for p in sorted(root.rglob("*")):
+        rel = str(p.relative_to(DEPTH_DIR))
+        parts = p.relative_to(DEPTH_DIR).parts
+        if any(part.startswith(".") for part in parts) or p.suffix in (".lock", ".refs"):
+            continue
+        if p.is_symlink():
+            links.append({"name": rel, "target": os.readlink(p)})
+        elif p.is_file():
+            b = p.read_bytes()
+            files.append({"name": rel, "size": len(b),
+                          "sha256": hashlib.sha256(b).hexdigest()})
+    return files, links
+
+
+def depth_weights_cached(deep=False):
+    """True when every file warmup recorded is present with its size (and
+    its sha256 when deep) and every snapshot link resolves."""
+    man = depth_manifest()
+    if not man or not man.get("files") or not man.get("verified"):
+        return False
+    for f in man["files"]:
+        p = DEPTH_DIR / f["name"]
+        if not p.is_file() or p.stat().st_size != f["size"]:
+            return False
+        if deep and hashlib.sha256(p.read_bytes()).hexdigest() != f["sha256"]:
+            return False
+    for l in man.get("links", []):
+        p = DEPTH_DIR / l["name"]
+        if not (p.is_symlink() and p.exists()):
+            return False
+    return True
+
+
+def _depth_status():
+    if not depth_available():
+        return "off (optional; ./setup.sh --learned)"
+    if not depth_weights_cached():
+        return "installed, but model files are MISSING: transitions.py warmup"
+    man = depth_manifest()
+    mb = sum(f["size"] for f in man["files"]) / 1e6
+    intact = depth_weights_cached(deep=True)
+    return (f"ready, offline ({man['model'].split('/')[-1]}, "
+            f"{len(man['files'])} files, {mb:.0f} MB in ./models/depth"
+            + ("" if intact else ", CHECKSUM MISMATCH: re-run warmup") + ")")
+
+
+def _depth_model():
+    """Depth Anything V2 Small, loaded once, CPU. Refuses without the
+    manifest: a job never downloads (the same rule as reveal.py)."""
+    global _DEPTH
+    if _DEPTH is not None:
+        return _DEPTH
+    if not depth_available():
+        raise TransitionError(
+            "--camera model needs the optional learned dependencies (torch, "
+            "transformers). Run:  ./setup.sh --learned")
+    if not _ALLOW_DOWNLOAD and not depth_weights_cached():
+        raise TransitionError(
+            "The depth model files are not installed or not intact. Run:  "
+            "transitions.py warmup  (or ./setup.sh --learned). A run never "
+            "downloads.")
+    _pin_hf_home()
+    import torch
+    import transformers
+    from transformers import AutoModelForDepthEstimation
+    transformers.logging.set_verbosity_error()
+    transformers.logging.disable_progress_bar()
+    torch.set_grad_enabled(False)
+    _DEPTH = AutoModelForDepthEstimation.from_pretrained(
+        DEPTH_MODEL, cache_dir=str(DEPTH_DIR / "hub"),
+        local_files_only=not _ALLOW_DOWNLOAD).eval()
+    return _DEPTH
+
+
+def _dpt_size(h, w, prep=DEPTH_PREP):
+    """transformers' DPT rule (image_processing_dpt.get_resize_output_image_size
+    with keep_aspect_ratio): the scale nearer to 1 wins, then each side is
+    rounded to a multiple of 14."""
+    sh, sw = prep["size"] / h, prep["size"] / w
+    if abs(1 - sw) < abs(1 - sh):
+        sh = sw
+    else:
+        sw = sh
+    m = prep["multiple"]
+    return int(round(sh * h / m) * m), int(round(sw * w / m) * m)
+
+
+def model_disparity(rgb, cfg=TCFG):
+    """Relative inverse depth of one image from Depth Anything V2 Small,
+    0 (far) .. 1 (near) at the image's own size. Deterministic on the CPU
+    (two runs byte-identical, harness 49)."""
+    import torch
+    m = _depth_model()
+    h, w = rgb.shape[:2]
+    s = cfg["depth_long"] / float(max(h, w))
+    small = (cv2.resize(rgb, (int(round(w * s)), int(round(h * s))),
+                        interpolation=cv2.INTER_AREA) if s < 1 else rgb)
+    nh, nw = _dpt_size(small.shape[0], small.shape[1])
+    x = cv2.resize(small, (nw, nh), interpolation=cv2.INTER_CUBIC)
+    x = (x.astype(np.float32) / 255.0 - np.float32(DEPTH_PREP["mean"])) \
+        / np.float32(DEPTH_PREP["std"])
+    t = torch.from_numpy(np.ascontiguousarray(x.transpose(2, 0, 1)))[None]
+    with torch.no_grad():
+        d = m(pixel_values=t).predicted_depth[0].float().cpu().numpy()
+    d = cv2.resize(d, (w, h), interpolation=cv2.INTER_CUBIC)
+    return _normalize_disparity(d, cfg)
+
+
+def _normalize_disparity(d, cfg=TCFG):
+    lo, hi = np.percentile(d, cfg["depth_percentiles"])
+    return np.clip((d - lo) / max(hi - lo, 1e-6), 0, 1).astype(np.float32)
+
+
+def ramp_disparity(h, w):
+    """The weight-free landscape prior: 0 at the top row, 1 at the bottom."""
+    return np.repeat(np.linspace(0, 1, h, dtype=np.float32)[:, None], w, 1)
+
+
+def depth_modulate(disp, d, cfg=TCFG):
+    """Scale a displacement field by the disparity so near content moves
+    more: factor 1 - gain/2 + gain * d (0.5 .. 1.5 at gain 1). Every
+    factor is positive, so a field that keeps the frame covering the
+    canvas still does (the edge condition is a sign condition). Returns
+    (field, splat importance floor + (1 - floor) * d)."""
+    g = cfg["depth_gain"]
+    fac = (1.0 - g / 2.0 + g * d).astype(np.float32)
+    imp = (cfg["depth_w_floor"] + (1.0 - cfg["depth_w_floor"]) * d).astype(np.float32)
+    return (disp * fac[..., None]).astype(np.float32), imp
+
+
+def _selftest_scene(w=640, h=400):
+    """A sky gradient over a checkerboard floor in one-point perspective:
+    the bottom rows are nearer than the top rows, which the model must
+    report (warmup and harness 49 assert it). No random source."""
+    img = np.zeros((h, w, 3), np.uint8)
+    hz = int(h * 0.42)
+    for y in range(hz):
+        img[y] = (int(90 + 100 * y / hz), int(140 + 80 * y / hz), 230)
+    fy = 300.0
+    for y in range(hz, h):
+        z = fy / max(y - hz, 1)
+        xs = (np.arange(w) - w / 2.0) * z / fy
+        chk = ((np.floor(xs * 2) + np.floor(z * 2)) % 2).astype(np.uint8)
+        img[y] = np.where(chk[:, None] == 1, np.uint8([200, 200, 200]),
+                          np.uint8([60, 60, 60]))
+    return img
+
+
+def depth_selftest(disp):
+    """(mean disparity of the top 20 % rows, of the bottom 20 % rows)."""
+    h = disp.shape[0]
+    return (round(float(disp[: int(h * 0.2)].mean()), 3),
+            round(float(disp[int(h * 0.8):].mean()), 3))
+
+
+def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG,
+                       camera="flat", zoom=None):
+    """Returns dict: dAB, dBA (float32 HxWx2 px), wA, wB (the splat's
+    importance: the certainty in class A, 0.5 in class B, the depth
+    importance under a camera move), cls ('A' | 'B'), method, diag.
 
     anchors: optional ((n,2), (n,2)) user control points, A px -> B px on
     the canvas. In class B they define the deformation (MLS); in class A
-    they are blended in as a correction on top of the dense field."""
+    they are blended in as a correction on top of the dense field.
+    camera / zoom: the class B camera move (CAMERAS) and zoom fraction;
+    `flat` at the default zoom is the field of 2026-09-14, byte for byte.
+    A camera other than flat has no effect on class A or on anchors and
+    says so on the log."""
     if A.shape[:2] != B.shape[:2]:
         raise TransitionError("Endpoints must share a canvas.")
     h, w = A.shape[:2]
@@ -550,6 +811,10 @@ def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG):
             "sparse_rmse": None if not sp else round(sp[2], 2)}
     n_anchor = 0 if anchors is None else len(anchors[0])
 
+    if camera != "flat" and (cls == "A" or n_anchor >= 3):
+        log.info("camera: %s requested, but the pair is class %s%s; the camera "
+                 "move applies to the class B pan-and-zoom only", camera, cls,
+                 " with anchors" if n_anchor >= 3 else "")
     if cls == "A":
         H = sp[0] if have_h else np.eye(3)
         dAB = _homography_guided(gA, gB, H)
@@ -576,15 +841,27 @@ def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG):
             # to 1 so the last frame is B itself. The two salient centers
             # meet throughout only when neither pan is capped.
             cA, cB = _box_center(salient_box(A)), _box_center(salient_box(B))
-            z = cfg["classb_zoom"]
+            z = cfg["classb_zoom"] if zoom is None else float(zoom)
             dAB, fA = panzoom_field(h, w, cA, cB, z)
             dBA, fB = panzoom_field(h, w, cB, cA, z)
             method = "saliency-panzoom"
             diag["pan_fraction"] = [round(fA, 2), round(fB, 2)]
+            diag["camera"], diag["zoom"] = camera, round(z, 3)
             steer = (f"; zoom {z:.0%}, pan {fA:.0%} / {fB:.0%} of the way "
-                     f"between the salient centers")
+                     f"between the salient centers; camera {camera}")
         wA = np.full((h, w), 0.5, np.float32)   # honest: no photometric proof
         wB = wA.copy()
+        if camera != "flat" and n_anchor < 3:
+            # the camera move: near content moves more and wins collisions
+            if camera == "model":
+                dA_, dB_ = model_disparity(A, cfg), model_disparity(B, cfg)
+            else:
+                dA_ = dB_ = ramp_disparity(h, w)
+            dAB, wA = depth_modulate(dAB, dA_, cfg)
+            dBA, wB = depth_modulate(dBA, dB_, cfg)
+            method += "+" + camera
+            diag["disparity_mean"] = [round(float(dA_.mean()), 3),
+                                      round(float(dB_.mean()), 3)]
         # the degrade path is visible, never silent
         log.info("correspondence: class B (%s) — no geometric correspondence "
                  "(%d sparse inliers)%s; pass --anchors to steer the morph",
@@ -917,7 +1194,8 @@ def prepare(A, B, spec, cfg=TCFG):
     A2, B2 = cover(A, w, h), cover(B, w, h)
     t = time.time()
     corr = dense_displacement(A2, B2, anchors=_anchor_arrays(spec),
-                              force_class=spec.force_class or None, cfg=cfg)
+                              force_class=spec.force_class or None, cfg=cfg,
+                              camera=spec.camera, zoom=spec.zoom)
     corr["diag"]["correspondence_s"] = round(time.time() - t, 2)
     return A2, B2, corr
 
@@ -1070,6 +1348,8 @@ def cmd_check():
          rawpy is not None),
         ("video export", "ok" if imageio_ffmpeg else f"OFF ({_FFMPEG_ERR})",
          imageio_ffmpeg is not None),
+        ("depth model", _depth_status(),
+         (not depth_available()) or depth_weights_cached()),
     ]
     bad = 0
     for name, val, ok in rows:
@@ -1078,6 +1358,65 @@ def cmd_check():
     if bad:
         print(f"\n{bad} problem(s); re-run ./setup.sh")
     return 1 if bad else 0
+
+
+def cmd_warmup():
+    """Download EVERYTHING --camera model will ever need, prove it works
+    with a real forward pass, and record it. After this, no run touches
+    the network (the same shape as reveal.py warmup)."""
+    global _ALLOW_DOWNLOAD, _DEPTH
+    if not depth_available():
+        print("The depth model's dependencies are not installed.\n"
+              "Run:  ./setup.sh --learned")
+        return 1
+    _ALLOW_DOWNLOAD = True
+    _DEPTH = None
+    d = _pin_hf_home()
+    print(f"Downloading {DEPTH_MODEL} into {d} ...")
+    try:
+        from huggingface_hub import hf_hub_download
+        card = json.loads(Path(hf_hub_download(
+            DEPTH_MODEL, "preprocessor_config.json",
+            cache_dir=str(DEPTH_DIR / "hub"))).read_text())
+        want = {"size": {"height": DEPTH_PREP["size"], "width": DEPTH_PREP["size"]},
+                "ensure_multiple_of": DEPTH_PREP["multiple"],
+                "keep_aspect_ratio": True, "do_pad": False, "resample": 3,
+                "image_mean": list(DEPTH_PREP["mean"]),
+                "image_std": list(DEPTH_PREP["std"])}
+        drift = {k: card.get(k) for k, v in want.items() if card.get(k) != v}
+        if drift:
+            print(f"The model card's preprocessing differs from this tool's "
+                  f"constants: {drift}. Not recorded; the tool stays as it was.")
+            return 1
+        # A REAL forward pass on the self-test scene: the floor must read
+        # nearer than the sky. Any hidden lazy download happens here.
+        top, bottom = depth_selftest(model_disparity(_selftest_scene()))
+        if not bottom > top + 0.3:
+            print(f"The model files downloaded but the self-test failed "
+                  f"(top {top}, bottom {bottom}); --camera model stays off.")
+            return 1
+    except Exception as e:
+        print(f"Could not prepare the depth model: {e}")
+        return 1
+    finally:
+        _ALLOW_DOWNLOAD = False
+    files, links = _depth_files()
+    if not files:
+        print("No model files were written. --camera model stays off.")
+        return 1
+    total = sum(f["size"] for f in files)
+    DEPTH_MANIFEST.write_text(json.dumps(
+        {"tool_version": VERSION, "model": DEPTH_MODEL, "verified": True,
+         "self_test": {"top20_mean": top, "bottom20_mean": bottom},
+         "prep": {k: list(v) if isinstance(v, tuple) else v
+                  for k, v in DEPTH_PREP.items()},
+         "files": files, "links": links}, indent=2))
+    for f in files:
+        print(f"  {f['name']}  {f['size']/1e6:.1f} MB")
+    print(f"\nVerified: floor {bottom} nearer than sky {top} on the self-test scene.")
+    print(f"{len(files)} file(s), {total/1e6:.1f} MB in {d}")
+    print("--camera model is now fully offline. It will never download again.")
+    return 0
 
 
 def parse_anchors(text):
@@ -1104,7 +1443,8 @@ def cmd_pair(args):
                      color_strength=args.color, warp_amount=args.warp,
                      max_long_edge=args.max_long, canvas=args.canvas,
                      anchors=parse_anchors(args.anchors),
-                     force_class=args.force_class)
+                     force_class=args.force_class,
+                     camera=args.camera, zoom=args.zoom)
     report = render_pair(A, B, spec, args.out)
     print(json.dumps({k: v for k, v in report.items() if k != "spec"},
                      indent=2))
@@ -1136,11 +1476,23 @@ def main(argv=None):
                     help='"ax,ay,bx,by;..." canvas pixels, A -> B, >= 3 pairs')
     pp.add_argument("--class", dest="force_class", default="",
                     choices=["", "A", "B"], help="force the pair class")
+    pp.add_argument("--camera", default="flat", choices=list(CAMERAS),
+                    help="class B camera move: flat = the pan-and-zoom as is; "
+                         "ramp = near content (bottom rows) moves more, no "
+                         "model; model = the same from Depth Anything V2 Small "
+                         "(needs `transitions.py warmup` once)")
+    pp.add_argument("--zoom", type=float, default=TCFG["classb_zoom"],
+                    help="class B zoom fraction per frame, clamped to "
+                         f"[{TCFG['zoom_range'][0]}, {TCFG['zoom_range'][1]}]")
     sub.add_parser("check", help="environment self-test")
+    sub.add_parser("warmup", help="fetch and verify the depth model once "
+                                  "(the only command that downloads)")
     args = ap.parse_args(argv)
     try:
         if args.cmd == "check":
             return cmd_check()
+        if args.cmd == "warmup":
+            return cmd_warmup()
         return cmd_pair(args)
     except TransitionError as e:
         print(f"FAILED: {e}", file=sys.stderr)

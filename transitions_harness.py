@@ -10,7 +10,9 @@ the next number in the lettered section it belongs to.
 
 Independent of harness.py by contract: transitions.py never imports
 reveal, reveal.py never imports transitions (checks 1-2), and nothing in
-transitions.py can reach the network (check 3).
+transitions.py can reach the network at module level; torch and
+transformers are imported lazily inside the depth functions only, behind
+`transitions.py warmup` + models/DEPTH_MANIFEST.json (checks 3, 48-51).
 """
 
 import ast
@@ -20,8 +22,10 @@ import io
 import json
 import logging
 import shutil
+import socket
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -112,6 +116,28 @@ def _imports(path):
     return names
 
 
+def _imports_by_scope(path):
+    """(module-level import names incl. the optional-layer try blocks,
+    {function name: import names inside it})."""
+    tree = ast.parse(Path(path).read_text())
+
+    def names(node):
+        out = []
+        for n in ast.walk(node):
+            if isinstance(n, ast.Import):
+                out += [a.name for a in n.names]
+            elif isinstance(n, ast.ImportFrom) and n.module:
+                out.append(n.module)
+        return out
+    top = []
+    for node in tree.body:
+        if isinstance(node, (ast.Import, ast.ImportFrom, ast.Try, ast.If)):
+            top += names(node)
+    funcs = {n.name: names(n) for n in ast.walk(tree)
+             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return top, funcs
+
+
 def _refused_policy():
     try:
         T.spec_from("morph", canvas="nope")
@@ -176,12 +202,18 @@ check(2, "reveal.py never imports transitions (AST-level)",
       not any(n == "transitions" or n.startswith("transitions.")
               for n in names_r))
 NET = ("socket", "urllib", "http", "ssl", "requests", "torch", "kornia",
-       "torchvision", "huggingface_hub")
-leaks = sorted({n for n in names_t
-                if n.split(".")[0] in NET})
-check(3, f"transitions.py imports nothing that can reach the network or "
-         f"load weights ({', '.join(NET[:4])}, ..., torch, kornia)"
-         + (f" — LEAK: {leaks}" if leaks else ""), not leaks)
+       "torchvision", "huggingface_hub", "transformers")
+DEPTH_FUNCS = {"depth_available", "_depth_model", "model_disparity", "cmd_warmup"}
+top_t, funcs_t = _imports_by_scope(ROOT / "transitions.py")
+leaks = sorted({n for n in top_t if n.split(".")[0] in NET})
+stray = sorted({f for f, ns in funcs_t.items() if f not in DEPTH_FUNCS
+                and any(n.split(".")[0] in NET for n in ns)})
+check(3, f"transitions.py imports nothing that can reach the network or load "
+         f"weights at module level ({', '.join(NET[:4])}, ..., torch, kornia); "
+         f"torch / transformers / huggingface_hub appear only inside the depth "
+         f"functions ({', '.join(sorted(DEPTH_FUNCS))})"
+         + (f" — LEAK: {leaks}" if leaks else "")
+         + (f" — STRAY: {stray}" if stray else ""), not leaks and not stray)
 
 # ===========================================================================
 print("== B. grammar ==")
@@ -456,6 +488,147 @@ check(43, f"class B end to end ({_corr_b['method']}): saliency finds the blob "
       and np.hypot(_boxc[0] - _pa[0], _boxc[1] - _pa[1]) < 30
       and np.abs(_corr_b["dAB"]).max() >= 8 and _cov_b >= 0.5 and _step_b < 30
       and "pan_fraction" in _corr_b["diag"])
+
+
+# ===========================================================================
+print("== L. camera move: --camera flat|ramp|model, --zoom (TR10, 2026-09-23) ==")
+_A1, _B1, _ = affine_pair()
+_fr_flat, _rep_flat = T.render_frames(_A1, _B1, T.spec_from("morph", seconds=0.4, fps=20))
+_lb = io.StringIO()
+_hd = logging.StreamHandler(_lb)
+T.log.addHandler(_hd)
+_fr_req, _rep_req = T.render_frames(_A1, _B1, T.spec_from("morph", seconds=0.4, fps=20,
+                                                          camera="model", zoom=0.25))
+T.log.removeHandler(_hd)
+_Ab, _Bb, _, _ = blob_pair()
+_c0 = T.dense_displacement(_Ab, _Bb)
+_c1 = T.dense_displacement(_Ab, _Bb, camera="flat", zoom=T.TCFG["classb_zoom"])
+check(44, "the camera is a class B option: on the class A pair `--camera model` renders the "
+          "flat bytes, loads no model and says so on the log; class B `flat` at the default zoom "
+          f"is the 2026-09-14 field byte for byte ({_c1['method']}, weight 0.5, report camera "
+          f"{_c1['diag'].get('camera')} / zoom {_c1['diag'].get('zoom')})",
+      frames_hash(_fr_flat) == frames_hash(_fr_req) and T._DEPTH is None
+      and "camera move applies to the class B" in _lb.getvalue() and "camera" not in _rep_req
+      and np.array_equal(_c0["dAB"], _c1["dAB"]) and np.array_equal(_c0["dBA"], _c1["dBA"])
+      and _c1["method"] == "saliency-panzoom" and float(_c1["wA"].min()) == 0.5 == float(_c1["wA"].max())
+      and _c1["diag"]["camera"] == "flat" and _c1["diag"]["zoom"] == T.TCFG["classb_zoom"])
+_cr = T.dense_displacement(_Ab, _Bb, camera="ramp", zoom=0.25)
+_cu = T.dense_displacement(_Ab, _Bb, camera="flat", zoom=0.25)
+_hb = _Ab.shape[0] // 5
+_mag, _magu = np.linalg.norm(_cr["dAB"], axis=2), np.linalg.norm(_cu["dAB"], axis=2)
+_top, _bot = float(np.median(_mag[:_hb])), float(np.median(_mag[-_hb:]))
+_ratio_u = float(np.median(_magu[-_hb:]) / max(np.median(_magu[:_hb]), 1e-6))
+check(45, f"ramp at zoom 0.25: the bottom fifth of the frame moves {_bot:.1f} px against "
+          f"{_top:.1f} px at the top ({_bot / max(_top, 1e-6):.2f}x >= 1.5; flat gives "
+          f"{_ratio_u:.2f}x), near rows win the splat (weight {_cr['wA'][-1, 0]:.2f} > "
+          f"{_cr['wA'][0, 0]:.2f}), method {_cr['method']}, report carries camera / zoom / "
+          f"disparity_mean {_cr['diag'].get('disparity_mean')}",
+      _bot >= 1.5 * _top and _ratio_u < 1.5 and _cr["wA"][-1, 0] > _cr["wA"][0, 0]
+      and _cr["method"] == "saliency-panzoom+ramp" and _cr["diag"]["camera"] == "ramp"
+      and _cr["diag"]["zoom"] == 0.25 and "disparity_mean" in _cr["diag"])
+_ts3 = (0.25, 0.5, 0.75)
+_cov_r = min(min_coverage(_Ab, _cr["dAB"], _ts3), min_coverage(_Bb, _cr["dBA"], _ts3))
+_th = T.TCFG["hole_thresh"]
+_hole_r = max(float((T.forward_splat(_Ab, _cr["dAB"], 0.5, _cr["wA"])[1] < _th).mean()),
+              float((T.forward_splat(_Bb, _cr["dBA"], 0.5, _cr["wB"])[1] < _th).mean()))
+_mid_r = T.morph_frame(_Ab, _Bb, _cr, 0.5, 0.5)
+_step_r = max(profile_step(_mid_r, _Bb), profile_step(_mid_r, _Ab))
+# the mutation, applied: a gain of 3 makes the factor -0.5 at the top row, so the top edge
+# moves INTO the canvas and the coverage guarantee (a sign condition) breaks
+_cb = T.dense_displacement(_Ab, _Bb, camera="ramp", zoom=0.25, cfg=dict(T.TCFG, depth_gain=3.0))
+_hole_bad = float((T.forward_splat(_Ab, _cb["dAB"], 0.5, _cb["wA"])[1] < _th).mean())
+check(46, f"ramp keeps both frames covering the canvas: mid-frame holes {_hole_r:.2%} <= 1 % "
+          f"(the T13 number), largest profile step {_step_r:.0f} levels < 30, min coverage "
+          f"{_cov_r:.2f} >= 0.25 at t = 0.25..0.75 (coverage is the inverse of the local stretch, "
+          f"about 1 / (1 + 0.25 x 1.5)^2 = 0.53 on the bottom rows, not a hole); a gain that turns "
+          f"the top factor negative (3.0) opens {_hole_bad:.1%} holes (> 1 %): the positive factor "
+          "is the guarantee",
+      _hole_r <= 0.01 and _step_r < 30 and _cov_r >= 0.25 and _hole_bad > 0.01)
+out4 = TMP / "ramp"
+rc, so, se = run_cli(["pair", str(pa), str(pb), "--out", str(out4), "--seconds", "0.5",
+                      "--preset", "morph", "--class", "B", "--camera", "ramp", "--zoom", "0.9"])
+rep4 = json.loads((out4 / "report.json").read_text()) if (out4 / "report.json").exists() else {}
+try:
+    T.spec_from("morph", camera="nope")
+    _bad_cam = False
+except T.TransitionError:
+    _bad_cam = True
+check(47, f"CLI: --zoom 0.9 is clamped to {T.TCFG['zoom_range'][1]} and report.json says camera "
+          f"{rep4.get('camera')} / zoom {rep4.get('zoom')} (spec.zoom "
+          f"{rep4.get('spec', {}).get('zoom')}), method {rep4.get('method')}; an unknown camera "
+          "is refused",
+      rc == 0 and rep4.get("camera") == "ramp" and rep4.get("zoom") == T.TCFG["zoom_range"][1]
+      and rep4.get("spec", {}).get("zoom") == T.TCFG["zoom_range"][1]
+      and rep4.get("method") == "saliency-panzoom+ramp" and _bad_cam)
+
+if not T.depth_available():
+    print("  [--]  48-51 skipped: torch + transformers not installed (optional; ./setup.sh --learned)")
+else:
+    _man = T.depth_manifest() or {}
+    _mb = sum(f["size"] for f in _man.get("files", [])) / 1e6
+    _st = _man.get("self_test", {})
+    check(48, f"depth model files live INSIDE the project ({len(_man.get('files', []))} files, "
+              f"{_mb:.0f} MB, {len(_man.get('links', []))} links in ./models/depth), the manifest "
+              f"is verified by a self-test (floor {_st.get('bottom20_mean')} nearer than sky "
+              f"{_st.get('top20_mean')}) and every recorded file is present and checksum-intact",
+          bool(_man) and str(T.DEPTH_DIR).startswith(str(T.MODELS_DIR)) and T.MODELS_DIR.exists()
+          and _man.get("verified") is True and _man.get("model") == T.DEPTH_MODEL
+          and _st.get("bottom20_mean", 0) > _st.get("top20_mean", 1) + 0.3
+          and T.depth_weights_cached(deep=True))
+
+    # THE offline proof: kill every socket, reload the model from disk, run it.
+    class _DeadSocket:
+        def __init__(self, *a, **k):
+            raise OSError("network blocked by harness")
+
+    def _dead(*a, **k):
+        raise OSError("network blocked by harness")
+    _rs, _rc = socket.socket, socket.create_connection
+    socket.socket, socket.create_connection = _DeadSocket, _dead
+    try:
+        T._DEPTH = None                       # force a cold load from disk
+        _S = T._selftest_scene()
+        _t0 = time.time()
+        _d1 = T.model_disparity(_S)
+        _s1 = time.time() - _t0
+        _d2 = T.model_disparity(_S)
+        _top_m, _bot_m = T.depth_selftest(_d1)
+    finally:
+        socket.socket, socket.create_connection = _rs, _rc
+    check(49, "runs with ALL sockets blocked: cold-loads from ./models/depth and reads the "
+              f"self-test floor nearer ({_bot_m}) than the sky ({_top_m}); disparity at the input "
+              f"size in 0..1, finite, two runs byte-identical ({_s1:.2f} s for the load + one "
+              "640x400 image on the CPU)",
+          _d1.shape == _S.shape[:2] and bool(np.isfinite(_d1).all()) and _bot_m > _top_m + 0.3
+          and np.array_equal(_d1, _d2) and float(_d1.min()) >= 0 and float(_d1.max()) <= 1)
+    _cm = T.dense_displacement(_S, _Bb, force_class="B", camera="model", zoom=0.25)
+    _magm = np.linalg.norm(_cm["dAB"], axis=2)
+    _topm, _botm = float(np.median(_magm[:_hb])), float(np.median(_magm[-_hb:]))
+    check(50, f"model on the self-test scene forced to class B: the floor (bottom fifth) moves "
+              f"{_botm:.1f} px against {_topm:.1f} px for the sky ({_botm / max(_topm, 1e-6):.2f}x "
+              f">= 1.5, the same sign as ramp), method {_cm['method']}, disparity means "
+              f"{_cm['diag'].get('disparity_mean')}",
+          _botm >= 1.5 * _topm and _cm["method"] == "saliency-panzoom+model"
+          and _cm["diag"]["camera"] == "model")
+    # and it must never silently reach for the network, or for ramp, during a job
+    _bak = T.DEPTH_MANIFEST.read_text()
+    T.DEPTH_MANIFEST.unlink()
+    T._DEPTH = None
+    socket.socket, socket.create_connection = _DeadSocket, _dead
+    try:
+        T.dense_displacement(_S, _Bb, force_class="B", camera="model", zoom=0.25)
+        _guard, _msg = False, ""
+    except T.TransitionError as e:
+        _guard, _msg = True, str(e)
+    except Exception as e:
+        _guard, _msg = False, str(e)
+    finally:
+        socket.socket, socket.create_connection = _rs, _rc
+        T.DEPTH_MANIFEST.write_text(_bak)
+        T._DEPTH = None
+    check(51, "with the manifest missing, --camera model REFUSES before touching the model or "
+              "the network, names warmup, and never falls back to ramp silently",
+          _guard and "warmup" in _msg and T._DEPTH is None)
 
 # ===========================================================================
 print("== I. identity fence (the tool is called transitions; owner ruling 2026-09-13) ==")

@@ -23,3 +23,8 @@ __pycache__/
 
 # TR5 research probe weight cache (scripts/research/roma_probe.py; 1.6 GB, never committed)
 /roma_torch_home/
+
+# transitions.py --camera model: the depth model cache + manifest, written by `transitions.py warmup`
+# (99 MB, near GitHub's per-file limit; ./setup.sh --learned rebuilds them)
+/models/depth/
+/models/DEPTH_MANIFEST.json

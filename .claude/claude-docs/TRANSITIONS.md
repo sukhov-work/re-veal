@@ -16,9 +16,14 @@ measured here. Decisions live in `DECISIONS.md` (dated lines from 2026-09-13); p
 1. **Isolation.** `transitions.py` never imports `reveal`, and `reveal.py` never imports
    `transitions` (checks 1–2). A change to one tool cannot break the other. The decode, cover and
    SIFT helpers are duplicated on purpose.
-2. **Offline, local, CPU.** No import that can reach the network or load model weights (check 3).
-   No model files. Reveal's decision 9 (no MPS) holds for the deterministic tier; the device for
-   model stages is decided per slice by measurement (`HANDOFF.md §11`).
+2. **Offline, local, CPU.** No import that can reach the network or load model weights at module
+   level; torch and transformers are imported lazily inside the depth section only (check 3, amended
+   2026-09-23). The one model, Depth Anything V2 Small behind `--camera model` (2026-09-23, §2.3),
+   lives in `models/depth/` behind `transitions.py warmup` + `models/DEPTH_MANIFEST.json` +
+   refuse-to-download, the shape of Reveal's decisions 24–27 (checks 48–51); a run never downloads.
+   Reveal's decision 9 (no MPS) holds for the deterministic tier and for the depth model (CPU and MPS
+   disparities agree to 2e-5, so no device flag exists); the device for model stages is decided per
+   slice by measurement (`HANDOFF.md §11`).
 3. **Inputs are never modified.** Every output is a new file in `--out`: `transition.mp4`,
    `strip.jpg`, `report.json`.
 4. **Exact endpoints.** Frame 0 is A and frame n−1 is B, byte for byte, whatever the color path did
@@ -60,8 +65,24 @@ measured here. Decisions live in `DECISIONS.md` (dated lines from 2026-09-13); p
      two salient boxes and its splat-and-inpaint inverse; the moved frame's rectangle was visible
      on every mismatched fixture (`§7.2`). With three or more anchor pairs the field is Moving
      Least Squares (affine; Schaefer 2006) with the splat-and-inpaint inverse, unchanged, and its
-     frame edge can still show. Certainty is 0.5 everywhere because nothing photometric supports
-     it. In class A, anchors are blended over the dense field with weight 0.7.
+     frame edge can still show. Certainty is 0.5 everywhere under `flat` because nothing
+     photometric supports it. In class A, anchors are blended over the dense field with weight 0.7.
+   - **Camera move** (`--camera flat|ramp|model`, `--zoom`; TR10, built 2026-09-23). `ramp` scales
+     the pan-and-zoom field by `1 − g/2 + g·d` with `g = 1` and `d` a top-to-bottom disparity ramp
+     (0 far at the top row, 1 near at the bottom), so the bottom rows move 1.5× and the top rows
+     0.5× (parallax), and the splat importance becomes `0.2 + 0.8·d` so near content wins the
+     collisions. `model` puts Depth Anything V2 Small's relative inverse depth in place of the
+     ramp: the canvas image is handed to the model at ≤ 1024 px on the long edge, the model's own
+     DPT preprocessing (short side 518, sides a multiple of 14, bicubic, ImageNet statistics) is
+     done with cv2 from the model card's `preprocessor_config.json`, and the raw output is clipped
+     to its 2nd–98th percentile → 0..1 at the canvas size. `flat` is the field above, byte for
+     byte (check 44; the 14 preset × class frame hashes were equal before and after the build).
+     Every factor is positive, so the coverage guarantee is kept (check 46). `--zoom` sets the
+     zoom fraction (default 0.10 = `classb_zoom`, clamped to [0.02, 0.5]; the owner liked 0.25).
+     Method becomes `saliency-panzoom+ramp` / `+model`; `report.json` carries `camera`, `zoom`
+     and, under a camera move, `disparity_mean [A, B]`; `mean_certainty` is then the mean depth
+     importance, not 0.5. On a class A pair or with anchors a camera other than `flat` has no
+     effect and says so on the log (check 44).
 4. **Per frame** (`iter_frames`). With `u = i/(n−1)`: `t_warp = curve(warp)·warp_amount +
    (1−warp_amount)·u` and `t_mix = curve(mix)(u − mix_delay)`.
    - **Color path.** Both endpoints move toward the Lab statistic interpolated at `u` (per-channel
@@ -97,13 +118,18 @@ measured here. Decisions live in `DECISIONS.md` (dated lines from 2026-09-13); p
 | `iris`, `wipe` | portal | feather 0.08 of the diagonal; the wipe shows B left of the seam, as Reveal's video does |
 | `luma` | luma | brightness-ordered reveal, softness 0.15 |
 
+Camera (class B only, 2026-09-23): `flat` (default) · `ramp` (weight-free, bottom rows near) ·
+`model` (Depth Anything V2 Small; needs `transitions.py warmup` once). `--zoom` 0.02–0.5, default 0.10.
+
 Curves: `linear ease ease-in ease-out snap hold-then-go`. Length clamps to [0.1, 10] s, fps to
 ≥ 1; `n_frames = round(seconds × fps)`, at least 2.
 
 ```
 transitions.py pair BEFORE AFTER --out DIR [--seconds 1.0] [--fps 30] [--preset morph]
                [--color 0.7] [--warp 1.0] [--max-long 0] [--anchors "ax,ay,bx,by;…"] [--class A|B]
-transitions.py check
+transitions.py pair … [--camera flat|ramp|model] [--zoom 0.10]
+transitions.py check                  # incl. the "depth model" row
+transitions.py warmup                 # the only command that downloads (2026-09-23)
 ```
 Exit 0 on success, 2 with `FAILED: <message>` on stderr.
 
@@ -122,8 +148,9 @@ Exit 0 on success, 2 with `FAILED: <message>` on stderr.
   starts with a measurement, not code.
 - **`clips` and `sequence`.** Wait for the PyAV decision (slice TR4).
 
-## 5. Harness: `transitions_harness.py`, 43 checks, about 8 s (as of 2026-09-14; own numbering)
-Coverage by section. A: isolation both ways and the no-network import set (1–3). B: grammar —
+## 5. Harness: `transitions_harness.py`, 51 checks, about 10 s (as of 2026-09-23; own numbering)
+Coverage by section. A: isolation both ways and the no-network import set at module level, with
+torch / transformers / huggingface_hub allowed only inside the four named depth functions (1–3). B: grammar —
 frame count, monotone progress for every curve and warp amount, length clamp, unknown names fail
 cleanly (4–7). C: warp — a translation field equals `warpAffine` within 0.5 levels, no fake holes,
 t=0 is the identity, `to_u8` rounds (8–11). D: correspondence — class A routing with inliers, dense
@@ -142,10 +169,24 @@ of the canvas without A and steps 56 levels at the exposed edge; `panzoom_field`
 ≥ 0.81 at every t while moving the frame up to 64 px, pans 2 % of the way to a far target and
 100 % to a near one; end to end on two flat frames with one blob each, saliency finds the blob
 within 5 px, coverage stays ≥ 0.86 and the mid frame's largest 12-px profile step is 4 levels (41–43).
+L: the camera move (2026-09-23) — `--camera model` on a class A pair renders the flat bytes, loads
+no model and says so; class B `flat` at the default zoom equals the 2026-09-14 field byte for byte
+(44); `ramp` at zoom 0.25 moves the bottom fifth 127 px against 52 px at the top (2.44×; flat 1.03×)
+and the near rows carry weight 1.0 against 0.2 (45); holes 0.00 % at the mid frame, edge step 4
+levels, coverage ≥ 0.49, and a gain of 3 (top factor −0.5) opens 2.2 % holes (46); the CLI clamps
+`--zoom 0.9` to 0.5 and reports camera / zoom, an unknown camera is refused (47); the model files
+live in `models/depth/` with a verified manifest (5 files, 99 MB, 4 links) and are checksum-intact
+(48); with every socket patched to raise, the model cold-loads from disk and reads the self-test
+floor (0.866) nearer than the sky (0.0), two runs byte-identical, 0.9 s for load + one 640×400
+image (49); `model` and `ramp` agree in sign on the self-test scene forced to class B (2.42×) (50);
+with the manifest removed, `--camera model` refuses before touching the model or the network and
+names warmup (51). Checks 48–51 print a loud skip line when torch or transformers are absent.
 
 Mutations applied: on 2026-09-13, making `to_u8` truncate turned checks 11, 20, 21 and 24 red
 (32 of 36 at the time); on 2026-09-14, removing the pan clip in `panzoom_field` turned 42 and 43
-red (coverage 0.00, a 56-level step). Gaps: the harness inputs are synthetic by rule; the real-pair tier lives in
+red (coverage 0.00, a 56-level step); on 2026-09-23 check 46 applies its own mutation every run
+(`depth_gain` 3 opens 2.2 % holes) and the lazy `import torch` inside the depth section turned the
+old check 3 red (it walked every import) before the amendment. Gaps: the harness inputs are synthetic by rule; the real-pair tier lives in
 `fixtures/` and the dated sheets under `.claude/claude-docs/benchmarks/` (first sheet 2026-09-13, ten
 pairs); DNG and ARW have never been decoded from a real file; the owner's usability rating is pending.
 
@@ -178,6 +219,7 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | TR6-A, the bridge on the skeleton: SD 1.5 inpainting SDEdit over the tool's skeleton frames, three pairs, 30 frames at 512 px, 2026-09-15 fourth session (`benchmarks/2026-09-15-generative.md §1`; page `benchmarks/runs/2026-09-15/gen/`) | Mean adjacent step, skeleton → fresh noise → warped noise at strength 0.4 (levels): mismatch_1 3.36 → 11.88 → 9.19, mismatch_4 2.08 → 7.21 → 6.91, match_4 2.06 → 9.45 → 4.75. Strength ramp 0.6 · sin(πu) + flow-guided filter: 3.86 / 2.89 / 2.65 (1.15× / 1.39× / 1.29× the skeleton), steps into B 3.1 / 2.6 / 2.9, content 11.6 / 7.7 / 7.9 levels from the skeleton; lifted to the native canvas 4.58 / 3.40 / 3.68 against skeletons 4.00 / 2.69 / 3.18. Same seed byte-identical (5 frames, max abs diff 0). Generator 6.0–13.4 s per frame at 0.4, 13.3–18.0 at 0.6, beside other GPU jobs; peak RSS ≤ 0.8 GB. Over the depth skeleton the warped clip's step is 13.6 / 13.3 (mismatch_4 / mismatch_1) against 6.9 / 9.2 over the pan-zoom skeleton |
 | TR10, depth camera move v0 (Depth Anything V2 Small on MPS via transformers 5.17; the pan-zoom field × (0.5 + disparity), near wins the splat), mismatch_1 / mismatch_4, 2 s clips, 2026-09-15 (`§4` of the same sheet) | depth 0.3–2.7 s per image at the native canvas; mid-frame holes ≤ 0.9 % of the canvas at 10 % and 25 % zoom; mean step 1.61 / 1.05 (10 %) and 2.24 / 1.38 (25 %) against the uniform pan-zoom 1.79 / 1.15 and 2.60 / 1.61; warping error equal or lower; render 14–34 s per 60 frames |
 | TR6-B and TR6-A2, 2026-09-15 fourth session (`§2–3` of the same sheet; clips under `benchmarks/runs/2026-09-15/{ltx,morphers}/`) | LTX keyframe 0.8 on mismatch_1 / mismatch_4: cut at frame 28 (38 levels) / 31 (21 levels), 1849 / 1961 s beside two GPU jobs, endpoints 5.3 / 5.3 and 7.4 / 10.7; match_4 at 0.6: continuous, max step 4.8, 736 s. LTX `generate` with five skeleton frames anchored, mismatch_1: continuous, mean step 2.28, max 3.87, endpoints 4.4 / 8.4, 11.3 levels from the skeleton clip, 1107 s, RSS 13.8 GB. DreamMover on MPS: 18.2 / 12.0 min (mismatch_1, two runs) and 8.8 min (mismatch_4), memory footprint 18–20 GB, endpoints 6.6 / 4.5 and 3.7 / 4.6 levels off, deterministic to 1 level, no licence. DiffMorpher: weights 404 (gated, not granted), 0.502 s per UNet step and 2.43 s per LoRA step → 42 min per pair at the README's recipe, 7.5 min minimal |
+| TR10 built as `--camera flat\|ramp\|model` + `--zoom` (2026-09-23; sheet `benchmarks/2026-09-23-camera.md`, run dir `benchmarks/runs/2026-09-23/`) | Depth Anything V2 Small through transformers 5.17.0 + torch 2.13.0 on the CPU (6 threads): 24,785,089 parameters, 99,173,660-byte safetensors, 0.27–0.31 s per 1024-px image, 1.2 s model load per process (4.9 s cold from disk); MPS 0.06 s warm, CPU-vs-MPS normalized disparity median 0 / p99 0 / max 2e-5 (no device flag built); two CPU runs byte-identical on five inputs. Harness pair: `flat` byte-identical (14 preset × class hashes equal before and after); `ramp` at zoom 0.25 moves the bottom fifth 127.4 px against 52.3 px at the top (2.44×; flat 1.03×), holes 0.00 % at the mid frame, edge step 4 levels. Six mismatched fixtures at ≤ 1920 px, morph 2 s, zoom 0.25: `model` median displacement 26–46 % below `flat` (disparity means 0.12–0.43), mean step 4–14 % lower, warping error ≤ flat on five of six, `edge_ratio` within ±0.06 except mismatch_2 0.19 → 0.24 and mismatch_6 0.53 → 0.59; correspondence 2.4–2.9 s (model) against 0.08–0.45 s (flat), render 2.6–13.3 s per 60 frames; run 2 byte-identical (mp4 md5) on all six. Six class A pairs forced to class B with `model`: mean step 2.1–10.6 against the class A morph's 0.5–5.3. Research push-in (zero at both ends) on the class A field: `edge_ratio` 1.1–1.8 on all twelve clips, the endpoint slope of sin(πu) |
 
 ## 7. Risks and open questions, ranked
 1. **Object-level correspondence is the top gap (owner review, 2026-09-13).** Three matched pairs
@@ -288,6 +330,8 @@ Owner order (2026-09-13): "make sure we account ( maybe you already did ) for an
 ## 9. Runbook
 ```
 .venv/bin/python transitions.py check
+.venv/bin/python transitions.py warmup     # once, with the learned deps: fetches the depth model into models/depth/
+.venv/bin/python transitions.py pair fixtures/mismatch_1_S.jpg fixtures/mismatch_1_F.jpg --out out/cam --seconds 2 --camera model --zoom 0.25
 .venv/bin/python transitions.py pair out/before.jpg out/after_aligned.jpg --out out/tr --seconds 1.5 --preset flow-dissolve
 open out/tr/strip.jpg; cat out/tr/report.json
 .venv/bin/python transitions_harness.py            # Gate 1b
@@ -524,6 +568,8 @@ run )"). The generative tier is parked as measured. The one thing the owner like
 depth camera move ("really liked the effect on all individual images especially z25 … at least as
 option"), approved on 2026-09-23 with its model leg ("yes to model, and run it on matched pairs
 too ( as a test, need to compare)"): it becomes a `transitions.py` option (plan §Rank 2026-09-23).
+Built the same day as `--camera flat|ramp|model` + `--zoom` (§2.3, harness L); the sweep with the
+three cameras is `benchmarks/2026-09-23-camera.md`, the owner's picks pending.
 
 ### 10.9 Found on the way, not TR14's
 `hold` on mismatch_7 exposes the start frame's moved border as a rectangle at mid-transition:

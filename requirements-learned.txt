@@ -7,3 +7,7 @@
 # Requires Python >= 3.11 (kornia 0.8.3).
 torch==2.13.0
 kornia==0.8.3
+# transitions.py --camera model: Depth Anything V2 Small (Apache-2.0, 99 MB) through
+# transformers, fetched ONCE by `transitions.py warmup` into models/depth/ and
+# recorded in models/DEPTH_MANIFEST.json; a run never downloads (2026-09-23).
+transformers==5.17.0

@@ -13,6 +13,8 @@ writes sheet.json, sheet.md and index.html (thumbnails + strips) into --out.
 Run: .venv/bin/python scripts/bench_transitions.py --out benchmarks/runs/<date> [--reveal]
      [--presets morph,flow-dissolve,snap-morph,dissolve] [--seconds 1.0] [--long-preset morph --long-seconds 3.0]
      [--max-long 1920] [--only match_1,mismatch_2]
+     [--camera flat|ramp|model] [--zoom 0.25] [--class A|B]   passed through to `transitions.py pair`
+                              (2026-09-23; the tag gains _<camera>, _z<zoom %> and _<class> suffixes)
      --render-only            rebuild sheet.md / index.html from sheet.json without running anything
      --picks picks.json       merge the owner's picks exported from index.html into the sheet
 
@@ -34,6 +36,23 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
 PAT = re.compile(r"^(match|mismatch)_(\d+)_([SF])\.(jpe?g|png|heic|heif|hif|dng|arw|tiff?|webp)$", re.I)
+TAG = re.compile(r"^(?P<preset>[a-z-]+)_(?P<sec>[\d.]+)s(?:_(?P<camera>flat|ramp|model))?(?:_z(?P<zoom>\d+))?(?:_(?P<cls>[AB]))?$")
+
+
+def make_tag(preset, sec, camera="flat", zoom=None, force_class=""):
+    return (f"{preset}_{sec:g}s" + (f"_{camera}" if camera != "flat" else "")
+            + (f"_z{int(round(zoom * 100))}" if zoom is not None else "")
+            + (f"_{force_class}" if force_class else ""))
+
+
+def parse_tag(tag):
+    """{preset, sec, camera, zoom, cls} from a run tag (the older `preset_1s` form parses too)."""
+    m = TAG.match(tag)
+    if not m:
+        preset, sec = tag.rsplit("_", 1)
+        return {"preset": preset, "sec": float(sec.rstrip("s")), "camera": None, "zoom": None, "cls": ""}
+    return {"preset": m["preset"], "sec": float(m["sec"]), "camera": m["camera"],
+            "zoom": int(m["zoom"]) / 100 if m["zoom"] else None, "cls": m["cls"] or ""}
 
 
 def find_pairs(fixtures):
@@ -88,6 +107,11 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--render-only", action="store_true")
     ap.add_argument("--picks", default="", help="picks.json exported from index.html")
+    ap.add_argument("--camera", default="flat", choices=["flat", "ramp", "model"],
+                    help="passed to transitions.py pair (class B camera move)")
+    ap.add_argument("--zoom", type=float, default=None, help="passed to transitions.py pair")
+    ap.add_argument("--class", dest="force_class", default="", choices=["", "A", "B"],
+                    help="passed to transitions.py pair")
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     if a.render_only:
@@ -97,8 +121,10 @@ def main():
         # Rows written before a report key existed pick it up from their report.json on disk.
         for row in runs.get("pairs", []):
             for r in row.get("transitions", {}).values():
-                if "pan_fraction" not in r and r.get("mp4"):
-                    r["pan_fraction"] = load_json(out / Path(r["mp4"]).parent / "report.json").get("pan_fraction")
+                if r.get("mp4") and any(k not in r for k in ("pan_fraction", "camera", "zoom")):
+                    rj = load_json(out / Path(r["mp4"]).parent / "report.json")
+                    for k in ("pan_fraction", "camera", "zoom", "disparity_mean"):
+                        r.setdefault(k, rj.get(k))
         (out / "sheet.json").write_text(json.dumps(runs, indent=2))
         picks = load_json(a.picks) if a.picks else {}
         write_sheet(out, runs, picks)
@@ -112,11 +138,15 @@ def main():
     # Merge into an existing sheet: pairs run now replace their earlier row, others are kept, so
     # the catalogue can grow one pair at a time without re-running everything.
     runs = load_json(out / "sheet.json") or {}
+    prev_rows = {r.get("id"): r for r in runs.get("pairs", [])}
     runs = {"date": time.strftime("%Y-%m-%d %H:%M"), "max_long": a.max_long,
             "pairs": [r for r in runs.get("pairs", []) if r.get("id") not in {k for k, _, _ in pairs}]}
     for key, S, F in pairs:
+        # a pair's earlier tags are kept (2026-09-23: one sheet can hold several camera runs);
+        # a tag run again replaces its own entry
+        prev = prev_rows.get(key, {})
         row = {"id": key, "before": S.name, "after": F.name, "run_at": time.strftime("%Y-%m-%d %H:%M"),
-               "reveal": {}, "transitions": {}}
+               "reveal": dict(prev.get("reveal", {})), "transitions": dict(prev.get("transitions", {}))}
         try:
             tS, szS = thumb(S); tF, szF = thumb(F)
             row["size_before"], row["size_after"] = list(szS), list(szF)
@@ -144,12 +174,15 @@ def main():
         jobs = [(p, a.seconds) for p in a.presets.split(",") if p]
         if a.long_preset:
             jobs.append((a.long_preset, a.long_seconds))
+        extra = (["--camera", a.camera] if a.camera != "flat" else []) \
+            + (["--zoom", str(a.zoom)] if a.zoom is not None else []) \
+            + (["--class", a.force_class] if a.force_class else [])
         for preset, sec in jobs:
-            tag = f"{preset}_{sec:g}s"
+            tag = make_tag(preset, sec, a.camera, a.zoom, a.force_class)
             d = out / key / tag
             rc, so, se, wall = run([PY, str(ROOT / "transitions.py"), "pair", str(S), str(F),
                                     "--out", str(d), "--preset", preset, "--seconds", str(sec),
-                                    "--max-long", str(a.max_long)])
+                                    "--max-long", str(a.max_long)] + extra)
             rep = load_json(d / "report.json")
             q = rep.get("quality", {})
             row["transitions"][tag] = {
@@ -158,6 +191,7 @@ def main():
                 "sparse_inliers": rep.get("sparse_inliers"), "median_disp_px": rep.get("median_disp_px"),
                 "mean_certainty": rep.get("mean_certainty"), "canvas": rep.get("canvas"),
                 "pan_fraction": rep.get("pan_fraction"),
+                "camera": rep.get("camera"), "zoom": rep.get("zoom"), "disparity_mean": rep.get("disparity_mean"),
                 "n_frames": rep.get("n_frames"), "correspondence_s": rep.get("correspondence_s"),
                 "render_s": rep.get("render_s"), "total_s": rep.get("total_s"),
                 "warping_error": q.get("warping_error"),
@@ -167,6 +201,7 @@ def main():
                 "mp4": str(Path(key) / tag / "transition.mp4")}
             print(f"  {key} {tag}: rc={rc} class={rep.get('class')} {rep.get('method')} "
                   f"inl={rep.get('sparse_inliers')} disp={rep.get('median_disp_px')} "
+                  f"{('camera=' + str(rep.get('camera')) + ' zoom=' + str(rep.get('zoom')) + ' ') if rep.get('camera') else ''}"
                   f"edge={q.get('flicker', {}).get('edge_ratio')} we={q.get('warping_error')} "
                   f"render={rep.get('render_s')}s total={wall}s")
         runs["pairs"].append(row)
@@ -183,13 +218,19 @@ def preset_legend(tags):
     base = T.TransitionSpec()
     rows = []
     for tag in tags:
-        preset, sec = tag.rsplit("_", 1)
-        spec = T.spec_from(preset, seconds=float(sec.rstrip("s")))
+        p = parse_tag(tag)
+        spec = T.spec_from(p["preset"], seconds=p["sec"])
         diff = []
         for f in ("style", "warp_amount", "warp_curve", "mix_curve", "mix_delay", "portal"):
             v, b = getattr(spec, f), getattr(base, f)
             if v != b or f == "style":
                 diff.append(f"{f}={v}")
+        if p["camera"]:
+            diff.append(f"camera={p['camera']}")
+        if p["zoom"] is not None:
+            diff.append(f"zoom={p['zoom']:g}")
+        if p["cls"]:
+            diff.append(f"class forced {p['cls']}")
         rows.append((tag, f"{spec.seconds:g} s, {spec.n_frames()} frames; " + ", ".join(diff)))
     return rows
 
@@ -225,15 +266,15 @@ def write_sheet(out, runs, picks=None):
                       f"{r.get('ecc_rho')} | {r.get('peripheral_ssim')} | {r.get('residual')} | {r.get('changed_pct')} | "
                       f"{r.get('confidence')} | {r['wall_s']} | {(r.get('error') or '')[:80]} |")
     md.append("\n## Transitions (`transitions.py pair`)\n")
-    md.append("| pair | preset | rc | class | method | inliers | median_disp_px | certainty | pan A/B | canvas | frames | corr s | render s | wall s | warping_err | edge_ratio | max_step | endpoint |")
-    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    md.append("| pair | preset | rc | class | method | inliers | median_disp_px | certainty | pan A/B | camera | zoom | canvas | frames | corr s | render s | wall s | warping_err | edge_ratio | max_step | endpoint |")
+    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for row in runs["pairs"]:
         for tag, r in row["transitions"].items():
             cv = "x".join(str(v) for v in (r.get("canvas") or [])) or "-"
             ep = r.get("endpoint") or {}
             pan = "/".join(f"{v:.2f}" for v in r["pan_fraction"]) if r.get("pan_fraction") else "-"
             md.append(f"| {row['id']} | {tag} | {r['rc']} | {r.get('class')} | {r.get('method')} | {r.get('sparse_inliers')} | "
-                      f"{r.get('median_disp_px')} | {r.get('mean_certainty')} | {pan} | {cv} | {r.get('n_frames')} | {r.get('correspondence_s')} | "
+                      f"{r.get('median_disp_px')} | {r.get('mean_certainty')} | {pan} | {r.get('camera') or '-'} | {r.get('zoom') if r.get('zoom') is not None else '-'} | {cv} | {r.get('n_frames')} | {r.get('correspondence_s')} | "
                       f"{r.get('render_s')} | {r['wall_s']} | {r.get('warping_error')} | {r.get('edge_ratio')} | {r.get('max_step')} | "
                       f"{ep.get('first_vs_A')}/{ep.get('last_vs_B')} |")
     if picks:
@@ -255,7 +296,7 @@ def write_sheet(out, runs, picks=None):
         for tag, r in row["transitions"].items():
             src = out / r["strip"]
             if src.exists() and r.get("n_frames"):
-                sec = float(tag.rsplit("_", 1)[1].rstrip("s"))
+                sec = parse_tag(tag)["sec"]
                 if label_strip(src, src.with_name("strip_labeled.jpg"), r["n_frames"], sec):
                     r["strip_labeled"] = str(Path(r["strip"]).with_name("strip_labeled.jpg"))
     html = ["<!doctype html><meta charset=utf-8><title>Transitions real-pair sheet</title>",
@@ -279,7 +320,9 @@ def write_sheet(out, runs, picks=None):
                 "<b>warp-dissolve</b> = same with the warp scaled by warp_amount and the dissolve shifted by mix_delay; <b>dissolve</b> = no geometry, crossfade only. "
                 "Curves: <b>ease</b> = slow-fast-slow; <b>hold-then-go</b> = nothing for the first 35 %, then linear; <b>ease-in</b> = starts slow. "
                 "class A = a homography plus DIS residual flow was found between the photos; class B = no geometric correspondence: each photo zooms in 10 % about its salient blob and pans toward the other photo's blob as far as the zoom allows without its edge entering the frame (pan = the fraction of that distance each photo travels; since 2026-09-14, before that the whole frame moved by a similarity and its border showed). "
-                "certainty = mean forward-backward consistency of the dense field (1 = every pixel agrees both ways).</p>")
+                "certainty = mean forward-backward consistency of the dense field (1 = every pixel agrees both ways). "
+                "camera (2026-09-23, class B only): <b>flat</b> = the pan-and-zoom as is; <b>ramp</b> = the same motion scaled by a top-to-bottom disparity ramp (bottom rows move 1.5×, top rows 0.5×), no model; "
+                "<b>model</b> = the same scaled by Depth Anything V2 Small's disparity, near content moves more and wins the overlap; zoom = the per-frame zoom fraction (0.10 default).</p>")
     html.append("<p><button onclick='exportPicks()'>Export picks</button> <span id=status class=note></span></p>")
     for row in runs["pairs"]:
         html.append(f"<h2 id='{row['id']}'>{row['id']} <small>{row['before']} → {row['after']} · {row.get('size_before')} / {row.get('size_after')}</small></h2>")
@@ -295,8 +338,9 @@ def write_sheet(out, runs, picks=None):
         for tag, r in row["transitions"].items():
             strip = r.get("strip_labeled", r["strip"])
             pan = (" pan=" + "/".join(f"{v:.2f}" for v in r["pan_fraction"])) if r.get("pan_fraction") else ""
+            cam = (f" camera={r.get('camera')} zoom={r.get('zoom')}" + (f" disparity={r.get('disparity_mean')}" if r.get("disparity_mean") else "")) if r.get("camera") else ""
             html.append(f"<div class=run><div><code>{tag}</code> class={r.get('class')} {r.get('method')} inliers={r.get('sparse_inliers')} "
-                        f"disp={r.get('median_disp_px')}px certainty={r.get('mean_certainty')}{pan} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')} "
+                        f"disp={r.get('median_disp_px')}px certainty={r.get('mean_certainty')}{pan}{cam} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')} "
                         f"render={r.get('render_s')}s<br><img src='{strip}'></div>"
                         f"<video src='{r['mp4']}' controls loop muted playsinline preload=metadata></video></div>")
     html.append("""<script>

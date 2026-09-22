@@ -36,7 +36,7 @@ defaults or to the strict `reshot` profile is NOT in the lane — it needs its o
 
 ## No-regression roster (struck from only by a recorded owner ruling)
 - `harness.py` 82/82 green (62.7 s wall on 2026-09-13) and `reveal.py check` all OK (18.5 s).
-- `transitions_harness.py` green (count in `TRANSITIONS.md §5`; 43 on 2026-09-14, ~8 s) and
+- `transitions_harness.py` green (count in `TRANSITIONS.md §5`; 51 on 2026-09-23, ~10 s) and
   `transitions.py check` all OK.
 - The seven invariants in `HANDOFF.md §2`: localhost only · originals never modified · BEFORE is
   the reference frame · convergence judged on inlier statistics, never pixel similarity · the
@@ -57,10 +57,11 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
 `[VERIFIED via …]` label a versioned fact needs.
 
 ## Build / test / run — Python 3.13, venv + pinned pip requirements (no build step)
-- Deps `./setup.sh` (`--learned` adds torch+kornia and fetches the 52 MB weights into `models/`)
+- Deps `./setup.sh` (`--learned` adds torch+kornia+transformers and fetches the 52 MB matcher
+  weights into `models/` and the 99 MB depth model into `models/depth/`, both by a `warmup`)
   · Gate 1 `.venv/bin/python harness.py` (82 checks, ~63 s, needs the learned deps for 77–82)
   · Gate 2 `.venv/bin/python reveal.py check` (dependency + offline matrix, ~19 s)
-  · Gate 1b `.venv/bin/python transitions_harness.py` (~5 s; own numbering space; count in `TRANSITIONS.md §5`)
+  · Gate 1b `.venv/bin/python transitions_harness.py` (~10 s; own numbering space; count in `TRANSITIONS.md §5`)
   · Gate 0 `.venv/bin/python -m py_compile reveal.py harness.py transitions.py transitions_harness.py`
   (seconds; run before Gate 1)
   · Run `./run.sh` (serves 127.0.0.1:8378 and opens the browser) · headless
@@ -68,7 +69,8 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
   · Clean `scripts/clean.sh` (`--jobs` also empties `_reveal/jobs`).
 - Never claim done with a failing gate. The harness is one process, all-or-nothing, and takes a
   minute; section selection is backlog row T2, not a thing you invent inline.
-- `models/` is write-protected by `.claude/settings.json`: only `reveal.py warmup` writes there.
+- `models/` is write-protected by `.claude/settings.json`: only `reveal.py warmup` and
+  `transitions.py warmup` (under `models/depth/` + `models/DEPTH_MANIFEST.json`, gitignored) write there.
 
 ## Workflow
 `/reveal` for implement / fix / design / research / review / audit. Heavy design →
@@ -95,8 +97,10 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
 - Single file by design: `reveal.py` stays one module, and so does `transitions.py` (a second
   single-file tool by the 2026-09-13 decision); helpers live in sections, not packages.
 - `transitions.py` never imports `reveal`, `reveal.py` never imports `transitions`, and
-  `transitions.py` imports nothing that can reach the network or load weights (transitions
-  harness 1–3). The two tools share the venv and `requirements*.txt`; a new dependency is a decision.
+  `transitions.py` imports nothing that can reach the network or load weights at module level;
+  torch and transformers appear only inside its depth section, behind `transitions.py warmup` +
+  `models/DEPTH_MANIFEST.json` + refuse-to-download (transitions harness 1–3, 48–51; 2026-09-23).
+  The two tools share the venv and `requirements*.txt`; a new dependency is a decision.
 
 ## Recurring gotchas (cost real time — check before they bite)
 - `findTransformECC` maps TEMPLATE(A) → INPUT(B) coordinates; seed with `inv(H)` and invert back
