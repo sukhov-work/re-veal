@@ -93,6 +93,35 @@ liked, and it is asked for as an option.
    TR6-A2 failed its gate); the remaining levers (auto-regressive input, weaker LTX anchors, 768 px canvas) only
    after item 2 exists and only if the owner asks.
 
+### Rank, revised 2026-09-26 (PROPOSED; the owner confirms) — after the retrospective
+Owner (verbatim, 2026-09-26, with the 2026-09-23 picks): "run was auwful , i feel like we are stuck ,
+conceptually. I went ahead and repeated for every junky mismathing pair same logic with applied z
+depth pass, which was not expected to help with transition in any way and as i said can be at most
+nice additioal touch to image. Revisit full plan and my original goals , do additional deep reseatch,
+analyze in retrospect all recent runs and my answers and  see what is not working for us in our
+research and what prevents you from understanding my goals clearly and designing precise metrics to
+pursue." Retrospective: `.claude/claude-docs/audits/retrospective-2026-09-26.md` (the goal in one
+paragraph for the owner to confirm, the method failures, four goal metrics calibrated on the recorded
+verdicts, the mismatch_4 anchor probe, five questions). Diagnosis in one line: every slice since
+2026-09-13 varied geometry and none varied the combination of A and B (an alpha crossfade since TR1),
+which is what the owner grades; the basket could not see it (AUC 0.46–0.48 against the owner's
+"crossfade" verdicts).
+1. **Goal paragraph + reference** (owner): confirm or correct `retrospective §1`; one reference clip
+   or one sentence per fixture pair. Nothing else starts before this answer.
+2. **Goal metrics in the basket** (Standard, `[revert: commit]`, frames byte-identical): `feat_floor`,
+   `laplace_floor`, `contrast_floor`, `local_share` (definitions and calibration in the retrospective
+   §5; script `scripts/research/verdict_metrics.py`) into `assess()`, two harness checks with
+   mutations (a crossfade of unrelated frames scores low; an aligned morph scores high), the numbers
+   on the sheet and the page; the review page gains three per-property yes/no boxes per clip.
+3. **Theme anchors on the six mismatches, hand-placed first** (a research page, then the owner's
+   boxes); if graded "one picture, content transforms" on most pairs, automate with Track B's recipe
+   (Mask2Former-tiny panoptic + DINOv2-S mutual-NN inside label-matched masks + YuNet faces + a
+   brightest-blob sun; about 280 MB, Apache-2.0 / MIT; behind warmup + manifest) — the TR9 slice with
+   a measured shape; fix the MLS path's frame edge in the same slice.
+4. **The combination where nothing aligns** (Design): Track A's deterministic candidates for the
+   regions no anchor covers; the luma reveal at partial strength ("a bit luma") is the cheapest member.
+5. **Parked**: `--camera` stays an option (not a default); the generative tier; TR7.
+
 ## H — harness before exploration (evidence: `HANDOFF.md §7`, `harness.py`, backlog T2–T5)
 | Slice | Goal (acceptance) | Seam | Revert | Gate / check | Size | Depends on |
 |---|---|---|---|---|---|---|
@@ -163,3 +192,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-15 | Owner verdicts on the RoMa clips: 1 better / 1 same / 3 DIS better / 1 neither → TR5 not adopted as a drop-in; TR14 (changed-region transformation) added as the next design pass; rank now TR14 design → TR2d measure → TR6 measurement → TR9 → TR5 hybrid | transitions session, 2026-09-15 |
 | 2026-09-14 | TR5 probe on match_2/3/5 at the owner's order: 2 wins, 2 ties of 4 pairs; speed gate for the dense matcher lifted by the owner; TR5 integration is the next slice, TR2d folds into it (RoMa's certainty is the weight) | transitions session, 2026-09-14 late |
 | 2026-09-13 | Coverage map of the research artifact written (`TRANSITIONS.md §8`); every experiment not yet planned got a slice: TR8 splat quality, TR9 class B semantics + anchor editor + SAM portals, TR10 depth camera move, TR11 color science + HDR, TR12 product surface, TR4b motion carry-over. Owner: "make sure we account … for any useful content in … impossible artifact prototype" | transitions session, late |
+| 2026-09-26 | Owner picks on the camera sweep ingested (0 of 12; all cameras "unnecessary pans and basically cross fading"); retrospective written (`audits/retrospective-2026-09-26.md`); §Rank 2026-09-26 PROPOSED, owner to confirm: goal paragraph → goal metrics → theme anchors (hand-placed, then Track B's recipe) → the combination where nothing aligns → cameras and generative parked | retrospective session, 2026-09-26 |

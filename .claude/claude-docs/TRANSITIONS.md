@@ -586,3 +586,29 @@ Recorded as backlog T14.
 2. `hold` (RoMa) against `hold-dis` (DIS + mask): is the background motion RoMa gives on match_4
    worth the dense matcher, or is the weight-free `hold-dis` enough?
 3. TR6: which backend may be fetched first (license and size in §10.7).
+
+## 11. Goal statement and goal metrics (2026-09-26; the owner confirms the statement)
+
+Retrospective: `audits/retrospective-2026-09-26.md`. After six review rounds and about 340 clips
+with no accepted clip, the record shows that every slice since TR1 varied the correspondence field,
+the border or the camera, while the combination of A and B in `morph_frame` stayed the alpha
+crossfade; the owner grades the combination. The goal, as read from the owner's words (verbatim in
+the retrospective §1; to be confirmed): every intermediate frame is one coherent picture made only of
+details that exist in A or B; those details move and change continuously from A to B; for unrelated
+photos the motion is organised by shared themes (sun to sun, skyline to skyline, face to face); a
+subject that does not move keeps its place while its surface transforms; nothing is invented; a
+camera move is decoration, not the transition. Three failure modes: F1 double exposure, F2 decoration
+without transformation, F3 invention.
+
+Goal metrics (candidates, calibrated on the owner's recorded verdicts by
+`scripts/research/verdict_metrics.py`; numbers in the retrospective §5 and
+`benchmarks/runs/2026-09-26/metrics/scores.md`): `feat_floor` (SIFT feature survival to the nearer
+endpoint, minimum over the clip), `laplace_floor` and `contrast_floor` (sharpness and local contrast
+against the endpoints' interpolation, minimum), `local_share` (non-rigid share of the frame-to-frame
+flow), `dissolve_fit` (the share of the frame change a plain crossfade explains). The shipped basket
+(§2 item 6) screens defects; it does not separate the owner's "crossfade" verdicts from the closest
+picks (AUC 0.46–0.48). Nothing of this is in `assess()` yet; the plan's rank of 2026-09-26 item 2
+builds it once the owner confirms the statement. The class B anchors path (`--anchors`, MLS) was
+exercised on a real pair for the first time on 2026-09-26 (mismatch_4, three auto-detected theme
+anchors): one sun instead of two at mid-frame; its moved-frame edge shows at the left (the T13 twin
+on the MLS path).
