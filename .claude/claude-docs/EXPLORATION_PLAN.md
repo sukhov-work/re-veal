@@ -133,6 +133,15 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    colour path, a Laplacian-pyramid composite ordered by the existing depth; estimated 1–3 min per
    1080p clip [INFERRED]. First probe: the sun layer (one sun sliding and reshaping) plus a
    horizon-aligned water layer on mismatch_4, nothing else changed.
+   **Progress 2026-09-26 (second half; owner: "Go on with theme anchors , feel free to explore")**:
+   the hand-placed anchors page exists (`benchmarks/runs/2026-09-26/anchors/index.html`: six
+   mismatches × flat / anchors_alpha / anchors_falloff 0.45 / anchors_auto, three boxes per clip;
+   `scripts/research/theme_anchors.py`); T16 closed by `--anchor-falloff` (default 0); the automatic
+   probe (`scripts/research/auto_anchors.py`: DINOv2-S mutual patch matches + brightest-blob sun +
+   strongest-edge horizon + YuNet faces) gives 0–6 DINOv2 matches across the unrelated pairs, faces on
+   mismatch_2 / 3, the sun on mismatch_4, and wrong "suns" and "horizons" on mismatch_1 / 6: patch
+   matching across whole unrelated scenes is not the anchor source; label-matched panoptic layers
+   (Track B recipe 1, Mask2Former-tiny) and the classical detectors are. Owner boxes pending.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -145,6 +154,15 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    BF16 not; GPU pool defaults to half the RAM). The keyframes are made by a separate script the
    operator runs on the box and cached with a manifest; `transitions.py` only reads files (the
    offline contract holds). Every speed is reported or inferred, nothing measured.
+   **Box facts 2026-09-26 (`mem:project/strix-halo-box`; track F `research/track_F.md`)**: the box is
+   a shared production LLM sidecar (llama-swap on Vulkan RADV, 34 GB + 8B models resident, about
+   30 GB free), auto-suspends, reboots Thu 05:00 BST, "never global changes". Least invasive route:
+   stable-diffusion.cpp's Vulkan container pinned by digest (`/dev/dri` only, no ROCm), Qwen-Image-
+   Edit-2511 Q4_K_M + Qwen2.5-VL-7B Q4_K_M + mmproj + VAE = 19 GB, one-shot with caps and a
+   pre-flight (`scripts/research/strix_keyframe.sh`, NOT RUN); a container memory cap does not cover
+   GPU pages on this APU, so the pre-flight and the quant budget are the protection. Lemonade covers
+   image editing only with FLUX.2 klein and runs as a daemon. The box was unreachable from the Mac on
+   2026-09-26 (Tailscale not connected); the first run needs the owner's go.
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -221,3 +239,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-13 | Coverage map of the research artifact written (`TRANSITIONS.md §8`); every experiment not yet planned got a slice: TR8 splat quality, TR9 class B semantics + anchor editor + SAM portals, TR10 depth camera move, TR11 color science + HDR, TR12 product surface, TR4b motion carry-over. Owner: "make sure we account … for any useful content in … impossible artifact prototype" | transitions session, late |
 | 2026-09-26 | Owner picks on the camera sweep ingested (0 of 12; all cameras "unnecessary pans and basically cross fading"); retrospective written (`audits/retrospective-2026-09-26.md`); §Rank 2026-09-26 PROPOSED, owner to confirm: goal paragraph → goal metrics → theme anchors (hand-placed, then Track B's recipe) → the combination where nothing aligns → cameras and generative parked | retrospective session, 2026-09-26 |
 | 2026-09-26 | Owner confirmed the goal paragraph and refined F3 (verbatim in DECISIONS); §Rank 2026-09-26 RANKED; item 2 (goal metrics) BUILT; items 3–4 rewritten as the layered scene transition and generated keyframes on the second machine | retrospective session, 2026-09-26 (second half) |
+| 2026-09-26 | Second half: owner named the second machine's docs and ordered the theme anchors; hand-placed anchors page (four variants × six pairs) + automatic probe rendered; `--anchor-falloff` built (T16 closed); Strix Halo route researched (track F) and recorded, not run | retrospective session, 2026-09-26 (late) |

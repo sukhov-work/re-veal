@@ -64,8 +64,19 @@ measured here. Decisions live in `DECISIONS.md` (dated lines from 2026-09-13); p
      salient centers meet throughout). Before 2026-09-14 the field was one similarity between the
      two salient boxes and its splat-and-inpaint inverse; the moved frame's rectangle was visible
      on every mismatched fixture (`§7.2`). With three or more anchor pairs the field is Moving
-     Least Squares (affine; Schaefer 2006) with the splat-and-inpaint inverse, unchanged, and its
-     frame edge can still show. Certainty is 0.5 everywhere under `flat` because nothing
+     Least Squares (affine; Schaefer 2006) with the splat-and-inpaint inverse. Its frame edge
+     showed on the 2026-09-26 anchored renders (backlog T16); since 2026-09-26 `--anchor-falloff F`
+     (default 0 = off, byte-identical) multiplies the anchored field by `border_weight`, a
+     smoothstep from 0 at the canvas border to 1 at F × the short edge inward, so the border
+     stays put and the frame keeps covering the canvas (check 54: a 120-px whole-frame anchor
+     translation leaves 9.1 % of the mid frame uncovered at 0, 0.00 % at 0.2; the field at the
+     centre is unchanged). Method `mls-anchors+falloff`; in class A the same weight applies to the
+     anchor correction (`…+anchors+falloff`). On the real pairs (2026-09-26,
+     `benchmarks/runs/2026-09-26/anchors/contact_falloff_0_02_045.jpg`) a band of 0.2 tears the
+     picture where the anchored field is large (mismatch_2's three-anchor rotation, mismatch_1's
+     sky): the weighted field's gradient compresses content; at 0.45 mismatch_1 renders with no
+     frame edge and no tearing, mismatch_2 stays a soft blend with striping in the trunk. Use
+     0.4–0.5 on real pairs; the fold itself needs a similarity or rigid MLS (not built). Certainty is 0.5 everywhere under `flat` because nothing
      photometric supports it. In class A, anchors are blended over the dense field with weight 0.7.
    - **Camera move** (`--camera flat|ramp|model`, `--zoom`; TR10, built 2026-09-23). `ramp` scales
      the pan-and-zoom field by `1 − g/2 + g·d` with `g = 1` and `d` a top-to-bottom disparity ramp
@@ -137,7 +148,7 @@ Curves: `linear ease ease-in ease-out snap hold-then-go`. Length clamps to [0.1,
 ```
 transitions.py pair BEFORE AFTER --out DIR [--seconds 1.0] [--fps 30] [--preset morph]
                [--color 0.7] [--warp 1.0] [--max-long 0] [--anchors "ax,ay,bx,by;…"] [--class A|B]
-transitions.py pair … [--camera flat|ramp|model] [--zoom 0.10]
+transitions.py pair … [--camera flat|ramp|model] [--zoom 0.10] [--anchor-falloff 0.0]
 transitions.py check                  # incl. the "depth model" row
 transitions.py warmup                 # the only command that downloads (2026-09-23)
 ```
@@ -158,7 +169,7 @@ Exit 0 on success, 2 with `FAILED: <message>` on stderr.
   starts with a measurement, not code.
 - **`clips` and `sequence`.** Wait for the PyAV decision (slice TR4).
 
-## 5. Harness: `transitions_harness.py`, 53 checks, about 10 s (as of 2026-09-26; own numbering)
+## 5. Harness: `transitions_harness.py`, 54 checks, about 10 s (as of 2026-09-26; own numbering)
 Coverage by section. A: isolation both ways and the no-network import set at module level, with
 torch / transformers / huggingface_hub allowed only inside the four named depth functions (1–3). B: grammar —
 frame count, monotone progress for every curve and warp amount, length clamp, unknown names fail
@@ -200,6 +211,11 @@ turned exactly the two checks red. `laplace_floor` and `contrast_floor` are NOT 
 harness textures: there the forward splat's resampling blurs the discs more than a blend of two
 unrelated textures does (aligned morph 0.45 against the crossfade's 0.85), the opposite of the
 real clips (retrospective §5); the real-clip calibration is their reference.
+Section N (54, 2026-09-26), the anchor border falloff: with the default 0 the anchored field is
+byte-identical to the 2026-09-13 MLS field; at 0.2 it is 0 on the four border lines, equal to the
+plain field at the centre, and the mid-frame hole fraction of a 120-px whole-frame anchor
+translation falls from 9.1 % to 0.00 % (mutation: a constant weight → holes stay, red; paid
+2026-09-26).
 
 Mutations applied: on 2026-09-13, making `to_u8` truncate turned checks 11, 20, 21 and 24 red
 (32 of 36 at the time); on 2026-09-14, removing the pan clip in `panzoom_field` turned 42 and 43
@@ -688,3 +704,16 @@ Research of 2026-09-26 that the next design pass starts from (primary sources; r
   reads cached files. Published two-image morphers (FreeMorph, AlignMorph) fall back to plain
   interpolation on unrelated pairs by their own account. Nothing measured; every speed is reported
   or inferred.
+
+Theme anchors, 2026-09-26 (late; owner: "Go on with theme anchors , feel free to explore"): the
+hand-placed anchors page `benchmarks/runs/2026-09-26/anchors/index.html` renders the six mismatched
+pairs as `flat`, `anchors_alpha` (hand-placed theme anchors through `--anchors`), `anchors_falloff`
+(the same at `--anchor-falloff 0.45`) and `anchors_auto` (automatic anchors, where three or more were
+found: mismatch_1–4), with the goal numbers and the three boxes per clip
+(`scripts/research/theme_anchors.py`; sheet `sheet.md`). The automatic probe
+(`scripts/research/auto_anchors.py`, DINOv2-S at 518 px with mutual nearest neighbours and a ratio
+test, a brightest-blob sun, the strongest horizontal edge row as the horizon, YuNet faces) found 0–6
+mutual patch matches per pair at similarity ≥ 0.55 (0 on mismatch_4 and 5), faces on mismatch_2 (1 / 3)
+and mismatch_3 (11 / 9), the sun on mismatch_4 (both), and false suns (a bright cloud) on mismatch_1 and
+6: DINOv2 patch matching across whole unrelated scenes is not an anchor source; the classical detectors
+and label-matched panoptic layers (Track B recipe 1) are. The owner's boxes on the page are pending.

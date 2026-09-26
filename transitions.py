@@ -127,6 +127,11 @@ TCFG = {
     "hole_thresh": 0.05,       # coverage below this is a true hole
     "mix_blur": 3.0,           # px, softens the coverage-aware mix
     "anchor_blend": 0.7,       # class A: weight of user anchors over the field
+    "anchor_falloff": 0.0,     # anchors: fraction of the short edge over which the
+                               # anchored field fades to zero at the canvas border, so
+                               # the moved frame keeps covering the canvas (T16);
+                               # 0 = off, the 2026-09-13 field byte for byte
+    "anchor_falloff_max": 0.5,
     "classb_zoom": 0.10,       # class B: each frame zooms in by this much about its
                                # salient center; the pan toward the other frame's
                                # salient center is capped by the zoom's slack so a
@@ -191,6 +196,7 @@ class TransitionSpec:
     force_class: str = ""          # "", "A", "B"
     camera: str = "flat"           # class B camera move: one of CAMERAS
     zoom: float = TCFG["classb_zoom"]   # class B zoom fraction, clamped to zoom_range
+    anchor_falloff: float = TCFG["anchor_falloff"]   # anchors: border falloff fraction
 
     def n_frames(self):
         return max(2, int(round(self.seconds * self.fps)))
@@ -204,6 +210,8 @@ class TransitionSpec:
         self.portal_feather = float(min(0.5, max(0.005, self.portal_feather)))
         lo, hi = TCFG["zoom_range"]
         self.zoom = float(min(hi, max(lo, self.zoom)))
+        self.anchor_falloff = float(min(TCFG["anchor_falloff_max"],
+                                        max(0.0, self.anchor_falloff)))
         if self.camera not in CAMERAS:
             raise TransitionError(f"Unknown camera {self.camera!r}. "
                                   f"Cameras: {', '.join(CAMERAS)}")
@@ -537,6 +545,18 @@ def mls_affine(p_src, p_dst, h, w, alpha=1.0, stride=8):
     return cv2.resize(disp, (w, h), interpolation=cv2.INTER_LINEAR)
 
 
+def border_weight(h, w, falloff):
+    """A weight that is 1 in the interior and falls smoothly to 0 at the
+    canvas border over `falloff` * min(h, w) px (smoothstep). Multiplying an
+    anchored field by it pins the border, so the moved frame keeps covering
+    the canvas and no frame edge walks through the picture (backlog T16,
+    the anchors twin of T13)."""
+    gx, gy = _grid(h, w)
+    dist = np.minimum(np.minimum(gx, w - 1 - gx), np.minimum(gy, h - 1 - gy))
+    t = np.clip(dist / max(1.0, falloff * min(h, w)), 0.0, 1.0)
+    return (t * t * (3.0 - 2.0 * t)).astype(np.float32)
+
+
 def _invert_disp(d):
     """Approximate inverse of a smooth displacement field: forward-splat
     -d, fill the gaps by inpainting, smooth. Adequate for similarity and
@@ -790,7 +810,7 @@ def depth_selftest(disp):
 
 
 def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG,
-                       camera="flat", zoom=None):
+                       camera="flat", zoom=None, anchor_falloff=None):
     """Returns dict: dAB, dBA (float32 HxWx2 px), wA, wB (the splat's
     importance: the certainty in class A, 0.5 in class B, the depth
     importance under a camera move), cls ('A' | 'B'), method, diag.
@@ -801,7 +821,9 @@ def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG,
     camera / zoom: the class B camera move (CAMERAS) and zoom fraction;
     `flat` at the default zoom is the field of 2026-09-14, byte for byte.
     A camera other than flat has no effect on class A or on anchors and
-    says so on the log."""
+    says so on the log. anchor_falloff (default TCFG["anchor_falloff"], 0 =
+    off): the anchored field is multiplied by border_weight so the border
+    stays put (T16)."""
     if A.shape[:2] != B.shape[:2]:
         raise TransitionError("Endpoints must share a canvas.")
     h, w = A.shape[:2]
@@ -813,6 +835,8 @@ def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG,
     diag = {"sparse_inliers": sp[1] if sp else 0,
             "sparse_rmse": None if not sp else round(sp[2], 2)}
     n_anchor = 0 if anchors is None else len(anchors[0])
+    falloff = cfg["anchor_falloff"] if anchor_falloff is None else float(anchor_falloff)
+    bw = border_weight(h, w, falloff)[..., None] if (n_anchor >= 3 and falloff > 0) else None
 
     if camera != "flat" and (cls == "A" or n_anchor >= 3):
         log.info("camera: %s requested, but the pair is class %s%s; the camera "
@@ -827,14 +851,20 @@ def dense_displacement(A, B, anchors=None, force_class=None, cfg=TCFG,
         method = "homography+dis" if have_h else "dis-only"
         if n_anchor >= 3:
             corr = mls_affine(anchors[0], anchors[1], h, w) - dAB
+            if bw is not None:
+                corr = corr * bw
             dAB = dAB + cfg["anchor_blend"] * corr
             dBA = _invert_disp(dAB)
-            method += "+anchors"
+            method += "+anchors" + ("+falloff" if bw is not None else "")
     else:
         if n_anchor >= 3:
             dAB = mls_affine(anchors[0], anchors[1], h, w)
+            if bw is not None:
+                dAB = dAB * bw
+                log.info("anchors: border falloff %.2f of the short edge; the frame "
+                         "edge stays on the canvas edge", falloff)
             dBA = _invert_disp(dAB)
-            method = "mls-anchors"
+            method = "mls-anchors" + ("+falloff" if bw is not None else "")
             steer = ""
         else:
             # Each frame zooms in about its own salient center and pans
@@ -1290,7 +1320,8 @@ def prepare(A, B, spec, cfg=TCFG):
     t = time.time()
     corr = dense_displacement(A2, B2, anchors=_anchor_arrays(spec),
                               force_class=spec.force_class or None, cfg=cfg,
-                              camera=spec.camera, zoom=spec.zoom)
+                              camera=spec.camera, zoom=spec.zoom,
+                              anchor_falloff=spec.anchor_falloff)
     corr["diag"]["correspondence_s"] = round(time.time() - t, 2)
     return A2, B2, corr
 
@@ -1538,6 +1569,7 @@ def cmd_pair(args):
                      color_strength=args.color, warp_amount=args.warp,
                      max_long_edge=args.max_long, canvas=args.canvas,
                      anchors=parse_anchors(args.anchors),
+                     anchor_falloff=args.anchor_falloff,
                      force_class=args.force_class,
                      camera=args.camera, zoom=args.zoom)
     report = render_pair(A, B, spec, args.out)
@@ -1569,6 +1601,10 @@ def main(argv=None):
                          "common = the smaller width and height of the two")
     pp.add_argument("--anchors", default="",
                     help='"ax,ay,bx,by;..." canvas pixels, A -> B, >= 3 pairs')
+    pp.add_argument("--anchor-falloff", type=float, default=TCFG["anchor_falloff"],
+                    help="anchors: fade the anchored field to zero at the canvas "
+                         "border over this fraction of the short edge (0 = off; "
+                         "keeps the frame edge off the picture, T16)")
     pp.add_argument("--class", dest="force_class", default="",
                     choices=["", "A", "B"], help="force the pair class")
     pp.add_argument("--camera", default="flat", choices=list(CAMERAS),

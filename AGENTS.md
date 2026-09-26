@@ -36,7 +36,7 @@ defaults or to the strict `reshot` profile is NOT in the lane — it needs its o
 
 ## No-regression roster (struck from only by a recorded owner ruling)
 - `harness.py` 82/82 green (62.7 s wall on 2026-09-13) and `reveal.py check` all OK (18.5 s).
-- `transitions_harness.py` green (count in `TRANSITIONS.md §5`; 53 on 2026-09-26, ~10 s) and
+- `transitions_harness.py` green (count in `TRANSITIONS.md §5`; 54 on 2026-09-26, ~10 s) and
   `transitions.py check` all OK.
 - The seven invariants in `HANDOFF.md §2`: localhost only · originals never modified · BEFORE is
   the reference frame · convergence judged on inlier statistics, never pixel similarity · the
