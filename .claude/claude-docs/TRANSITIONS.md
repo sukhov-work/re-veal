@@ -66,12 +66,14 @@ measured here. Decisions live in `DECISIONS.md` (dated lines from 2026-09-13); p
      on every mismatched fixture (`§7.2`). With three or more anchor pairs the field is Moving
      Least Squares (affine; Schaefer 2006) with the splat-and-inpaint inverse. Its frame edge
      showed on the 2026-09-26 anchored renders (backlog T16); since 2026-09-26 `--anchor-falloff F`
-     (default 0 = off, byte-identical) multiplies the anchored field by `border_weight`, a
+     (default 0.45; 0 = off) multiplies the anchored field by `border_weight`, a
      smoothstep from 0 at the canvas border to 1 at F × the short edge inward, so the border
      stays put and the frame keeps covering the canvas (check 54: a 120-px whole-frame anchor
      translation leaves 9.1 % of the mid frame uncovered at 0, 0.00 % at 0.2; the field at the
      centre is unchanged). Method `mls-anchors+falloff`; in class A the same weight applies to the
-     anchor correction (`…+anchors+falloff`). On the real pairs (2026-09-26,
+     anchor correction (`…+anchors+falloff`). Default 0.45 since 2026-09-26 (late; owner picks: the
+     frame edge is "hard ugly" on every pair where it shows); `--anchor-falloff 0` gives the
+     2026-09-13 field. On the real pairs (2026-09-26,
      `benchmarks/runs/2026-09-26/anchors/contact_falloff_0_02_045.jpg`) a band of 0.2 tears the
      picture where the anchored field is large (mismatch_2's three-anchor rotation, mismatch_1's
      sky): the weighted field's gradient compresses content; at 0.45 mismatch_1 renders with no
@@ -148,7 +150,7 @@ Curves: `linear ease ease-in ease-out snap hold-then-go`. Length clamps to [0.1,
 ```
 transitions.py pair BEFORE AFTER --out DIR [--seconds 1.0] [--fps 30] [--preset morph]
                [--color 0.7] [--warp 1.0] [--max-long 0] [--anchors "ax,ay,bx,by;…"] [--class A|B]
-transitions.py pair … [--camera flat|ramp|model] [--zoom 0.10] [--anchor-falloff 0.0]
+transitions.py pair … [--camera flat|ramp|model] [--zoom 0.10] [--anchor-falloff 0.45]
 transitions.py check                  # incl. the "depth model" row
 transitions.py warmup                 # the only command that downloads (2026-09-23)
 ```
@@ -728,4 +730,10 @@ test, a brightest-blob sun, the strongest horizontal edge row as the horizon, Yu
 mutual patch matches per pair at similarity ≥ 0.55 (0 on mismatch_4 and 5), faces on mismatch_2 (1 / 3)
 and mismatch_3 (11 / 9), the sun on mismatch_4 (both), and false suns (a bright cloud) on mismatch_1 and
 6: DINOv2 patch matching across whole unrelated scenes is not an anchor source; the classical detectors
-and label-matched panoptic layers (Track B recipe 1) are. The owner's boxes on the page are pending.
+and label-matched panoptic layers (Track B recipe 1) are. The owner's boxes (2026-09-26, verbatim in
+DECISIONS 2026-09-26 late): `one_picture` and `transforms` on no clip, `not_invented` on every graded
+clip; the frame edge "hard ugly"; a few-anchor whole-frame warp reads as "one picture rotates" or a
+"3D plane flip"; mismatch_3 asks for depth layers moving independently; mismatch_6 is scored in time
+(clouds dissolve, the sky darkens, stars appear, buildings exit downward, trees and the
+air-conditioning unit enter). The next design pass (§12, to be written) is the orchestrated layered
+transition with a per-scene score; the anchors' default falloff is 0.45 since the same day.

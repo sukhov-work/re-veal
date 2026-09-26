@@ -141,7 +141,20 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    strongest-edge horizon + YuNet faces) gives 0–6 DINOv2 matches across the unrelated pairs, faces on
    mismatch_2 / 3, the sun on mismatch_4, and wrong "suns" and "horizons" on mismatch_1 / 6: patch
    matching across whole unrelated scenes is not the anchor source; label-matched panoptic layers
-   (Track B recipe 1, Mask2Former-tiny) and the classical detectors are. Owner boxes pending.
+   (Track B recipe 1, Mask2Former-tiny) and the classical detectors are.
+   **Owner picks 2026-09-26 (verbatim in DECISIONS 2026-09-26, late)**: `one_picture` and
+   `transforms` ticked on none of the 22 clips, `not_invented` on every graded one; a whole-frame
+   warp from a few anchors reads as "one picture rotates" or a "3D plane flip" (mismatch_1, 2, 5);
+   the frame edge is "hard ugly", so the falloff is preferred on 1, 3, 6 and the plain anchors on 4
+   (the sun landing); mismatch_3 asks for depth layers (background behind the people and the
+   people in front transforming independently, colours and objects shifting in place); mismatch_6
+   is scored in time by the owner: clouds dissolve into dark, the background sky darkens on its
+   own, then stars appear, the buildings go down and out, the trees and the air-conditioning unit
+   enter, optional zoom-out / rotation / parallax. So item 3 is the layered, ORCHESTRATED
+   transition: layers × an action and a time window each (darken, dissolve, materialise, exit,
+   enter, move, hold), a field per layer with anchors only inside a layer, a colour path per
+   layer, compositing by depth, and a per-scene score the owner edits. First probe: mismatch_6 as
+   scored, then mismatch_4 (sun, skyline, river) and mismatch_3 (depth layers).
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -244,3 +257,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-26 | Owner picks on the camera sweep ingested (0 of 12; all cameras "unnecessary pans and basically cross fading"); retrospective written (`audits/retrospective-2026-09-26.md`); §Rank 2026-09-26 PROPOSED, owner to confirm: goal paragraph → goal metrics → theme anchors (hand-placed, then Track B's recipe) → the combination where nothing aligns → cameras and generative parked | retrospective session, 2026-09-26 |
 | 2026-09-26 | Owner confirmed the goal paragraph and refined F3 (verbatim in DECISIONS); §Rank 2026-09-26 RANKED; item 2 (goal metrics) BUILT; items 3–4 rewritten as the layered scene transition and generated keyframes on the second machine | retrospective session, 2026-09-26 (second half) |
 | 2026-09-26 | Second half: owner named the second machine's docs and ordered the theme anchors; hand-placed anchors page (four variants × six pairs) + automatic probe rendered; `--anchor-falloff` built (T16 closed); Strix Halo route researched (track F) and recorded, not run | retrospective session, 2026-09-26 (late) |
+| 2026-09-26 | Owner picks on the theme-anchors page ingested (no clip one picture or transforming; the frame edge rejected; whole-frame rotations rejected; per-pair layered orchestration described); item 3 rewritten as the orchestrated layered transition with a per-scene score; the anchors' default falloff set to 0.45 | retrospective session, 2026-09-26 (late) |

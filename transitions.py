@@ -127,10 +127,11 @@ TCFG = {
     "hole_thresh": 0.05,       # coverage below this is a true hole
     "mix_blur": 3.0,           # px, softens the coverage-aware mix
     "anchor_blend": 0.7,       # class A: weight of user anchors over the field
-    "anchor_falloff": 0.0,     # anchors: fraction of the short edge over which the
+    "anchor_falloff": 0.45,    # anchors: fraction of the short edge over which the
                                # anchored field fades to zero at the canvas border, so
-                               # the moved frame keeps covering the canvas (T16);
-                               # 0 = off, the 2026-09-13 field byte for byte
+                               # the moved frame keeps covering the canvas (T16).
+                               # 0.45 since 2026-09-26 (owner picks: the frame edge is
+                               # "hard ugly"; a 0.2 band tears); 0 = the 2026-09-13 field
     "anchor_falloff_max": 0.5,
     "classb_zoom": 0.10,       # class B: each frame zooms in by this much about its
                                # salient center; the pan toward the other frame's
@@ -1603,8 +1604,8 @@ def main(argv=None):
                     help='"ax,ay,bx,by;..." canvas pixels, A -> B, >= 3 pairs')
     pp.add_argument("--anchor-falloff", type=float, default=TCFG["anchor_falloff"],
                     help="anchors: fade the anchored field to zero at the canvas "
-                         "border over this fraction of the short edge (0 = off; "
-                         "keeps the frame edge off the picture, T16)")
+                         "border over this fraction of the short edge (default 0.45; "
+                         "0 = the plain MLS field, whose frame edge shows; T16)")
     pp.add_argument("--class", dest="force_class", default="",
                     choices=["", "A", "B"], help="force the pair class")
     pp.add_argument("--camera", default="flat", choices=list(CAMERAS),

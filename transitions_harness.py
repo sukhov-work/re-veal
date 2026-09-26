@@ -291,7 +291,8 @@ d1 = T.mls_affine(p, p + [25, -10], h, w)
 check(15, "MLS: identity anchors -> zero field; translated anchors -> that translation",
       np.abs(d0).max() < 1e-3 and np.abs(d1[inner] - [25, -10]).max() < 0.5)
 corr_b = T.dense_displacement(A, U, anchors=(p, p + [25, -10]), force_class="B")
-check(16, "class B honours user anchors (MLS)", corr_b["method"] == "mls-anchors")
+check(16, "class B honours user anchors (MLS; the default border falloff is on)",
+      corr_b["method"] == "mls-anchors+falloff")
 corr_f = T.dense_displacement(A, U, force_class="A")
 check(17, f"--class A overrides routing on an unrelated pair ({corr_f['method']})",
       corr_f["cls"] == "A" and corr_f["method"].startswith("dis"))
@@ -668,21 +669,25 @@ _B0n = textured(22, _wN, _hN)
 # three anchors that translate the whole frame by 120 px: the old MLS field moves the border
 _src = np.array([[100, 100], [540, 100], [320, 300]], np.float32)
 _dst = _src + np.array([120, 0], np.float32)
-_plain = T.dense_displacement(_A0n, _B0n, anchors=(_src, _dst), force_class="B")
+_def = T.dense_displacement(_A0n, _B0n, anchors=(_src, _dst), force_class="B")
 _off = T.dense_displacement(_A0n, _B0n, anchors=(_src, _dst), force_class="B", anchor_falloff=0.0)
 _fal = T.dense_displacement(_A0n, _B0n, anchors=(_src, _dst), force_class="B", anchor_falloff=0.2)
-_hole_plain = float((T.forward_splat(_A0n, _plain["dAB"], 0.5)[1] < T.TCFG["hole_thresh"]).mean())
+_plain_mls = T.mls_affine(_src, _dst, _hN, _wN)
+_hole_off = float((T.forward_splat(_A0n, _off["dAB"], 0.5)[1] < T.TCFG["hole_thresh"]).mean())
 _hole_fal = float((T.forward_splat(_A0n, _fal["dAB"], 0.5)[1] < T.TCFG["hole_thresh"]).mean())
+_hole_def = float((T.forward_splat(_A0n, _def["dAB"], 0.5)[1] < T.TCFG["hole_thresh"]).mean())
 _edge = np.abs(np.concatenate([_fal["dAB"][0].ravel(), _fal["dAB"][-1].ravel(),
                                _fal["dAB"][:, 0].ravel(), _fal["dAB"][:, -1].ravel()])).max()
-_centre = float(np.abs(_fal["dAB"][_hN // 2, _wN // 2] - _plain["dAB"][_hN // 2, _wN // 2]).max())
-check(54, f"default falloff 0 leaves the anchored field byte-identical to the 2026-09-13 MLS field "
-          f"({_off['method']}); at 0.2 the field is 0 on the border (max {_edge:.3f} px), equals the "
-          f"plain field at the centre (diff {_centre:.3f} px), and the mid-frame hole fraction falls from "
-          f"{_hole_plain:.1%} to {_hole_fal:.2%}; mutation: a constant weight -> holes stay, red",
-      np.array_equal(_plain["dAB"], _off["dAB"]) and _plain["method"] == "mls-anchors"
+_centre = float(np.abs(_fal["dAB"][_hN // 2, _wN // 2] - _off["dAB"][_hN // 2, _wN // 2]).max())
+check(54, f"--anchor-falloff 0 gives the 2026-09-13 MLS field byte for byte ({_off['method']}); the "
+          f"default ({T.TCFG['anchor_falloff']}) is {_def['method']} with {_hole_def:.2%} holes; at 0.2 the field "
+          f"is 0 on the border (max {_edge:.3f} px), equals the plain field at the centre (diff {_centre:.3f} px), "
+          f"and the mid-frame hole fraction falls from {_hole_off:.1%} to {_hole_fal:.2%}; "
+          "mutation: a constant weight -> holes stay, red",
+      np.array_equal(_off["dAB"], _plain_mls) and _off["method"] == "mls-anchors"
+      and _def["method"] == "mls-anchors+falloff" and _hole_def < 0.01
       and _fal["method"] == "mls-anchors+falloff" and _edge < 1e-3 and _centre < 1e-3
-      and _hole_plain > 0.05 and _hole_fal < 0.01)
+      and _hole_off > 0.05 and _hole_fal < 0.01)
 
 # ===========================================================================
 print("== I. identity fence (the tool is called transitions; owner ruling 2026-09-13) ==")
