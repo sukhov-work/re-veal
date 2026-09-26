@@ -999,3 +999,41 @@ eye: a faint disc-shaped patch at the second sun's place from t ≈ 0.4 until th
 the sky behind A's left buildings is a flat extrapolation until B's sky takes over; A's water
 reflections stay as stripes at the old waterline while it slides; a horizontal cut at the far-left
 structure's top as B's band rises. Ungraded as of 2026-09-26.
+
+### 12.8 Owner picks on round 2 (2026-09-26, 20:49 UTC; `benchmarks/runs/2026-09-26/layered_r2/layered_picks.json`)
+
+Verbatim. mismatch_6, closer `layered` (round 1); boxes: `flat` = nothing invented; `layered`,
+`layered_r2`, `layered_r2_L`, `layered_r2_drift` = one picture + content transforms + nothing
+invented: "I have picked layered ( although it is still very raw)  just to highlight that this is at
+least remotely looks like right direction ( at least for this pair) . Removing individual objects
+still is junky, like they are some cheap decorations in 2d scene with hard edges  , but at least you
+attempt to decompose the scene now, also i like how stars appear. weakest part still are clouds that
+dissolve in a very raw  and naive luma manner , i would expect them to dissolve more like real clouds
+would do in nature ( but again , NOT crossfade) . Also still all parts of the image that move , have
+hard distint edges that break immersion and move in very linear manner ". mismatch_4, closer
+`layered_r2`; boxes: `flat`, `anchors_alpha` = nothing invented; `layered_r2` = transforms + nothing
+invented: "I have picked layered_r2 ( although it is still very raw)  just to highlight that this is
+at least remotely looks like right direction ( at least for this pair) . moving individual objects
+still are junky, like they are some cheap decorations in 2d scene with hard edges  , but at least you
+attempt to decompose the scene now and attempt to make transtions between some parts, like skyline
+in this case and moving sun between the frames.  Clouds and sun reflections on water are  still
+crossfaded and we still have some rough edges and afterimages but it all looks more dynamic now. ".
+On §12.7's defect list: "pretty much accurate".
+
+What follows, pair by pair: mismatch_6 carries the first "one picture" ticks on record (none of the
+22 clips on the anchors page, none of the 6 on the round-1 page); the owner picks round 1's `layered`
+as closer while ticking the four clips alike, so round 2's fixes removed the named afterimages
+without changing the grade, and the note names what stands between "raw" and done: the cloud erosion
+(a luma threshold; the wish is a cloud that thins the way a cloud does, and not a crossfade), the hard
+edge on every moving layer, the linear motion; the stars are liked. mismatch_4 gains "transforms"
+(round 1 had no box) and not "one picture"; the sun move and the skyline are the attempts that work;
+the clouds and the sun's water reflection are named as crossfades. The §12.4 gate is met on its
+letter; the build of `pair --score FILE` against a round 3 is the owner's decision. Round 3 targets,
+in the owner's order: (1) a cloud dissolve that behaves like a cloud — erode from the cloud's edges
+inward along its own density gradient (a distance-from-edge order rather than a luma order), thin the
+whole matte's alpha with the erosion so a cloud fades where it is already thin, and let the erosion
+front carry a soft, turbulent boundary (a noise-displaced front, not a noise-ordered patch); (2) soft
+edges on every moving layer — a matte feather that follows the photo's own edge (guided by the
+gradient) plus a short motion blur along the travel direction (proportional to the per-frame
+displacement); (3) motion that is not linear — an ease that starts and ends slower than the cosine
+(a smootherstep or a physical decay) and a small acceleration profile per layer.

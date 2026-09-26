@@ -43,7 +43,11 @@
     0.55,
     0.95
    ],
-   "curve": "ease"
+   "curve": "ease",
+   "prompt": {
+    "b": "the dark tree crown with leaves",
+    "where": "the bottom of the frame"
+   }
   },
   {
    "name": "ac_core",
@@ -76,7 +80,11 @@
     0.6,
     0.97
    ],
-   "curve": "ease"
+   "curve": "ease",
+   "prompt": {
+    "b": "the air-conditioning unit hanging from above",
+    "where": "the top-right corner"
+   }
   },
   {
    "name": "sky_b",
@@ -119,7 +127,12 @@
     0.9
    ],
    "curve": "ease",
-   "each": 0.12
+   "each": 0.12,
+   "prompt": {
+    "b": "the stars",
+    "where": "the sky",
+    "plural": true
+   }
   },
   {
    "name": "buildings",
@@ -148,7 +161,11 @@
     0.3,
     0.75
    ],
-   "curve": "ease"
+   "curve": "ease",
+   "prompt": {
+    "a": "the row of city buildings",
+    "where": "along the bottom of the frame"
+   }
   },
   {
    "name": "sky",
@@ -197,7 +214,12 @@
      "soft": 6
     }
    ],
-   "fit2d": true
+   "fit2d": true,
+   "prompt": {
+    "a": "the blue day sky",
+    "b": "the dark night sky",
+    "where": "the whole sky"
+   }
   },
   {
    "name": "clouds",
@@ -222,7 +244,13 @@
    "feather": 0.1,
    "recolor_to": "sky_b",
    "recolor_mode": "L",
-   "recolor_strength": 1.0
+   "recolor_strength": 1.0,
+   "prompt": {
+    "a": "the white cumulus clouds",
+    "where": "the sky",
+    "plural": true
+   }
   }
- ]
+ ],
+ "scene_a": "a city seen from a window in daylight: a blue sky with big white cumulus clouds over a row of buildings along the bottom of the frame"
 }

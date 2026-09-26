@@ -68,7 +68,11 @@
     0.3,
     0.85
    ],
-   "curve": "ease"
+   "curve": "ease",
+   "prompt": {
+    "b": "the low industrial skyline with cranes, pylons and a tall chimney",
+    "where": "across the middle of the frame"
+   }
   },
   {
    "name": "sky_b",
@@ -161,7 +165,11 @@
     0.15,
     0.7
    ],
-   "curve": "ease"
+   "curve": "ease",
+   "prompt": {
+    "a": "the dark city skyline with the tall buildings on the left and its masts",
+    "where": "across the middle of the frame"
+   }
   },
   {
    "name": "sky",
@@ -202,7 +210,12 @@
    "curve": "ease",
    "minus": [
     "sun"
-   ]
+   ],
+   "prompt": {
+    "a": "the deep orange sunset sky",
+    "b": "the golden sunset sky with a band of thin bright clouds",
+    "where": "the top half of the frame"
+   }
   },
   {
    "name": "sun",
@@ -222,7 +235,11 @@
    ],
    "curve": "ease",
    "recolor_to": "sun_b",
-   "recolor_strength": 1.0
+   "recolor_strength": 1.0,
+   "prompt": {
+    "a": "the sun disc",
+    "b": "the sun disc sitting on the tip of the tall chimney"
+   }
   },
   {
    "name": "sun_b_layer",
@@ -242,7 +259,10 @@
     0.68,
     0.8
    ],
-   "curve": "ease"
+   "curve": "ease",
+   "prompt": {
+    "b": "the sun disc on the tip of the tall chimney"
+   }
   },
   {
    "name": "water",
@@ -266,7 +286,12 @@
     0.1,
     0.85
    ],
-   "curve": "ease"
+   "curve": "ease",
+   "prompt": {
+    "a": "the water with the sun's bright reflection road",
+    "where": "the bottom half of the frame"
+   }
   }
- ]
+ ],
+ "scene_a": "a sunset over a wide river: a dark city skyline with tall buildings on the left, the sun above the buildings, its reflection as a bright road on the water"
 }

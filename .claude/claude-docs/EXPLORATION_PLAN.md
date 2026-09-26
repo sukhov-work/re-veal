@@ -189,6 +189,13 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    over on arrival, the skyline band with its masts exits down behind the water, B's band rises, the
    waterline slides, no cloud layer (the L-density rule takes a sunset glow for cloud), no patches;
    steps 0.12 / 0.10, `edge_ratio` 0.172, byte-identical. Ungraded.
+   **Owner picks 2026-09-26 late (verbatim in DECISIONS; `TRANSITIONS.md §12.8`)**: the first "one picture"
+   ticks on record — mismatch_6 `layered` and all three `layered_r2…` clips one picture + transforms +
+   nothing invented (closer: round 1's `layered`, "still very raw"); mismatch_4 `layered_r2` transforms +
+   nothing invented (closer). Named for round 3: clouds that dissolve "more like real clouds would do in
+   nature ( but again , NOT crossfade)", the "hard distint edges" on every moving part, the "very linear"
+   motion; mismatch_4's clouds and sun reflection "still crossfaded". The §12.4 gate is met on its letter;
+   build `pair --score FILE` or run round 3 first — the owner's call.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -221,6 +228,11 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    the keyframe reproduces image 2 (sun 5 px from B's, 4.8 levels from B, 33.1 from A), not a midpoint.
    Page `benchmarks/runs/2026-09-26/keyframes/index.html`; the owner's eye decides (handover q2). Next
    experiment: a prompt that names the change, or a single-reference edit, or FLUX.2 klein 4B.
+   **Prompting researched 2026-09-27** (`research/keyframe-prompting.md`; generator `scripts/research/keyframe_prompt.py`):
+   both pipelines label the inputs "Picture N"; the guides say what changes and what stays, direct verbs,
+   a role per reference, no "halfway"; the prompt is generated from the layered score at a clip time
+   (one clause per layer, progress in words). Next runs: kf_02 single reference, kf_03 two references,
+   kf_04 mismatch_6, kf_05 references pre-resized (sd.cpp keeps 2-MP references at full size).
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -306,3 +318,5 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-26 | Fourth session, Track C: `DECISIONS.md` compacted (era 2026-09-13 → 2026-09-23, 37 lines, moved byte-verbatim to `DECISIONS_ARCHIVE.md`, md5 `70a09c0e…`; 118 KB → 71 KB) | round-2 session, 2026-09-26 (fourth) |
 | 2026-09-26 | Fourth session, Track D: mismatch_4 round 2 rendered at 3 s (sun move, sliding skyline bands and waterline, no cloud layer, no patches); no tool change; owner grades next | round-2 session, 2026-09-26 (fourth) |
 | 2026-09-26 | Fourth session, Track B: the keyframe recipe ran twice on the box (inhibitor patched; keyframes byte-identical, sha256 `c8d6f50f…`; 1,804 / 1,941 s); the keyframe reproduces image 2; box clean | round-2 session, 2026-09-26 (fourth) |
+| 2026-09-26 | Owner picks on the round-2 page ingested: the first "one picture" ticks (mismatch_6, four clips); mismatch_4 gains "transforms"; round-3 targets named (cloud dissolve like a real cloud, soft edges on moving layers, non-linear motion); the defect list confirmed | round-2 session, 2026-09-26 (fourth, late) |
+| 2026-09-27 | Keyframe prompting researched (BFL guides, Qwen rewriter rules, both pipelines' "Picture N" labels, sd.cpp reference sizing) and made dynamic (`keyframe_prompt.py` from a score at a clip time); runs kf_02–kf_05 planned | round-2 session, 2026-09-27 |
