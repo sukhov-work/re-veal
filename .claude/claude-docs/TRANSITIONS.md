@@ -894,3 +894,12 @@ What follows, pair by pair (the agent's reading; the owner corrects it):
   mismatch_6 `layered`; the owner's note grades the same clip "very junky". Recommendation: no
   tool build yet; one more probe round on mismatch_6 aimed at "one picture", then the owner grades
   again. The owner decides (handover question 1).
+
+Owner answers to the two round-2 questions (2026-09-26, verbatim): "1) i see afterimage for tree
+crown, distinct clouds, bottom buildings contours 2) keep 3s for now". Round 2 therefore targets, in
+this order, the tree crown (the leaf tips outside the depth matte ghost in the sky residual; the
+`grow` band), the distinct clouds (the cloud fringe left in the backdrop's residual while the clouds
+erode, and their recolour), and the bottom buildings' contours (the skyline cut and the sky fit left
+under the exiting buildings), at 3 s. The same message schedules the box run for the next session
+without the owner present ("do not wait for me … just be careful with resources") and asks for more
+work per session with Opus 5.5 subagents; DECISIONS 2026-09-26 (third session, last).
