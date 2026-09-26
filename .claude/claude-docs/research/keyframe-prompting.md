@@ -67,9 +67,10 @@ role of the second) + numbered clauses + the keep-and-format tail. The clip's mi
   The references are not downscaled by the CLI: the vision tower takes them at 2 MP each (up to
   12.8 MP allowed) and the reference latents at full size, so the transformer's context carries two
   2-MP pictures for a 1-MP output. The diffusers pipeline feeds the vision tower 384×384-pixel-area
-  copies instead. Next run, UNVERIFIED until measured: pre-resize the reference PNGs to the output
-  size (1344×768) before upload, or pass `--image-preprocess target=ref,mode=fit-pad,…` — expect a
-  per-step time well under 81 s; compare the log's "preprocess ref" lines and the step time.
+  copies instead. Measured 2026-09-27 (kf_05 against kf_02, §5.1): a reference pre-resized to
+  1344×768 gives 46.78 s per step against 46.74 s at 1920×1092, so the reference's pixel count does
+  not set the time on this path; the second reference does (82.16 s per step in kf_03, 46.74 s with
+  one). The expectation written here on 2026-09-27 morning ("well under 81 s") was wrong.
 - Steps: 20 (the CLI default) gave a clean picture; the Qwen card uses 40–50, the community 25–40.
   Keep 20 for the prompt experiments (one variable at a time); raise steps only when a prompt works.
 - Single-reference runs halve the reference context and remove the "copy Picture 2" pull; they are
@@ -91,6 +92,29 @@ Screen every keyframe with the Track B numbers before the owner's eye: the sun c
 the mean absolute difference to A and to B (a midpoint should sit far from both; kf_01 sat at 4.8 from
 B), the Laplacian variance on the 480-px proxy (188 for kf_01, B 254). A keyframe is a helper element
 only if the owner's boxes say so on two mismatched pairs (plan item 4).
+
+### 5.1 Results (2026-09-27; DECISIONS 2026-09-27 fifth session, Track B; page `benchmarks/runs/2026-09-27/keyframes/index.html`)
+
+| run | references | wall s | s per step | sun (keyframe px; B at (673.5, 323.0)) | MAD to A / B (levels) | sha256 |
+|---|---|---|---|---|---|---|
+| kf_02 | Picture 1 only, 1920×1092 | 1,084 | 46.74 | (679.8, 322.2): 6.4 px from B, 83.0 from the midpoint | 44.80 / 33.66 | `34aebeb9…` |
+| kf_03 | Pictures 1 and 2 | 1,847 | 82.16 | 2.8 px from B | 32.80 / 4.26 (Picture 2 reproduced) | `6735a78d…` |
+| kf_04 | mismatch_6's Picture 1 only, 1146×1524 → 768×1024 | 710 | 33.25 | no sun | 119.35 / 26.48 | `ac0f696d…` |
+| kf_05 | kf_02's prompt, the reference pre-resized to 1344×768 | 1,066 | 46.78 | (684.7, 315.6): 13.4 px from B | 48.14 / 35.60 (6.01 from kf_02) | `789ad836…` |
+
+Read: rule 1 (name the base picture, describe the state) moves the result away from both photos
+once the second picture is absent; with both pictures supplied (kf_03) the model returns Picture 2
+whatever the wording, so rule 4 (a role for the second picture) did not hold on this model. The
+described progress words landed at the END state for the sun ("most of the way" → at B's place);
+a midpoint needs the state said as a position ("between the tall buildings and the chimney, a third
+of the way down from …"), not as a fraction of a move — the next prompt experiment. Pre-resizing the
+reference (kf_05) changed the time per step by 0.04 s and the picture by 6.01 levels: the reference's
+pixel count is not what costs time on this path (UNVERIFIED why; the log does not show the latent
+size), the second reference is (82.16 s against 46.74 s per step). The Laplacian numbers of §5's
+screening list changed definition on 2026-09-27 (`keyframe_screen.py`: kf_01 100.4, A 118.4, B 151.2;
+the 2026-09-26 figures 188 / 254 do not compare). By my eye, not evidence: kf_02 invents a water
+plume and a bridge, kf_04 keeps A's daylit buildings in place under a night sky. The owner's boxes
+decide; no keyframe is graded as of 2026-09-27.
 
 ## 6. Gaps
 

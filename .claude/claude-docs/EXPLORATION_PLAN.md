@@ -241,6 +241,16 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    a role per reference, no "halfway"; the prompt is generated from the layered score at a clip time
    (one clause per layer, progress in words). Next runs: kf_02 single reference, kf_03 two references,
    kf_04 mismatch_6, kf_05 references pre-resized (sd.cpp keeps 2-MP references at full size).
+   **Runs kf_02–kf_05 done (2026-09-27, fifth session, Track B, an Opus 5.5 subagent without the
+   owner; DECISIONS Track B line; `research/keyframe-prompting.md §5.1`; page
+   `benchmarks/runs/2026-09-27/keyframes/`)**: a single-reference, state-describing prompt leaves both
+   photos (kf_02: 44.8 levels from A, 33.7 from B) but puts the sun at B's place (6.4 px) rather than the
+   midpoint; both pictures as references reproduce Picture 2 again (kf_03: 4.3 levels from B); the
+   day-to-night pair (kf_04) darkens the sky and adds stars over A's unchanged daylit buildings; a 1-MP
+   reference costs the same per step as a 2-MP one (46.78 against 46.74 s), the second reference doubles
+   it (82.16 s). Box clean after (hold file removed, no container, 38 GiB available). Ungraded: the
+   owner's three questions are on the page. Next prompt experiment: the midpoint said as a position,
+   not as a fraction of a move; then FLUX.2 klein 4B as the speed fallback.
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -329,3 +339,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-26 | Owner picks on the round-2 page ingested: the first "one picture" ticks (mismatch_6, four clips); mismatch_4 gains "transforms"; round-3 targets named (cloud dissolve like a real cloud, soft edges on moving layers, non-linear motion); the defect list confirmed | round-2 session, 2026-09-26 (fourth, late) |
 | 2026-09-27 | Keyframe prompting researched (BFL guides, Qwen rewriter rules, both pipelines' "Picture N" labels, sd.cpp reference sizing) and made dynamic (`keyframe_prompt.py` from a score at a clip time); runs kf_02–kf_05 planned | round-2 session, 2026-09-27 |
 | 2026-09-27 | Fifth session, Track A: round 3 rendered on mismatch_6 (three clips: the cloud erosion from the edge inward, motion blur + relit regions + smootherstep, both) and mismatch_4 (motion only; the streak-cloud layer rejected on the frames with numbers); the probe measures the three faults on the composite; no tool change; owner grades next | round-3 session, 2026-09-27 (fifth) |
+| 2026-09-27 | Fifth session, Track B: kf_02–kf_05 ran on the box (single reference leaves both photos, the sun at B's place; two references reproduce Picture 2; reference size does not set the step time, the second reference does); box clean; owner grades next | round-3 session, 2026-09-27 (fifth) |
