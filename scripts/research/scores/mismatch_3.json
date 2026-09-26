@@ -1,0 +1,21 @@
+{
+  "pair": "mismatch_3",
+  "tag": "layered",
+  "seconds": 2.0,
+  "fps": 30,
+  "max_long": 1920,
+  "owner": "for this scene i would expect for experiments with depth and parts of background behind group of people transforming independently from people and people in foreground doing same + colors objects etc shift in place ( i don't mind some weird swirling or rotation or other translational movents but it should make sence for final image and be coherent",
+  "layers": [
+    {"name": "b_all", "from": "B", "mask": {"rule": "all"}, "depth": 0, "action": "hold"},
+    {"name": "a_back", "from": "A", "mask": {"rule": "depth_bg", "lo": 0.3, "hi": 0.34},
+     "depth": 1, "action": "dissolve", "order": "noise", "noise_px": 90, "noise_gain": 1.0, "feather": 0.2, "window": [0.05, 0.55], "curve": "ease", "zoom": [1.0, 1.04]},
+    {"name": "b_mid", "from": "B", "mask": {"rule": "depth_band", "lo": 0.35, "hi": 0.7, "soft": 0.04},
+     "depth": 2, "action": "materialise", "order": "noise", "noise_px": 90, "noise_gain": 1.0, "feather": 0.2, "window": [0.35, 0.8], "curve": "ease"},
+    {"name": "a_people", "from": "A", "mask": {"rule": "depth_band", "lo": 0.3, "hi": 0.85, "soft": 0.04},
+     "depth": 3, "action": "dissolve", "order": "noise", "noise_px": 70, "noise_gain": 1.0, "feather": 0.2, "window": [0.3, 0.75], "curve": "ease", "zoom": [1.0, 1.06]},
+    {"name": "b_near", "from": "B", "mask": {"rule": "depth_fg", "lo": 0.7, "hi": 0.74},
+     "depth": 4, "action": "materialise", "order": "noise", "noise_px": 70, "noise_gain": 1.0, "feather": 0.2, "window": [0.6, 0.95], "curve": "ease"},
+    {"name": "a_fence", "from": "A", "mask": {"rule": "depth_fg", "lo": 0.85, "hi": 0.89},
+     "depth": 5, "action": "dissolve", "order": "noise", "noise_px": 50, "noise_gain": 1.0, "feather": 0.2, "window": [0.55, 0.9], "curve": "ease", "zoom": [1.0, 1.08]}
+  ]
+}

@@ -155,6 +155,16 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    enter, move, hold), a field per layer with anchors only inside a layer, a colour path per
    layer, compositing by depth, and a per-scene score the owner edits. First probe: mismatch_6 as
    scored, then mismatch_4 (sun, skyline, river) and mismatch_3 (depth layers).
+   **Progress 2026-09-26 (third session)**: designed as `TRANSITIONS.md §12` (the score: layers ×
+   one action each × a time window; mask rules on the offline depth model and the photo; per-layer,
+   per-row colour path; compositing back to front; frame 0 = A and the last frame = B exactly) and
+   probed by `scripts/research/layered_probe.py` from the tracked scores
+   `scripts/research/scores/{mismatch_6,mismatch_6_overlap,mismatch_4,mismatch_3}.json`: the page
+   `benchmarks/runs/2026-09-26/layered/index.html` (sheet `benchmarks/2026-09-26-layered.md`) shows
+   each probe beside the two clips the owner graded on the anchors page, with the three boxes. Numbers
+   in §12.2 (mismatch_6: first / last interior step 0.05 / 0.05 levels, `edge_ratio` 0.0105; two runs
+   byte-identical). Defects by the agent's eye in §12.3; the owner's boxes decide; nothing entered
+   `transitions.py`. Next: the picks, then the tool shape of §12.4 (`--score FILE`) for a graded probe.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -258,3 +268,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-26 | Owner confirmed the goal paragraph and refined F3 (verbatim in DECISIONS); §Rank 2026-09-26 RANKED; item 2 (goal metrics) BUILT; items 3–4 rewritten as the layered scene transition and generated keyframes on the second machine | retrospective session, 2026-09-26 (second half) |
 | 2026-09-26 | Second half: owner named the second machine's docs and ordered the theme anchors; hand-placed anchors page (four variants × six pairs) + automatic probe rendered; `--anchor-falloff` built (T16 closed); Strix Halo route researched (track F) and recorded, not run | retrospective session, 2026-09-26 (late) |
 | 2026-09-26 | Owner picks on the theme-anchors page ingested (no clip one picture or transforming; the frame edge rejected; whole-frame rotations rejected; per-pair layered orchestration described); item 3 rewritten as the orchestrated layered transition with a per-scene score; the anchors' default falloff set to 0.45 | retrospective session, 2026-09-26 (late) |
+| 2026-09-26 | Third session: the orchestrated layered transition designed (`TRANSITIONS.md §12`) and probed from hand-written scores on mismatch_6 (as the owner scored it, two timings), mismatch_4 (sun by the Gaussian map, skyline, water, clouds) and mismatch_3 (depth bands); page + sheet; no tool change; owner grades next | layered session, 2026-09-26 (third) |

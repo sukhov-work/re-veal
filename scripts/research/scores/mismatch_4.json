@@ -1,0 +1,173 @@
+{
+ "pair": "mismatch_4",
+ "tag": "layered",
+ "seconds": 2.0,
+ "fps": 30,
+ "max_long": 1920,
+ "owner": "sun -> sun, skyline with depth and river -> their counterparts independently and consistently, clouds materialising, the scene basically got rebuilt and transformed in real time (the owner's sentence of 2026-09-26, plan Rank item 1)",
+ "layers": [
+  {
+   "name": "band_b",
+   "from": "B",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 9,
+    "gap": 20
+   },
+   "depth": 5,
+   "action": "materialise",
+   "order": "rows_rev",
+   "noise_px": 60,
+   "noise_gain": 0.25,
+   "feather": 0.12,
+   "window": [
+    0.4,
+    0.85
+   ],
+   "curve": "ease"
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "mask": {
+    "rule": "above_band",
+    "of": "band_b"
+   },
+   "render": false
+  },
+  {
+   "name": "water_b",
+   "from": "B",
+   "mask": {
+    "rule": "below_band",
+    "of": "band_b"
+   },
+   "render": false
+  },
+  {
+   "name": "sun_b",
+   "from": "B",
+   "mask": {
+    "rule": "sun",
+    "within": "sky_b",
+    "thr": 92,
+    "grow": 40
+   },
+   "render": false
+  },
+  {
+   "name": "clouds_b",
+   "from": "B",
+   "mask": {
+    "rule": "clouds",
+    "within": "sky_b",
+    "channel": "L",
+    "delta": 25,
+    "opaque": 0.5,
+    "clear_pct": 15,
+    "window": 60
+   },
+   "depth": 2,
+   "action": "materialise",
+   "noise_px": 50,
+   "noise_gain": 0.35,
+   "feather": 0.15,
+   "window": [
+    0.35,
+    0.9
+   ],
+   "curve": "ease"
+  },
+  {
+   "name": "band",
+   "from": "A",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 6,
+    "gap": 20
+   },
+   "depth": 4,
+   "action": "dissolve",
+   "order": "rows",
+   "noise_px": 60,
+   "noise_gain": 0.25,
+   "feather": 0.12,
+   "drift": [
+    0.0,
+    0.26
+   ],
+   "window": [
+    0.15,
+    0.78
+   ],
+   "curve": "ease",
+   "recolor_to": "band_b",
+   "recolor_strength": 1.0
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "above_band",
+    "of": "band"
+   },
+   "render": true,
+   "depth": 0,
+   "action": "backdrop",
+   "opaque": true,
+   "to": "sky_b",
+   "exclude": [
+    "sun_b",
+    "clouds_b"
+   ],
+   "minus": [
+    "sun"
+   ],
+   "window": [
+    0.0,
+    0.85
+   ],
+   "curve": "ease"
+  },
+  {
+   "name": "sun",
+   "from": "A",
+   "mask": {
+    "rule": "sun",
+    "within": "sky",
+    "thr": 92,
+    "grow": 40
+   },
+   "depth": 3,
+   "action": "move_to",
+   "to": "sun_b",
+   "window": [
+    0.15,
+    0.75
+   ],
+   "curve": "ease",
+   "recolor_to": "sun_b",
+   "recolor_strength": 1.0
+  },
+  {
+   "name": "water",
+   "from": "A",
+   "mask": {
+    "rule": "below_band",
+    "of": "band"
+   },
+   "depth": 1,
+   "action": "backdrop",
+   "opaque": false,
+   "to": "water_b",
+   "mask_to": "water_b",
+   "window": [
+    0.1,
+    0.85
+   ],
+   "curve": "ease"
+  }
+ ]
+}

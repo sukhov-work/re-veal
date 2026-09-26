@@ -258,6 +258,7 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | TR6-B and TR6-A2, 2026-09-15 fourth session (`§2–3` of the same sheet; clips under `benchmarks/runs/2026-09-15/{ltx,morphers}/`) | LTX keyframe 0.8 on mismatch_1 / mismatch_4: cut at frame 28 (38 levels) / 31 (21 levels), 1849 / 1961 s beside two GPU jobs, endpoints 5.3 / 5.3 and 7.4 / 10.7; match_4 at 0.6: continuous, max step 4.8, 736 s. LTX `generate` with five skeleton frames anchored, mismatch_1: continuous, mean step 2.28, max 3.87, endpoints 4.4 / 8.4, 11.3 levels from the skeleton clip, 1107 s, RSS 13.8 GB. DreamMover on MPS: 18.2 / 12.0 min (mismatch_1, two runs) and 8.8 min (mismatch_4), memory footprint 18–20 GB, endpoints 6.6 / 4.5 and 3.7 / 4.6 levels off, deterministic to 1 level, no licence. DiffMorpher: weights 404 (gated, not granted), 0.502 s per UNet step and 2.43 s per LoRA step → 42 min per pair at the README's recipe, 7.5 min minimal |
 | TR10 built as `--camera flat\|ramp\|model` + `--zoom` (2026-09-23; sheet `benchmarks/2026-09-23-camera.md`, run dir `benchmarks/runs/2026-09-23/`) | Depth Anything V2 Small through transformers 5.17.0 + torch 2.13.0 on the CPU (6 threads): 24,785,089 parameters, 99,173,660-byte safetensors, 0.27–0.31 s per 1024-px image, 1.2 s model load per process (4.9 s cold from disk); MPS 0.06 s warm, CPU-vs-MPS normalized disparity median 0 / p99 0 / max 2e-5 (no device flag built); two CPU runs byte-identical on five inputs. Harness pair: `flat` byte-identical (14 preset × class hashes equal before and after); `ramp` at zoom 0.25 moves the bottom fifth 127.4 px against 52.3 px at the top (2.44×; flat 1.03×), holes 0.00 % at the mid frame, edge step 4 levels. Six mismatched fixtures at ≤ 1920 px, morph 2 s, zoom 0.25: `model` median displacement 26–46 % below `flat` (disparity means 0.12–0.43), mean step 4–14 % lower, warping error ≤ flat on five of six, `edge_ratio` within ±0.06 except mismatch_2 0.19 → 0.24 and mismatch_6 0.53 → 0.59; correspondence 2.4–2.9 s (model) against 0.08–0.45 s (flat), render 2.6–13.3 s per 60 frames; run 2 byte-identical (mp4 md5) on all six. Six class A pairs forced to class B with `model`: mean step 2.1–10.6 against the class A morph's 0.5–5.3. Research push-in (zero at both ends) on the class A field: `edge_ratio` 1.1–1.8 on all twelve clips, the endpoint slope of sin(πu) |
 
+| Layered probe, `scripts/research/layered_probe.py` from hand-written scores, 2026-09-26 third session (§12; sheet `benchmarks/2026-09-26-layered.md`; page `benchmarks/runs/2026-09-26/layered/`) | mismatch_6 at 1146×1524, 60 frames: prep 1.8–3.7 s (the depth model 1.3 s per photo), render 5.8 s, first / last interior step 0.05 / 0.05 levels, `edge_ratio` 0.0105; mismatch_4 at 1920×1092: render 8.0 s, steps 0.11 / 0.23, `edge_ratio` 0.188; mismatch_3 at 1920×1440: render 7.1 s, steps 0.14 / 0.00; two runs byte-identical per pair (md5 `64a54eee…`, `1d2e8bbb…`); `transitions.py` untouched |
 
 Goal numbers on the real surface (2026-09-26, `benchmarks/runs/2026-09-26/surface/` and `bench/`, morph 2 s, canvas ≤ 1920 px, 480-px proxy; run 1 through the CLI and run 2 through the bench script give identical numbers):
 
@@ -737,3 +738,124 @@ clip; the frame edge "hard ugly"; a few-anchor whole-frame warp reads as "one pi
 (clouds dissolve, the sky darkens, stars appear, buildings exit downward, trees and the
 air-conditioning unit enter). The next design pass (§12, to be written) is the orchestrated layered
 transition with a per-scene score; the anchors' default falloff is 0.45 since the same day.
+
+## 12. The orchestrated layered transition: the score, the probe, the first three clips (2026-09-26, third session)
+
+Result: a hand-written per-scene SCORE (layers × one action each × a time window) rendered by a
+research script gives clips in which every interior frame is a composite of layers, each layer
+showing one photo's content; the first three probes (mismatch_6 exactly as the owner scored it,
+mismatch_4 from the owner's sentence of the same day, mismatch_3 by depth bands) are on
+`benchmarks/runs/2026-09-26/layered/index.html` beside the two clips the owner graded on the
+theme-anchors page, ungraded as of 2026-09-26. Nothing in `transitions.py` changed. The script is
+`scripts/research/layered_probe.py`; the scores are `scripts/research/scores/<pair>[_variant].json`
+(tracked); the sheet is `.claude/claude-docs/benchmarks/2026-09-26-layered.md`. Sources: the owner's
+mismatch_6 score and mismatch_3 note (verbatim in DECISIONS 2026-09-26, late), the mismatch_4
+sentence (plan §Rank 2026-09-26 item 1), Track E's ten steps (`benchmarks/runs/2026-09-26/research/track_E.md §6`),
+Track B's recipe (`track_B.md §5`).
+
+### 12.1 The score: what the owner edits
+
+One JSON file per pair: `pair`, `seconds`, `fps`, `max_long`, the owner's sentence under `owner`,
+and `layers`. A layer has a `name`, a source photo `from` (A or B), a `mask` rule with parameters,
+a compositing `depth` (0 is the back), one `action`, a `window` [t0, t1] in clip fractions, a
+`curve` (the tool's `CURVES`), and optional terms: `recolor_to` + `recolor_strength` (the colour
+path), `drift` (canvas fractions over the window), `zoom` ([z0, z1] about the canvas centre over
+the window), `direction` and `travel_px` (exit / enter / move), `order` and its noise parameters
+(dissolve / materialise), `render: false` (a layer that only lends its mask and statistics).
+
+Mask rules in the probe, all from the two photos and the offline depth model (Depth Anything V2
+Small through `transitions.model_disparity`, the 2026-09-23 weights):
+- `depth_fg` / `depth_bg`: disparity between `lo` and `hi`; `dilate` widens the region, `refine:
+  dark` keeps only pixels darker than the per-row brightness of the rest of the photo (leaf-level
+  detail the depth lacks), `grow` lets a moving layer carry the background within a few px of its
+  edge, `components` keeps the connected parts touching one border.
+- `skyline_below` / `skyline_above`: a per-column skyline from the depth (the topmost row whose
+  next 20 rows are 70 % near and whose rows down to the bottom are 60 % near), with a texture veto
+  (the depth model rounds a roof into a dome of "near" sky) and hand polygons `union` for what the
+  depth misses (the far glass tower of mismatch_6 sits at disparity 0–0.03 and was added by hand).
+- `band_dark`, `above_band`, `below_band`: the dark silhouette band under the sky per column
+  (from the first near row through the run of rows with L below `dark_L`), and the sky above or
+  the water below it; `depth_band` for a disparity interval; `polygon`, `invert`, `invert_any`, `all`.
+- `clouds`: a density against the clear sky of the same rows (a low percentile of b* over a window
+  of rows for a day sky, of L for a sunset); `stars`: white top-hat blobs, ordered bright-first with
+  jitter; `sun`: the brightest blob inside a layer with its Gaussian moments.
+
+Actions: `backdrop` (the per-row Lab fit of the layer moves from the A layer's to the B layer's
+while the residual textures crossfade; alpha 1 for the base, or a matte that moves from the A mask
+to `mask_to`), `hold`, `recolor`, `dissolve` and `materialise` (the matte erodes or grows through an
+order field: the layer's own density, its blobs, its luma, its row position, or noise), `exit`,
+`enter` and `move` (a translation until the layer's box leaves or reaches the canvas), `move_to`
+(the closed-form Bures–Wasserstein map between the layer's Gaussian and the target's, interpolated
+as ((1 − p) I + p T) x + p b; Track E §2.4). The colour path is per layer and per row (48 bands):
+Reinhard's statistics transfer toward the counterpart layer by the layer's own progress, so a sky
+darkens as a gradient and a cloud dims toward the night sky while it erodes. Compositing is the
+over operator back to front on soft mattes; frame 0 is A and the last frame is B, exactly. The one
+mixed quantity is the backdrop's residual (the sky texture after the fit; on mismatch_4 also the
+water's, which carries the sun road), faded from A's to B's over the backdrop's window.
+
+### 12.2 What the three probes measured (2 s, 30 fps, canvas ≤ 1920 px, the tool's basket on the 480-px proxy)
+
+| pair (canvas) | clip | edge_ratio | feat_floor | laplace_floor | contrast_floor | dissolve_fit | motion_share | first / last interior step, levels | wall s |
+|---|---|---|---|---|---|---|---|---|---|
+| mismatch_6 (1146×1524) | `layered` (the owner's sequence) | 0.0105 | 0.055 | 0.241 | 0.197 | 0.226 | 0.290 | 0.05 / 0.05 | 9.4 |
+| mismatch_6 | `layered_overlap` (windows overlap; the clouds drift and zoom out 6 %, the buildings zoom out 8 % as they leave) | 0.0132 | 0.006 | 0.195 | 0.193 | 0.245 | 0.304 | 0.06 / 0.05 | 9.5 |
+| mismatch_6 | `flat` / `anchors_falloff` (graded 2026-09-26: not one picture, no transformation) | 0.672 / 0.789 | 0.128 / 0.159 | 0.330 / 0.340 | 0.639 / 0.665 | 0.492 / 0.803 | 0.016 / −0.001 | — | 6.9 / 6.9 |
+| mismatch_4 (1920×1092) | `layered` (sun moved by the Gaussian map, scale 0.86 × 0.83, translation (156, 271) px; the A skyline sinks and dissolves top-down while drifting 26 % of the height; B's skyline rises; B's clouds materialise by density) | 0.188 | 0.108 | 0.518 | 0.713 | 0.215 | 0.003 | 0.11 / 0.23 | 13.2 |
+| mismatch_4 | `flat` / `anchors_alpha` (the owner's pick of the day) | 0.164 / 0.134 | 0.085 / 0.171 | 0.455 / 0.619 | 0.806 / 0.814 | 0.195 / 0.046 | 0.139 / 0.448 | — | 6.4 / 8.2 |
+| mismatch_3 (1920×1440) | `layered` (three depth bands per photo; A's bands dissolve by noise back to front with 4–8 % zoom-in, B's materialise in the same order over B as the base) | 0.0707 | 0.445 | 0.914 | 0.949 | 0.195 | −0.064 | 0.14 / 0.00 | 10.1 |
+| mismatch_3 | `flat` / `anchors_falloff` (the owner's pick of the day) | 0.059 / 0.056 | 0.065 / 0.051 | 0.457 / 0.474 | 0.710 / 0.712 | 0.024 / 0.019 | 0.189 / 0.422 | — | 9.1 / 10.1 |
+
+Two runs of the final script give byte-identical clips (md5 `64a54eee…` for mismatch_6 `layered`,
+`1d2e8bbb…` for mismatch_4; seeds are fixed). The depth model costs 1.3 s per photo inside `prep`.
+Reading the numbers: the goal numbers were calibrated on crossfade-versus-closer verdicts (§11)
+and do not see an orchestration. The low `feat_floor` and `laplace_floor` on mismatch_6 (0.055 and
+0.24) measure the frames in which the sky is a smooth gradient with the clouds gone and the trees
+not yet in, which is what the owner's sequence asks for; the same numbers on mismatch_3 (0.45,
+0.91, 0.95) show a composite that keeps every layer sharp, because no pixel is a mix of A and B
+content. Whether any of this is "one picture" or "content transforms" is the owner's verdict; my
+eye is not evidence.
+
+### 12.3 Defects seen while building (by my eye; the owner's boxes decide the rest)
+
+- The depth model is smooth at edges: the tips of a tree crown sit at disparity 0, the sky beside
+  the trees at 0.08–0.13, a dome of "near" sky (0.05–0.15) sits above the left roof of mismatch_6,
+  and the far glass tower is as far as the sky. Every foreground matte needed a photo-based
+  refinement (darkness, texture, a hand polygon). A panoptic model (Track B recipe 1) is the
+  next mask source and is a new weights file behind `warmup` and a manifest: the owner's decision.
+- The moved sun carries its blob and 40 px of glow; the wider glow stays in A's residual and B's
+  glow fades in at the target before the sun arrives (the F1 remnant of this pair). Track E step 4
+  (a radial glow re-rendered around the moving centre) is not built.
+- The sinking A skyline of mismatch_4 shows vertical streaks at its tall left shore, and B's clouds
+  come in as blotches (density order plus 50-px noise).
+- The mismatch_3 clip is a depth-ordered patch reveal with parallax, the honest deterministic
+  answer where no correspondence exists; content does not transform inside a layer. That needs
+  generated keyframes (plan item 4) or a correspondence that does not exist for this pair.
+- Four probe bugs fixed on the way, each a trap for the tool: the cosine ease is not monotone
+  outside 0..1 (clip the window progress before the curve); an entering layer's travel must be
+  measured along the reverse of its direction; a per-column texture skyline spikes at cloud edges;
+  a half-weighted residual under a layer's soft edge stays behind as a ghost when the layer
+  moves (the residual is interior-only; a moving layer carries the background near its edge).
+
+### 12.4 The shape it takes in the tool, when a probe is graded
+
+Nothing enters `transitions.py` before the owner grades a probe "one picture" or "content
+transforms" (handover rule of 2026-09-26). The shape then: `pair … --score FILE` renders the score
+instead of the preset (the experimental lane: a new option, the default path and the 14 frame
+hashes untouched; class `L`, method `layered-score` in `report.json`); the rules and actions
+become one new section "Layers" between Depth and Morph; the harness pins frame 0 and the last
+frame byte-exact, every matte in 0..1, the first and last interior step below 1 level on the
+synthetic pair, and the determinism of a seeded score, with a paid mutation (the unclipped ease).
+The score file is the operator surface the owner asked for ("flexibly tune and control per
+scene"); its keys above are the contract to record in `contracts.md` on that day.
+
+### 12.5 Questions for the owner
+
+1. Grade the three probes with the three boxes; the score files are the knobs, say what a layer
+   should do differently.
+2. mismatch_6: the literal sequence (an empty sky between the clouds' exit and the trees' entry) or
+   the overlapping one?
+3. Layer masks: keep rules on the depth model and the photo, or fetch a panoptic model (Mask2Former
+   Swin-Tiny, MIT, about 190 MB per Track B, UNVERIFIED size) behind `warmup`?
+4. The moved sun's glow: re-render it around the moving centre, or accept the fade?
+5. mismatch_3: is a per-layer patch reveal with parallax a family worth tuning, or is it "cross
+   fade with cheap effects"?

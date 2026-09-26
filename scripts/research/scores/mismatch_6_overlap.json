@@ -1,0 +1,196 @@
+{
+ "pair": "mismatch_6",
+ "tag": "layered_overlap",
+ "seconds": 2.0,
+ "fps": 30,
+ "max_long": 1920,
+ "owner": "I would expect here for clouds to interestingly dissolve into dark, backgorund sky darken independently , then stars appear , buildings in bootom go down, and foreground elements ( like trees and overhanging air conditioning unit ) enter the frame . Maybe all of this with some zoom out , rotation and/or parallax on cloud / buildings - these are just examples, there are endless scenarios how this transition could be orchestrated.",
+ "layers": [
+  {
+   "name": "trees",
+   "from": "B",
+   "mask": {
+    "rule": "depth_fg",
+    "lo": 0.012,
+    "hi": 0.04,
+    "dilate": 120,
+    "refine": "dark",
+    "dark_lo": 0.3,
+    "dark_hi": 0.75,
+    "grow": 4,
+    "components": "bottom"
+   },
+   "depth": 4,
+   "action": "enter",
+   "direction": [
+    0,
+    -1
+   ],
+   "window": [
+    0.45,
+    0.9
+   ],
+   "curve": "ease-out"
+  },
+  {
+   "name": "ac_unit",
+   "from": "B",
+   "mask": {
+    "rule": "depth_fg",
+    "lo": 0.05,
+    "hi": 0.12,
+    "components": "top"
+   },
+   "depth": 5,
+   "action": "enter",
+   "direction": [
+    -1,
+    1
+   ],
+   "window": [
+    0.5,
+    0.92
+   ],
+   "curve": "ease-out"
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "mask": {
+    "rule": "invert_any",
+    "of": [
+     "trees",
+     "ac_unit"
+    ]
+   },
+   "render": false
+  },
+  {
+   "name": "stars",
+   "from": "B",
+   "mask": {
+    "rule": "stars",
+    "within": "sky_b",
+    "tophat": 8,
+    "max_area": 80,
+    "jitter": 0.4
+   },
+   "depth": 1,
+   "action": "materialise",
+   "window": [
+    0.4,
+    0.88
+   ],
+   "curve": "ease",
+   "each": 0.12
+  },
+  {
+   "name": "buildings",
+   "from": "A",
+   "mask": {
+    "rule": "skyline_below",
+    "d": 0.08,
+    "run": 20,
+    "frac": 0.7,
+    "bottom": 0.6,
+    "tex_sd": 3.5,
+    "tex_frac": 0.3,
+    "union": [
+     [
+      [
+       0.527,
+       0.782
+      ],
+      [
+       0.532,
+       0.772
+      ],
+      [
+       0.598,
+       0.772
+      ],
+      [
+       0.603,
+       0.782
+      ],
+      [
+       0.603,
+       0.87
+      ],
+      [
+       0.527,
+       0.87
+      ]
+     ]
+    ]
+   },
+   "depth": 3,
+   "action": "exit",
+   "direction": [
+    0,
+    1
+   ],
+   "window": [
+    0.25,
+    0.68
+   ],
+   "curve": "ease-in",
+   "zoom": [
+    1.0,
+    0.92
+   ]
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "invert",
+    "of": "buildings"
+   },
+   "depth": 0,
+   "action": "backdrop",
+   "to": "sky_b",
+   "exclude": "stars",
+   "minus": [
+    "clouds"
+   ],
+   "window": [
+    0.0,
+    0.65
+   ],
+   "curve": "ease"
+  },
+  {
+   "name": "clouds",
+   "from": "A",
+   "mask": {
+    "rule": "clouds",
+    "within": "sky",
+    "b_cloud": -4,
+    "opaque": 0.35,
+    "clear_pct": 5,
+    "window": 100
+   },
+   "depth": 2,
+   "action": "dissolve",
+   "window": [
+    0.05,
+    0.6
+   ],
+   "curve": "ease",
+   "noise_px": 40,
+   "noise_gain": 0.35,
+   "feather": 0.12,
+   "recolor_to": "sky_b",
+   "recolor_strength": 1.0,
+   "drift": [
+    0.03,
+    -0.02
+   ],
+   "zoom": [
+    1.0,
+    0.94
+   ]
+  }
+ ]
+}
