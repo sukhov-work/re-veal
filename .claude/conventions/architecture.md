@@ -28,20 +28,20 @@ each other (transitions harness 1–2). Its design of record is `TRANSITIONS.md`
 | Frontend | 1753–2404 | one embedded HTML/CSS/JS string |
 | CLI | 2405–2570 | `cmd_check`, `cmd_warmup`, `cmd_align`, `main` |
 
-## `transitions.py` section map (line anchors as of 2026-09-23 — re-grep `^# ---` after edits)
+## `transitions.py` section map (line anchors as of 2026-09-26 — re-grep `^# ---` after edits)
 | Section | Lines | Owns |
 |---|---|---|
-| Configuration | 106–252 | `TCFG` (incl. `zoom_range`, `depth_*`), `CURVES`, `STYLES`, `PORTALS`, `CAMERAS`, `TransitionSpec` (`n_frames`, `clamp`, `progress`; `camera`, `zoom`), `PRESETS`, `spec_from`, `TransitionError` |
-| Decode and canvas | 253–376 | `load_image_rgb` (re-implemented), `gray_of`, `even`, `to_u8` (rounding cast), `cover`, `common_canvas`, `_grid` |
-| Correspondence | 377–560 | `sparse_homography`, `_sane`, `_dis`, `_homography_guided`, `consistency_weight`, `salient_box`, `_box_center`, `panzoom_field` (class B, coverage-preserving pan-and-zoom, 2026-09-14), `mls_affine`, `_invert_disp` |
-| Depth (2026-09-23) | 561–786 | the offline shape of Reveal's decisions 24–27 on the transitions surface: `MODELS_DIR`, `DEPTH_DIR` (`HF_HOME`), `DEPTH_MANIFEST`, `DEPTH_MODEL`, `DEPTH_PREP`, `_pin_hf_home`, `depth_available`, `depth_manifest`, `_depth_files`, `depth_weights_cached`, `_depth_status`, `_depth_model` (lazy torch/transformers, refuses without the manifest), `_dpt_size`, `model_disparity`, `_normalize_disparity`, `ramp_disparity`, `depth_modulate`, `_selftest_scene`, `depth_selftest` |
-| Correspondence (cont.) | 787–875 | `dense_displacement` (class A/B routing, the camera move on the class B pan-and-zoom, INFO lines on B and on an ignored camera) |
-| Warp | 876–1004 | `backward_warp`, `forward_splat` (1/4-res coordinate splat → one remap), `fill_holes`, `morph_frame`, `portal_mask` |
-| Color path | 1005–1079 | `lab_stats`, `lerp_stats`, `apply_stats` (float correction, rounded once), `color_pair_at`, `luma_mask` |
-| Quality basket | 1080–1176 | `warping_error`, `flicker` (`edge_ratio` = hidden-cut detector), `endpoint_fidelity`, `assess`, `proxy_of`, `StreamStats` |
-| Render | 1177–1245 | `prepare` (canvas + correspondence once, passes `camera`/`zoom`), `iter_frames` (generator, endpoints pinned), `render_frames` (in-memory convenience) |
-| Encode | 1246–1329 | `FrameEncoder` (imageio-ffmpeg rawvideo pipe → libx264), `render_pair` (the whole job: mp4 + strip + report) |
-| CLI | 1330–1505 | `cmd_check` (incl. the depth row), `cmd_warmup`, `parse_anchors`, `cmd_pair`, `main` (exit 0 / 2; `pair`, `check`, `warmup`) |
+| Configuration | 107–255 | `TCFG` (incl. `zoom_range`, `depth_*`), `CURVES`, `STYLES`, `PORTALS`, `CAMERAS`, `TransitionSpec` (`n_frames`, `clamp`, `progress`; `camera`, `zoom`), `PRESETS`, `spec_from`, `TransitionError` |
+| Decode and canvas | 256–379 | `load_image_rgb` (re-implemented), `gray_of`, `even`, `to_u8` (rounding cast), `cover`, `common_canvas`, `_grid` |
+| Correspondence | 380–563 | `sparse_homography`, `_sane`, `_dis`, `_homography_guided`, `consistency_weight`, `salient_box`, `_box_center`, `panzoom_field` (class B, coverage-preserving pan-and-zoom, 2026-09-14), `mls_affine`, `_invert_disp` |
+| Depth (2026-09-23) | 564–789 | the offline shape of Reveal's decisions 24–27 on the transitions surface: `MODELS_DIR`, `DEPTH_DIR` (`HF_HOME`), `DEPTH_MANIFEST`, `DEPTH_MODEL`, `DEPTH_PREP`, `_pin_hf_home`, `depth_available`, `depth_manifest`, `_depth_files`, `depth_weights_cached`, `_depth_status`, `_depth_model` (lazy torch/transformers, refuses without the manifest), `_dpt_size`, `model_disparity`, `_normalize_disparity`, `ramp_disparity`, `depth_modulate`, `_selftest_scene`, `depth_selftest` |
+| Correspondence (cont.) | 790–878 | `dense_displacement` (class A/B routing, the camera move on the class B pan-and-zoom, INFO lines on B and on an ignored camera) |
+| Warp | 879–1007 | `backward_warp`, `forward_splat` (1/4-res coordinate splat → one remap), `fill_holes`, `morph_frame`, `portal_mask` |
+| Color path | 1008–1082 | `lab_stats`, `lerp_stats`, `apply_stats` (float correction, rounded once), `color_pair_at`, `luma_mask` |
+| Quality basket | 1083–1271 | `warping_error`, `flicker` (`edge_ratio` = hidden-cut detector), `endpoint_fidelity`, `goal_numbers` (2026-09-26: `feat_floor`, `laplace_floor`, `contrast_floor`, `dissolve_fit`, `motion_share`; helpers `_gray8`, `_patch_std_median`, `_sift_matches`), `assess` (adds `goal`), `proxy_of`, `StreamStats` |
+| Render | 1272–1340 | `prepare` (canvas + correspondence once, passes `camera`/`zoom`), `iter_frames` (generator, endpoints pinned), `render_frames` (in-memory convenience) |
+| Encode | 1341–1424 | `FrameEncoder` (imageio-ffmpeg rawvideo pipe → libx264), `render_pair` (the whole job: mp4 + strip + report) |
+| CLI | 1425–1600 | `cmd_check` (incl. the depth row), `cmd_warmup`, `parse_anchors`, `cmd_pair`, `main` (exit 0 / 2; `pair`, `check`, `warmup`) |
 
 Seams: a **new preset** = a `PRESETS` entry + a harness assertion in section F (byte-exact
 endpoints, `edge_ratio`, monotone approach) — nothing else changes; a **new style** = a branch in
@@ -53,7 +53,10 @@ shape (decisions 24–27) — the Depth section (2026-09-23) is the worked examp
 `depth_weights_cached`, `_depth_model`, `cmd_warmup`; harness 48–51), and check 3 allows the lazy
 torch / transformers imports inside those four functions only, never at module level; a **new
 camera** = a `CAMERAS` value, a disparity function beside `ramp_disparity` / `model_disparity`, and
-a section-L check on the bottom-vs-top displacement ratio and the mid-frame hole fraction.
+a section-L check on the bottom-vs-top displacement ratio and the mid-frame hole fraction; a
+**new goal number** = a key in `goal_numbers` + a section-M check with a synthetic positive control
+and its red-making mutation, calibrated first on the graded real clips
+(`scripts/research/verdict_metrics.py`).
 
 ## Extension seams (the experimental lane, `AGENTS.md §Reversibility`)
 - **New matching mode** → a new key in `MODES` (overrides only; `reshot` stays `{}`), a harness

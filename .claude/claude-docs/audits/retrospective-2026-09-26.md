@@ -284,3 +284,22 @@ aligns.
 5. Is a set of automatic theme anchors (weights about 280 MB, offline behind warmup, CPU) acceptable
    as the first build once the hand-placed anchors are graded, or do you want the hand-placed page
    only?
+
+## 9. The owner's answers (2026-09-26, verbatim in DECISIONS 2026-09-26, second line)
+
+The goal paragraph of §1 is confirmed ("totally right") and gains two sentences: the transition is
+tunable per scene; colours, luminosity and transparency stay natural even where the content is
+impossible, adhering to one higher-order flow. F1 and F2 stand. F3 is refined: invented content is
+allowed as a generative helper element when it is executed deterministically and fluently, keeps the
+start and end details and is seamless; the shape is one or several generated KEYFRAMES that the
+deterministic engine then interpolates, never full video generation; a second machine (a Strix Halo
+with 128 GB unified memory) is available for the image models. The ideal for mismatch_4, in the
+owner's words: the sun morphs to the end sun, the skyline with depth and the river morph to their
+counterparts independently and consistently, the clouds shift or materialise, "the scene basically
+got rebuilt and transformed in real time"; 3D pans are an addition. The anchored probe of §6 is
+"still a crossfade but smoother; the sun tries to be consistent"; the three partition variants are
+junk (hard colour borders). Questions 4 and 5 of §8 were not answered directly; the metrics build
+was ordered ("go ahead with the metrics") and shipped the same day (DECISIONS 2026-09-26, third
+line); the plan's rank of §7 was rewritten as the layered scene transition and generated keyframes
+(`EXPLORATION_PLAN.md §Rank, revised 2026-09-26`), with two research tracks (D: keyframes on the
+second machine; E: layered, flow-based morphing) under `benchmarks/runs/2026-09-26/research/`.

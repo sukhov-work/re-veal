@@ -197,6 +197,7 @@ def main():
                 "warping_error": q.get("warping_error"),
                 "edge_ratio": q.get("flicker", {}).get("edge_ratio"),
                 "max_step": q.get("flicker", {}).get("max"),
+                "goal": q.get("goal"),
                 "endpoint": q.get("endpoint"), "strip": str(Path(key) / tag / "strip.jpg"),
                 "mp4": str(Path(key) / tag / "transition.mp4")}
             print(f"  {key} {tag}: rc={rc} class={rep.get('class')} {rep.get('method')} "
@@ -266,8 +267,8 @@ def write_sheet(out, runs, picks=None):
                       f"{r.get('ecc_rho')} | {r.get('peripheral_ssim')} | {r.get('residual')} | {r.get('changed_pct')} | "
                       f"{r.get('confidence')} | {r['wall_s']} | {(r.get('error') or '')[:80]} |")
     md.append("\n## Transitions (`transitions.py pair`)\n")
-    md.append("| pair | preset | rc | class | method | inliers | median_disp_px | certainty | pan A/B | camera | zoom | canvas | frames | corr s | render s | wall s | warping_err | edge_ratio | max_step | endpoint |")
-    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    md.append("| pair | preset | rc | class | method | inliers | median_disp_px | certainty | pan A/B | camera | zoom | canvas | frames | corr s | render s | wall s | warping_err | edge_ratio | max_step | endpoint | feat_floor | laplace_floor | contrast_floor | dissolve_fit | motion_share |")
+    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for row in runs["pairs"]:
         for tag, r in row["transitions"].items():
             cv = "x".join(str(v) for v in (r.get("canvas") or [])) or "-"
@@ -276,14 +277,17 @@ def write_sheet(out, runs, picks=None):
             md.append(f"| {row['id']} | {tag} | {r['rc']} | {r.get('class')} | {r.get('method')} | {r.get('sparse_inliers')} | "
                       f"{r.get('median_disp_px')} | {r.get('mean_certainty')} | {pan} | {r.get('camera') or '-'} | {r.get('zoom') if r.get('zoom') is not None else '-'} | {cv} | {r.get('n_frames')} | {r.get('correspondence_s')} | "
                       f"{r.get('render_s')} | {r['wall_s']} | {r.get('warping_error')} | {r.get('edge_ratio')} | {r.get('max_step')} | "
-                      f"{ep.get('first_vs_A')}/{ep.get('last_vs_B')} |")
+                      f"{ep.get('first_vs_A')}/{ep.get('last_vs_B')} | " + " | ".join(str((r.get('goal') or {}).get(k, '')) for k in ('feat_floor', 'laplace_floor', 'contrast_floor', 'dissolve_fit', 'motion_share')) + " |")
     if picks:
         md.append("\n## Owner picks (from index.html → picks.json)\n")
-        md.append("| pair | best variant | note |")
-        md.append("|---|---|---|")
+        md.append("| pair | best variant | note | per-clip boxes (one picture / content transforms / nothing invented) |")
+        md.append("|---|---|---|---|")
         for row in runs["pairs"]:
             pk = picks.get(row["id"]) or {}
-            md.append(f"| {row['id']} | {pk.get('best', '')} | {(pk.get('note') or '').replace('|', '/')} |")
+            props = pk.get("props") or {}
+            boxes = "; ".join(f"{tag}: " + "/".join("yes" if v.get(k) else "no" for k in ("one_picture", "transforms", "not_invented"))
+                              for tag, v in props.items())
+            md.append(f"| {row['id']} | {pk.get('best', '')} | {(pk.get('note') or '').replace('|', '/')} | {boxes} |")
     (out / "sheet.md").write_text("\n".join(md) + "\n")
 
     tags = []
@@ -306,13 +310,16 @@ def write_sheet(out, runs, picks=None):
             ".run img{max-width:100%;display:block}.run video{width:300px;max-height:360px;background:#000}"
             "code{color:#9cf}.legend td{padding:2px 10px;vertical-align:top}.pick{margin:8px 0 0}.pick label{margin-right:14px}"
             "textarea{width:100%;max-width:900px;background:#222;color:#ddd;border:1px solid #444}button{padding:6px 12px}"
-            ".note{color:#bbb}.hint{background:#26210a;padding:10px;border-radius:6px;margin:12px 0}</style>",
+            ".note{color:#bbb}.boxes label{margin-right:12px;color:#fd9}.hint{background:#26210a;padding:10px;border-radius:6px;margin:12px 0}</style>",
             f"<h1>Real-pair sheet — {runs['date']}</h1>",
             f"<div class=hint><b>How to read this page.</b> Each pair has {len(tags)} variants, one per row. "
             "The strip under a variant shows <b>eight frames of that one transition</b>, labelled with the frame index and the time; "
             "the player next to it is the full clip (loops; the first and last frames are the two photos byte for byte). "
             f"Transitions canvas capped at {runs['max_long']} px. Pick the best variant per pair, add a note, then <b>Export picks</b> "
-            "and drop the file next to sheet.json: <code>scripts/bench_transitions.py --render-only --picks picks.json</code> puts it in the sheet.</div>",
+            "and drop the file next to sheet.json: <code>scripts/bench_transitions.py --render-only --picks picks.json</code> puts it in the sheet. "
+            "Under every clip, three boxes ask for the property, not the pick: <b>one picture</b> (the mid frame is one coherent picture, not two superimposed), "
+            "<b>content transforms</b> (details move and change, rather than the frame panning or fading), <b>nothing invented</b> (no content that is in neither photo). "
+            "The goal numbers beside each clip (feat / laplace / contrast floors, dissolve fit, motion share; 2026-09-26) are calibrated on your earlier verdicts and are there to be checked against your eye, not to replace it.</div>",
             "<h3>What differs between the variants</h3><table class=legend>"]
     for tag, desc in legend:
         html.append(f"<tr><td><code>{tag}</code></td><td>{desc}</td></tr>")
@@ -323,7 +330,8 @@ def write_sheet(out, runs, picks=None):
                 "certainty = mean forward-backward consistency of the dense field (1 = every pixel agrees both ways). "
                 "camera (2026-09-23, class B only): <b>flat</b> = the pan-and-zoom as is; <b>ramp</b> = the same motion scaled by a top-to-bottom disparity ramp (bottom rows move 1.5×, top rows 0.5×), no model; "
                 "<b>model</b> = the same scaled by Depth Anything V2 Small's disparity, near content moves more and wins the overlap; zoom = the per-frame zoom fraction (0.10 default).</p>")
-    html.append("<p><button onclick='exportPicks()'>Export picks</button> <span id=status class=note></span></p>")
+    html.append("<p><button onclick='exportPicks()'>Export picks</button> <span id=status class=note></span></p>"
+                "<details><summary class=note>preview of what Export writes</summary><pre id=preview class=note></pre></details>")
     for row in runs["pairs"]:
         html.append(f"<h2 id='{row['id']}'>{row['id']} <small>{row['before']} → {row['after']} · {row.get('size_before')} / {row.get('size_after')}</small></h2>")
         html.append(f"<div class=pair><img src='{row['id']}/thumb_S.jpg'><img src='{row['id']}/thumb_F.jpg'></div>")
@@ -339,17 +347,25 @@ def write_sheet(out, runs, picks=None):
             strip = r.get("strip_labeled", r["strip"])
             pan = (" pan=" + "/".join(f"{v:.2f}" for v in r["pan_fraction"])) if r.get("pan_fraction") else ""
             cam = (f" camera={r.get('camera')} zoom={r.get('zoom')}" + (f" disparity={r.get('disparity_mean')}" if r.get("disparity_mean") else "")) if r.get("camera") else ""
+            g = r.get("goal") or {}
+            goal_txt = (f" goal: feat={g.get('feat_floor')} laplace={g.get('laplace_floor')} contrast={g.get('contrast_floor')} "
+                        f"dissolve_fit={g.get('dissolve_fit')} motion={g.get('motion_share')}") if g else ""
+            pp = (pk.get("props") or {}).get(tag) or {}
+            boxes = " ".join(
+                f"<label><input type=checkbox class=prop data-pair='{row['id']}' data-tag='{tag}' data-k='{k}' {'checked' if pp.get(k) else ''} onchange='save()'> {lab}</label>"
+                for k, lab in (("one_picture", "one picture"), ("transforms", "content transforms"), ("not_invented", "nothing invented")))
             html.append(f"<div class=run><div><code>{tag}</code> class={r.get('class')} {r.get('method')} inliers={r.get('sparse_inliers')} "
                         f"disp={r.get('median_disp_px')}px certainty={r.get('mean_certainty')}{pan}{cam} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')} "
-                        f"render={r.get('render_s')}s<br><img src='{strip}'></div>"
+                        f"render={r.get('render_s')}s{goal_txt}<br><span class=boxes>{boxes}</span><br><img src='{strip}'></div>"
                         f"<video src='{r['mp4']}' controls loop muted playsinline preload=metadata></video></div>")
     html.append("""<script>
 const KEY='picks:'+location.pathname;
 function collect(){const p={};document.querySelectorAll('h2[id]').forEach(h=>{const id=h.id;const r=document.querySelector(`input[name='pick_${id}']:checked`);
- const n=document.getElementById('note_'+id);if((r&&r.value)||(n&&n.value))p[id]={best:r?r.value:'',note:n?n.value:''};});return p;}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(collect()));document.getElementById('status').textContent='saved locally '+new Date().toLocaleTimeString();}catch(e){}}
+ const n=document.getElementById('note_'+id);const props={};document.querySelectorAll(`input.prop[data-pair='${id}']`).forEach(b=>{if(b.checked){(props[b.dataset.tag]=props[b.dataset.tag]||{})[b.dataset.k]=true;}});
+ if((r&&r.value)||(n&&n.value)||Object.keys(props).length)p[id]={best:r?r.value:'',note:n?n.value:'',props:props};});return p;}
+function save(){try{const c=collect();localStorage.setItem(KEY,JSON.stringify(c));document.getElementById('status').textContent='saved locally '+new Date().toLocaleTimeString();document.getElementById('preview').textContent=JSON.stringify(c,null,1);}catch(e){}}
 function restore(){try{const p=JSON.parse(localStorage.getItem(KEY)||'{}');for(const id in p){const r=document.querySelector(`input[name='pick_${id}'][value='${p[id].best}']`);if(r)r.checked=true;
- const n=document.getElementById('note_'+id);if(n&&p[id].note)n.value=p[id].note;}}catch(e){}}
+ const n=document.getElementById('note_'+id);if(n&&p[id].note)n.value=p[id].note;const pr=p[id].props||{};for(const tag in pr){for(const k in pr[tag]){const b=document.querySelector(`input.prop[data-pair='${id}'][data-tag='${tag}'][data-k='${k}']`);if(b)b.checked=true;}}}}catch(e){}}
 function exportPicks(){const blob=new Blob([JSON.stringify({date:new Date().toISOString(),picks:collect()},null,2)],{type:'application/json'});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='picks.json';a.click();document.getElementById('status').textContent='picks.json downloaded';}
 restore();

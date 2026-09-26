@@ -106,7 +106,17 @@ measured here. Decisions live in `DECISIONS.md` (dated lines from 2026-09-13); p
    `warping_error` (flow-warp frame t onto t+1, mean residual on gray), `flicker` with `mean`,
    `max`, `spikiness` and `edge_ratio` (an endpoint step divided by the interior mean; a hidden
    cut scores far above 1), and `endpoint` fidelity, which must be 0. Several numbers, never one.
-   Pixel scales depend on the scene, so a pair is compared against itself.
+   Pixel scales depend on the scene, so a pair is compared against itself. Since 2026-09-26 the
+   basket also carries `goal` (`goal_numbers`, §11): `feat_floor` (the minimum over the interior
+   frames of SIFT matches to A over A's count plus matches to B over B's count — details of A or
+   B must survive), `laplace_floor` and `contrast_floor` (the minimum ratio of the frame's
+   Laplacian variance, and of its median 24-px patch standard deviation, to the endpoints'
+   interpolated value — sharpness and local contrast kept), `dissolve_fit` (the mean R² of the fit
+   frame(t+1) − frame(t) ≈ β·(B − A): the share of the change a plain crossfade explains; a
+   dissolve scores near 1) and `motion_share` (the mean share of the frame change that DIS
+   motion explains; a crossfade scores near 0). The first block screens defects; `goal` grades
+   the transition against the owner's verdicts (calibration in the retrospective §5). The
+   numbers cost about 1 s per 30 proxy frames and do not touch the frames (hashes equal).
 
 ## 3. Grammar and CLI
 | Preset | style | Notes |
@@ -148,7 +158,7 @@ Exit 0 on success, 2 with `FAILED: <message>` on stderr.
   starts with a measurement, not code.
 - **`clips` and `sequence`.** Wait for the PyAV decision (slice TR4).
 
-## 5. Harness: `transitions_harness.py`, 51 checks, about 10 s (as of 2026-09-23; own numbering)
+## 5. Harness: `transitions_harness.py`, 53 checks, about 10 s (as of 2026-09-26; own numbering)
 Coverage by section. A: isolation both ways and the no-network import set at module level, with
 torch / transformers / huggingface_hub allowed only inside the four named depth functions (1–3). B: grammar —
 frame count, monotone progress for every curve and warp amount, length clamp, unknown names fail
@@ -181,6 +191,15 @@ floor (0.866) nearer than the sky (0.0), two runs byte-identical, 0.9 s for load
 image (49); `model` and `ramp` agree in sign on the self-test scene forced to class B (2.42×) (50);
 with the manifest removed, `--camera model` refuses before touching the model or the network and
 names warmup (51). Checks 48–51 print a loud skip line when torch or transformers are absent.
+Section M (52–53, 2026-09-26), the goal numbers: a plain crossfade of two unrelated harness
+scenes scores `dissolve_fit` 0.97 and the aligned morph of `affine_pair()` 0.23 (52; mutation:
+feed the crossfade's frames as the morph → red); the aligned morph keeps `feat_floor` 0.97 while a
+clip whose interior is a scene from neither photo reads 0.07 (53; mutation: interior = A → 1.13,
+red); `report.json` carries the five goal keys. Both mutations were applied on 2026-09-26 and
+turned exactly the two checks red. `laplace_floor` and `contrast_floor` are NOT pinned on the
+harness textures: there the forward splat's resampling blurs the discs more than a blend of two
+unrelated textures does (aligned morph 0.45 against the crossfade's 0.85), the opposite of the
+real clips (retrospective §5); the real-clip calibration is their reference.
 
 Mutations applied: on 2026-09-13, making `to_u8` truncate turned checks 11, 20, 21 and 24 red
 (32 of 36 at the time); on 2026-09-14, removing the pan clip in `panzoom_field` turned 42 and 43
@@ -220,6 +239,21 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | TR10, depth camera move v0 (Depth Anything V2 Small on MPS via transformers 5.17; the pan-zoom field × (0.5 + disparity), near wins the splat), mismatch_1 / mismatch_4, 2 s clips, 2026-09-15 (`§4` of the same sheet) | depth 0.3–2.7 s per image at the native canvas; mid-frame holes ≤ 0.9 % of the canvas at 10 % and 25 % zoom; mean step 1.61 / 1.05 (10 %) and 2.24 / 1.38 (25 %) against the uniform pan-zoom 1.79 / 1.15 and 2.60 / 1.61; warping error equal or lower; render 14–34 s per 60 frames |
 | TR6-B and TR6-A2, 2026-09-15 fourth session (`§2–3` of the same sheet; clips under `benchmarks/runs/2026-09-15/{ltx,morphers}/`) | LTX keyframe 0.8 on mismatch_1 / mismatch_4: cut at frame 28 (38 levels) / 31 (21 levels), 1849 / 1961 s beside two GPU jobs, endpoints 5.3 / 5.3 and 7.4 / 10.7; match_4 at 0.6: continuous, max step 4.8, 736 s. LTX `generate` with five skeleton frames anchored, mismatch_1: continuous, mean step 2.28, max 3.87, endpoints 4.4 / 8.4, 11.3 levels from the skeleton clip, 1107 s, RSS 13.8 GB. DreamMover on MPS: 18.2 / 12.0 min (mismatch_1, two runs) and 8.8 min (mismatch_4), memory footprint 18–20 GB, endpoints 6.6 / 4.5 and 3.7 / 4.6 levels off, deterministic to 1 level, no licence. DiffMorpher: weights 404 (gated, not granted), 0.502 s per UNet step and 2.43 s per LoRA step → 42 min per pair at the README's recipe, 7.5 min minimal |
 | TR10 built as `--camera flat\|ramp\|model` + `--zoom` (2026-09-23; sheet `benchmarks/2026-09-23-camera.md`, run dir `benchmarks/runs/2026-09-23/`) | Depth Anything V2 Small through transformers 5.17.0 + torch 2.13.0 on the CPU (6 threads): 24,785,089 parameters, 99,173,660-byte safetensors, 0.27–0.31 s per 1024-px image, 1.2 s model load per process (4.9 s cold from disk); MPS 0.06 s warm, CPU-vs-MPS normalized disparity median 0 / p99 0 / max 2e-5 (no device flag built); two CPU runs byte-identical on five inputs. Harness pair: `flat` byte-identical (14 preset × class hashes equal before and after); `ramp` at zoom 0.25 moves the bottom fifth 127.4 px against 52.3 px at the top (2.44×; flat 1.03×), holes 0.00 % at the mid frame, edge step 4 levels. Six mismatched fixtures at ≤ 1920 px, morph 2 s, zoom 0.25: `model` median displacement 26–46 % below `flat` (disparity means 0.12–0.43), mean step 4–14 % lower, warping error ≤ flat on five of six, `edge_ratio` within ±0.06 except mismatch_2 0.19 → 0.24 and mismatch_6 0.53 → 0.59; correspondence 2.4–2.9 s (model) against 0.08–0.45 s (flat), render 2.6–13.3 s per 60 frames; run 2 byte-identical (mp4 md5) on all six. Six class A pairs forced to class B with `model`: mean step 2.1–10.6 against the class A morph's 0.5–5.3. Research push-in (zero at both ends) on the class A field: `edge_ratio` 1.1–1.8 on all twelve clips, the endpoint slope of sin(πu) |
+
+
+Goal numbers on the real surface (2026-09-26, `benchmarks/runs/2026-09-26/surface/` and `bench/`, morph 2 s, canvas ≤ 1920 px, 480-px proxy; run 1 through the CLI and run 2 through the bench script give identical numbers):
+
+| pair | class | feat_floor | laplace_floor | contrast_floor | dissolve_fit | motion_share | total s |
+|---|---|---|---|---|---|---|---|
+| match_4 (the roster pair) | A homography+dis | 0.420 | 0.728 | 0.809 | 0.070 | −0.031 | 10.6 |
+| mismatch_4 (`flat` pan-and-zoom) | B saliency-panzoom | 0.085 | 0.455 | 0.806 | 0.195 | 0.139 | 6.4 |
+
+Reading: `dissolve_fit` as built sees a STATIC crossfade (0.97 on the harness pair; 0.79 AUC on the
+pooled real clips) and not a panned one — mismatch_4's pan-and-zoom moves the frame, so the change
+is not explained by β·(B − A) in place and the number reads 0.195 although the owner calls the clip
+a crossfade. The motion-compensated form (fit after removing the global similarity) is the next
+candidate (retrospective §5). `feat_floor` at the 480-px proxy on a smooth sunset is 0.085 with
+about 60 SIFT features per endpoint; read it with the feature count in mind.
 
 ## 7. Risks and open questions, ranked
 1. **Object-level correspondence is the top gap (owner review, 2026-09-13).** Three matched pairs
@@ -607,8 +641,50 @@ endpoint, minimum over the clip), `laplace_floor` and `contrast_floor` (sharpnes
 against the endpoints' interpolation, minimum), `local_share` (non-rigid share of the frame-to-frame
 flow), `dissolve_fit` (the share of the frame change a plain crossfade explains). The shipped basket
 (§2 item 6) screens defects; it does not separate the owner's "crossfade" verdicts from the closest
-picks (AUC 0.46–0.48). Nothing of this is in `assess()` yet; the plan's rank of 2026-09-26 item 2
-builds it once the owner confirms the statement. The class B anchors path (`--anchors`, MLS) was
+picks (AUC 0.46–0.48). Built 2026-09-26 (the owner confirmed the statement the same day and ordered the build, DECISIONS
+2026-09-26): `goal_numbers` in the Quality section, `assess()` gains `goal`, harness section M
+(52–53, both mutations paid), the bench sheet and the review page carry the five numbers and
+three per-property boxes per clip (one picture · content transforms · nothing invented; exported
+under `props` in `picks.json`), frames byte-identical (14 preset × class hashes equal), numbers
+identical across two runs on match_4 and mismatch_4 (§6). Owner answers of 2026-09-26 (verbatim
+in DECISIONS): the goal paragraph is "totally right" and gains two sentences — the transition is
+tunable per scene; colours, luminosity and transparency stay natural even where the content is
+impossible, adhering to one higher-order flow; F3 is refined: invented content is allowed as a
+generative helper element, executed deterministically and fluently, preserving the start and end
+details, seamless — one or several generated KEYFRAMES that deterministic interpolation bridges,
+never full video generation; a second machine (Strix Halo, 128 GB) exists for the image models;
+the ideal for mismatch_4 is a LAYERED transition (sun → sun, skyline with depth, river, clouds
+materialising, each independently and consistently); per-pixel switches with hard colour borders
+are junk. The class B anchors path (`--anchors`, MLS) was
 exercised on a real pair for the first time on 2026-09-26 (mismatch_4, three auto-detected theme
 anchors): one sun instead of two at mid-frame; its moved-frame edge shows at the left (the T13 twin
 on the MLS path).
+
+Research of 2026-09-26 that the next design pass starts from (primary sources; reports under
+`benchmarks/runs/2026-09-26/research/`, gitignored, copied out of the session scratchpad):
+- **Track E, the layered scene transition** (`track_E.md`): every step of the owner's sentence for
+  mismatch_4 has a deterministic, CPU-feasible technique with no generative step — semantic layers
+  from OneFormer or Mask2Former on ADE20K (MIT; a new weights file behind warmup + manifest; ADE20K
+  has no sun or cloud class, both come from rules on the sky layer), the sun moved by the closed-form
+  Bures–Wasserstein map between two Gaussians (one sun sliding and reshaping, never two), the cloud
+  mass moved by convolutional Wasserstein displacement (Solomon 2015) with Neyret's advected texture
+  (works for isotropic texture such as clouds and water, not for a skyline), the skyline and horizon
+  by Lipman's four-point Möbius map (bijective, spreads distortion; MLS folds and concentrates it) plus
+  the existing MLS detail, a per-layer Lab colour path so no two-tone border exists, and a
+  Laplacian-pyramid composite ordered by the existing depth. Estimated 1–3 min per 1080p clip
+  [INFERRED]; nothing measured; `opencv-python-headless` 5.0.0 has no `xphoto` / `ximgproc`;
+  POT would be a new dependency (the Gaussian formula and a Sinkhorn loop need none).
+- **Track D, generated keyframes on the second machine** (`track_D.md`): Qwen-Image-Edit-2511
+  (20 B, Apache-2.0, 1–3 input images natively, 57.5 GB bf16, 113 s cold per 1.6 MP image on a
+  Strix Halo with the 4-step Lightning LoRA, one input image measured) is the first candidate,
+  FLUX.2 [klein] 4B (Apache-2.0, 7.75 GB, about 22 s at 1024² on gfx1151) the fallback; FLUX.2 [dev]
+  and HunyuanImage-3.0 do not fit the box or the licence. Recipe: the tool's own mid frame as the
+  starting image, both photos as references, a partial-denoise pass, a fixed seed, the keyframe
+  cached with a manifest (model and LoRA sha256, workflow hash, seed, denoise, prompt, software
+  versions); the engine interpolates A → keyframes → B segment by segment. Strix Halo: ROCm 10.0
+  lists gfx1151 with PyTorch 2.11–2.13, FP16 validated (not BF16), the GPU pool defaults to half the
+  RAM, kernel ≥ 6.18.4, fast attention behind an experimental flag. The offline contract holds only
+  if keyframes are made by a separate script the operator runs on purpose and `transitions.py`
+  reads cached files. Published two-image morphers (FreeMorph, AlignMorph) fall back to plain
+  interpolation on unrelated pairs by their own account. Nothing measured; every speed is reported
+  or inferred.

@@ -631,6 +631,36 @@ else:
           _guard and "warmup" in _msg and T._DEPTH is None)
 
 # ===========================================================================
+print("== M. goal numbers: the basket sees a crossfade and invented content (2026-09-26) ==")
+# Calibrated on 343 graded real clips (retrospective 2026-09-26 §5). On the harness
+# textures the sharpness and contrast floors invert (the splat's resampling blurs the
+# discs more than a blend does), so only the crossfade fit and the feature survival
+# are pinned here; the real-clip calibration is the reference for the other two.
+_U1, _U2 = textured(1), textured(7)                      # two unrelated scenes
+_xf, _ = T.render_frames(_U1, _U2, T.spec_from("dissolve", seconds=0.4, fps=20))
+_Aa, _Ba, _ = affine_pair()
+_mo, _ = T.render_frames(_Aa, _Ba, T.spec_from("morph", seconds=0.4, fps=20))
+_g_xf = T.goal_numbers([T.proxy_of(f) for f in _xf])
+_g_mo = T.goal_numbers([T.proxy_of(f) for f in _mo])
+check(52, f"dissolve_fit sees a plain crossfade of two unrelated scenes ({_g_xf['dissolve_fit']:.2f} > 0.9) "
+          f"and not an aligned morph ({_g_mo['dissolve_fit']:.2f} < 0.5); "
+          "mutation: feed the crossfade's frames as the morph -> red",
+      _g_xf["dissolve_fit"] > 0.9 and _g_mo["dissolve_fit"] < 0.5
+      and _g_mo["dissolve_fit"] < _g_xf["dissolve_fit"])
+_r = np.random.default_rng(5)
+_inv = (_r.random((400, 640, 3)) * 255).astype(np.uint8)          # a scene in neither photo
+cv2.rectangle(_inv, (60, 60), (300, 340), (250, 250, 250), -1)
+_invented = [_xf[0]] + [_inv] * (len(_xf) - 2) + [_xf[-1]]
+_g_inv = T.goal_numbers([T.proxy_of(f) for f in _invented])
+_cli = (rep.get("quality") or {}).get("goal", {})
+check(53, f"feat_floor keeps the details of A or B through an aligned morph ({_g_mo['feat_floor']:.2f} > 0.5) "
+          f"and reads invented interior frames as none ({_g_inv['feat_floor']:.2f} < 0.1); "
+          "report.json carries the five goal keys; mutation: interior = A -> red",
+      _g_mo["feat_floor"] > 0.5 and _g_inv["feat_floor"] < 0.1
+      and all(k in _cli for k in ("feat_floor", "laplace_floor", "contrast_floor",
+                                  "dissolve_fit", "motion_share")))
+
+# ===========================================================================
 print("== I. identity fence (the tool is called transitions; owner ruling 2026-09-13) ==")
 _src = (ROOT / "transitions.py").read_text()
 check(37, "persisted identifiers are pinned: module transitions.py, outputs transition.mp4 / "

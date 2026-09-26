@@ -37,7 +37,8 @@ built until it has been measured):
   piped to the bundled ffmpeg as rawvideo ->
   libx264 mp4, plus an 8-tile thumbnail strip and report.json with the
   quality basket (warping error, flicker with the hidden-cut detector,
-  endpoint fidelity).
+  endpoint fidelity, and the goal numbers: feature survival, sharpness
+  and contrast floors, the crossfade fit and the motion share).
 
 Usage:
   python transitions.py pair BEFORE AFTER --out DIR [--seconds 1.0]
@@ -143,6 +144,8 @@ TCFG = {
     "color_gain_clip": (0.4, 2.5),
     # quality basket (computed on a proxy so 4K stays cheap)
     "quality_long": 480,
+    "goal_features": 1500,     # SIFT keypoints per endpoint for feat_floor
+    "goal_patch": 24,          # patch size (proxy px) for contrast_floor
     "strip_tiles": 8,
     "strip_height": 160,
     # encode
@@ -1085,6 +1088,19 @@ def luma_mask(img, t, softness=0.15, bright_first=True):
 #   flicker           adjacent-frame change; edge_ratio is the hidden-cut
 #                     detector (an endpoint step far above the interior)
 #   endpoint_fidelity first/last frame vs the inputs (must be 0)
+#   goal              the numbers that see what the owner grades (2026-09-26,
+#                     retrospective §5; calibrated on 343 graded clips):
+#     feat_floor      min over interior frames of SIFT matches to A / nA +
+#                     matches to B / nB — details of A or B must survive
+#     laplace_floor   min over interior frames of Laplacian variance /
+#                     the endpoints' interpolated value — sharpness kept
+#     contrast_floor  the same on the median patch std — local contrast kept
+#     dissolve_fit    mean R^2 of (I[t+1]-I[t]) ~ beta (B-A): the share of
+#                     the change a plain crossfade explains (dissolve ~1)
+#     motion_share    mean (|dI| - |dI after DIS warp|) / |dI|: the share
+#                     of the change that motion explains (crossfade ~0)
+# The first three screen defects; `goal` grades the transition. A number
+# means nothing across pairs: compare a pair against itself.
 # All computed on a proxy of long edge TCFG["quality_long"] so 4K is cheap.
 # ---------------------------------------------------------------------------
 
@@ -1124,9 +1140,88 @@ def endpoint_fidelity(frames, A, B):
                                       - B.astype(int)).mean())}
 
 
-def assess(frames, A=None, B=None):
+def _gray8(f):
+    return cv2.cvtColor(f, cv2.COLOR_RGB2GRAY)
+
+
+def _patch_std_median(g, patch):
+    g = g.astype(np.float32)
+    h, w = g.shape
+    hh, ww = h // patch * patch, w // patch * patch
+    if hh == 0 or ww == 0:
+        return float(g.std())
+    p = g[:hh, :ww].reshape(hh // patch, patch, ww // patch, patch)
+    return float(np.median(p.transpose(0, 2, 1, 3).std(axis=(2, 3))))
+
+
+def _sift_matches(des_q, des_t, bf):
+    if des_q is None or des_t is None or len(des_q) < 2 or len(des_t) < 2:
+        return 0
+    good = 0
+    for m in bf.knnMatch(des_q, des_t, k=2):
+        if len(m) == 2 and m[0].distance < 0.75 * m[1].distance:
+            good += 1
+    return good
+
+
+def goal_numbers(frames, cfg=TCFG):
+    """The goal numbers on a list of uint8 RGB frames (proxies), the first
+    and last being the endpoints. See the section comment. Frames with no
+    interior (n < 3) give zeros."""
+    n = len(frames)
+    if n < 3:
+        return {"feat_floor": 0.0, "laplace_floor": 0.0, "contrast_floor": 0.0,
+                "dissolve_fit": 0.0, "motion_share": 0.0}
+    gs = [_gray8(f) for f in frames]
+    A, B = gs[0], gs[-1]
+    sift = cv2.SIFT_create(nfeatures=int(cfg["goal_features"]))
+    bf = cv2.BFMatcher(cv2.NORM_L2)
+    dA = sift.detectAndCompute(A, None)[1]
+    dB = sift.detectAndCompute(B, None)[1]
+    nA = len(dA) if dA is not None else 0
+    nB = len(dB) if dB is not None else 0
+    patch = int(cfg["goal_patch"])
+    psA, psB = _patch_std_median(A, patch), _patch_std_median(B, patch)
+    lvA = float(cv2.Laplacian(A, cv2.CV_32F).var())
+    lvB = float(cv2.Laplacian(B, cv2.CV_32F).var())
+    feat, lap, con = [], [], []
+    for i in range(1, n - 1):
+        u = i / (n - 1)
+        g = gs[i]
+        d = sift.detectAndCompute(g, None)[1]
+        feat.append(_sift_matches(d, dA, bf) / max(1, nA)
+                    + _sift_matches(d, dB, bf) / max(1, nB))
+        lap.append(float(cv2.Laplacian(g, cv2.CV_32F).var())
+                   / max(1e-6, (1 - u) * lvA + u * lvB))
+        con.append(_patch_std_median(g, patch)
+                   / max(1e-6, (1 - u) * psA + u * psB))
+    e = (B.astype(np.float32) - A.astype(np.float32)).ravel()
+    ee = float(np.dot(e, e)) + 1e-6
+    dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_FAST)
+    h, w = A.shape
+    gx, gy = _grid(h, w)
+    fits, shares = [], []
+    for a, b in zip(gs[:-1], gs[1:]):
+        dd = (b.astype(np.float32) - a.astype(np.float32)).ravel()
+        beta = float(np.dot(dd, e)) / ee
+        res = dd - beta * e
+        fits.append(1.0 - float(np.dot(res, res)) / (float(np.dot(dd, dd)) + 1e-6))
+        f = dis.calc(a, b, None)
+        wb = cv2.remap(b, gx + f[..., 0], gy + f[..., 1], cv2.INTER_LINEAR)
+        d_raw = float(np.abs(b.astype(np.float32) - a.astype(np.float32)).mean())
+        d_warp = float(np.abs(wb.astype(np.float32) - a.astype(np.float32)).mean())
+        shares.append((d_raw - d_warp) / max(d_raw, 1e-6))
+    return {"feat_floor": round(float(min(feat)), 4),
+            "laplace_floor": round(float(min(lap)), 4),
+            "contrast_floor": round(float(min(con)), 4),
+            "dissolve_fit": round(float(np.mean(fits)), 4),
+            "motion_share": round(float(np.mean(shares)), 4)}
+
+
+def assess(frames, A=None, B=None, cfg=TCFG):
     r = {"warping_error": round(warping_error(frames), 4),
          "flicker": {k: round(v, 4) for k, v in flicker(frames).items()},
+         "goal": goal_numbers(frames, cfg),
          "n_frames": len(frames)}
     if A is not None and B is not None:
         r["endpoint"] = {k: round(v, 2)

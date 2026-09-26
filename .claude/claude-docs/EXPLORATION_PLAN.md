@@ -93,7 +93,7 @@ liked, and it is asked for as an option.
    TR6-A2 failed its gate); the remaining levers (auto-regressive input, weaker LTX anchors, 768 px canvas) only
    after item 2 exists and only if the owner asks.
 
-### Rank, revised 2026-09-26 (PROPOSED; the owner confirms) — after the retrospective
+### Rank, revised 2026-09-26 — after the retrospective (RANKED: the owner confirmed the goal paragraph and ordered the metrics the same day; DECISIONS 2026-09-26 second line)
 Owner (verbatim, 2026-09-26, with the 2026-09-23 picks): "run was auwful , i feel like we are stuck ,
 conceptually. I went ahead and repeated for every junky mismathing pair same logic with applied z
 depth pass, which was not expected to help with transition in any way and as i said can be at most
@@ -106,21 +106,48 @@ verdicts, the mismatch_4 anchor probe, five questions). Diagnosis in one line: e
 2026-09-13 varied geometry and none varied the combination of A and B (an alpha crossfade since TR1),
 which is what the owner grades; the basket could not see it (AUC 0.46–0.48 against the owner's
 "crossfade" verdicts).
-1. **Goal paragraph + reference** (owner): confirm or correct `retrospective §1`; one reference clip
-   or one sentence per fixture pair. Nothing else starts before this answer.
-2. **Goal metrics in the basket** (Standard, `[revert: commit]`, frames byte-identical): `feat_floor`,
-   `laplace_floor`, `contrast_floor`, `local_share` (definitions and calibration in the retrospective
-   §5; script `scripts/research/verdict_metrics.py`) into `assess()`, two harness checks with
-   mutations (a crossfade of unrelated frames scores low; an aligned morph scores high), the numbers
-   on the sheet and the page; the review page gains three per-property yes/no boxes per clip.
-3. **Theme anchors on the six mismatches, hand-placed first** (a research page, then the owner's
-   boxes); if graded "one picture, content transforms" on most pairs, automate with Track B's recipe
-   (Mask2Former-tiny panoptic + DINOv2-S mutual-NN inside label-matched masks + YuNet faces + a
-   brightest-blob sun; about 280 MB, Apache-2.0 / MIT; behind warmup + manifest) — the TR9 slice with
-   a measured shape; fix the MLS path's frame edge in the same slice.
-4. **The combination where nothing aligns** (Design): Track A's deterministic candidates for the
-   regions no anchor covers; the luma reveal at partial strength ("a bit luma") is the cheapest member.
-5. **Parked**: `--camera` stays an option (not a default); the generative tier; TR7.
+1. **Goal paragraph + reference** (owner): CONFIRMED 2026-09-26 ("totally right") with two added
+   sentences (tunable per scene; colours, luminosity and transparency natural, one higher-order flow)
+   and a refined F3 (generated KEYFRAMES as helper elements, deterministic interpolation between
+   them, never full video generation). The reference for mismatch_4 is the owner's sentence: sun →
+   sun, skyline with depth and river → their counterparts independently and consistently, clouds
+   materialising, "the scene basically got rebuilt and transformed in real time".
+2. **Goal metrics in the basket** — **BUILT 2026-09-26** (DECISIONS 2026-09-26 third line;
+   `TRANSITIONS.md §2` item 6, §5 section M, §6, §11): `feat_floor`, `laplace_floor`, `contrast_floor`,
+   `dissolve_fit`, `motion_share` in `assess()` (`local_share` dropped: within-pair AUC 0.46), harness
+   52–53 with paid mutations, the numbers on the sheet and the page, three per-property boxes per clip
+   exported under `props`. Open: the motion-compensated `dissolve_fit` (a panned crossfade reads 0.195
+   on mismatch_4) and a seam / colour-border number (the partition probes).
+3. **Layered scene transition, designed first** (Deep design pass; research tracks D and E of
+   2026-09-26 under `benchmarks/runs/2026-09-26/research/`): the owner's sentence for mismatch_4 is
+   the specification — semantic layers (sky, clouds, sun, skyline with depth, water), a
+   correspondence and a field per layer (theme anchors from Track B's recipe: Mask2Former-tiny
+   panoptic + DINOv2-S mutual-NN inside label-matched masks + YuNet faces + a brightest-blob sun,
+   about 280 MB; the depth model already offline), a combination per layer that is not a global
+   alpha and not a hard switch (colour-harmonised, gradient-domain or flow-advected), compositing
+   by depth. Hand-placed anchors on all six mismatches first (the `--anchors` path; fix T16 there),
+   graded with the three boxes. Track E (2026-09-26, `research/track_E.md`) gives every step a
+   deterministic technique: OneFormer / Mask2Former on ADE20K (MIT) for the layers, the closed-form
+   Bures–Wasserstein map for the sun, convolutional Wasserstein displacement + Neyret's advected
+   texture for the clouds, Lipman's four-point Möbius map + MLS for the skyline, a per-layer Lab
+   colour path, a Laplacian-pyramid composite ordered by the existing depth; estimated 1–3 min per
+   1080p clip [INFERRED]. First probe: the sun layer (one sun sliding and reshaping) plus a
+   horizon-aligned water layer on mismatch_4, nothing else changed.
+4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
+   several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
+   both photos as references, screened by `feat_floor` against both endpoints, then the
+   deterministic engine interpolates between consecutive keyframes. No build before a measured
+   keyframe passes the owner's boxes on two mismatched pairs. Full video generation stays out.
+   Track D (2026-09-26, `research/track_D.md`): Qwen-Image-Edit-2511 (20 B, Apache-2.0, 1–3 input
+   images, 57.5 GB bf16, 113 s cold per 1.6 MP image on a Strix Halo with the 4-step Lightning LoRA)
+   first, FLUX.2 [klein] 4B (Apache-2.0, 7.75 GB) as the fallback; FLUX.2 [dev] and HunyuanImage-3.0
+   do not fit the box or the licence; ROCm 10.0 lists gfx1151 with PyTorch 2.11–2.13 (FP16 validated,
+   BF16 not; GPU pool defaults to half the RAM). The keyframes are made by a separate script the
+   operator runs on the box and cached with a manifest; `transitions.py` only reads files (the
+   offline contract holds). Every speed is reported or inferred, nothing measured.
+5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
+   the reference; per-pixel switches only with colour harmonisation), after 3.
+6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
 
 ## H — harness before exploration (evidence: `HANDOFF.md §7`, `harness.py`, backlog T2–T5)
 | Slice | Goal (acceptance) | Seam | Revert | Gate / check | Size | Depends on |
@@ -193,3 +220,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-14 | TR5 probe on match_2/3/5 at the owner's order: 2 wins, 2 ties of 4 pairs; speed gate for the dense matcher lifted by the owner; TR5 integration is the next slice, TR2d folds into it (RoMa's certainty is the weight) | transitions session, 2026-09-14 late |
 | 2026-09-13 | Coverage map of the research artifact written (`TRANSITIONS.md §8`); every experiment not yet planned got a slice: TR8 splat quality, TR9 class B semantics + anchor editor + SAM portals, TR10 depth camera move, TR11 color science + HDR, TR12 product surface, TR4b motion carry-over. Owner: "make sure we account … for any useful content in … impossible artifact prototype" | transitions session, late |
 | 2026-09-26 | Owner picks on the camera sweep ingested (0 of 12; all cameras "unnecessary pans and basically cross fading"); retrospective written (`audits/retrospective-2026-09-26.md`); §Rank 2026-09-26 PROPOSED, owner to confirm: goal paragraph → goal metrics → theme anchors (hand-placed, then Track B's recipe) → the combination where nothing aligns → cameras and generative parked | retrospective session, 2026-09-26 |
+| 2026-09-26 | Owner confirmed the goal paragraph and refined F3 (verbatim in DECISIONS); §Rank 2026-09-26 RANKED; item 2 (goal metrics) BUILT; items 3–4 rewritten as the layered scene transition and generated keyframes on the second machine | retrospective session, 2026-09-26 (second half) |
