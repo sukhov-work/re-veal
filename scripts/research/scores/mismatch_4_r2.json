@@ -1,0 +1,272 @@
+{
+ "pair": "mismatch_4",
+ "tag": "layered_r2",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "owner": "Round 1 (2026-09-26): 'layered variants in this example are very juny patchy dirty transitions , not useful at all , i feel like this is because for this example luma and colors vary between frames and also lots of distinct edges'. Round 2 keeps the sun move and the two backdrops; the skyline band (with its masts) slides down as a whole behind the water and B's band rises behind it; the waterline slides; B's clouds arrive with B's sky texture (the L-density cloud rule takes the sun's glow for cloud on a sunset sky, so no cloud layer); B's sun takes over once the moved sun arrives; the suns carry their disc only, the glow stays in the sky.",
+ "layers": [
+  {
+   "name": "band_core_b",
+   "from": "B",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 9,
+    "gap": 20,
+    "median": 31,
+    "max_bottom": 0.75
+   },
+   "render": false
+  },
+  {
+   "name": "sky_core_b",
+   "from": "B",
+   "mask": {
+    "rule": "above_band",
+    "of": "band_core_b"
+   },
+   "render": false
+  },
+  {
+   "name": "silh_b",
+   "from": "B",
+   "mask": {
+    "rule": "dark_in",
+    "relative": "local",
+    "local_px": 120,
+    "dark_lo": 0.35,
+    "dark_hi": 0.6,
+    "within": "sky_core_b",
+    "min_blob": 40,
+    "dilate": 2
+   },
+   "render": false
+  },
+  {
+   "name": "band_b",
+   "from": "B",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 9,
+    "gap": 20,
+    "median": 31,
+    "max_bottom": 0.75,
+    "or": [
+     "silh_b"
+    ],
+    "grow": 2
+   },
+   "depth": 1,
+   "action": "enter",
+   "direction": [
+    0,
+    -1
+   ],
+   "window": [
+    0.3,
+    0.85
+   ],
+   "curve": "ease"
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "mask": {
+    "rule": "above_band",
+    "of": "band_b"
+   },
+   "render": false
+  },
+  {
+   "name": "water_b",
+   "from": "B",
+   "mask": {
+    "rule": "below_band",
+    "of": "band_b"
+   },
+   "render": false
+  },
+  {
+   "name": "sun_b",
+   "from": "B",
+   "mask": {
+    "rule": "sun",
+    "within": "sky_b",
+    "thr": 92,
+    "grow": 6
+   },
+   "render": false
+  },
+  {
+   "name": "band_core",
+   "from": "A",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 6,
+    "gap": 20,
+    "median": 31,
+    "max_bottom": 0.56
+   },
+   "render": false
+  },
+  {
+   "name": "sky_core",
+   "from": "A",
+   "mask": {
+    "rule": "above_band",
+    "of": "band_core"
+   },
+   "render": false
+  },
+  {
+   "name": "silh_a",
+   "from": "A",
+   "mask": {
+    "rule": "dark_in",
+    "relative": "local",
+    "local_px": 120,
+    "dark_lo": 0.35,
+    "dark_hi": 0.6,
+    "within": "sky_core",
+    "min_blob": 40,
+    "dilate": 2
+   },
+   "render": false
+  },
+  {
+   "name": "band",
+   "from": "A",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 6,
+    "gap": 20,
+    "median": 31,
+    "max_bottom": 0.56,
+    "or": [
+     "silh_a"
+    ],
+    "grow": 2
+   },
+   "depth": 2,
+   "action": "exit",
+   "direction": [
+    0,
+    1
+   ],
+   "window": [
+    0.15,
+    0.7
+   ],
+   "curve": "ease"
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "above_band",
+    "of": "band"
+   },
+   "depth": 0,
+   "action": "backdrop",
+   "opaque": true,
+   "to": "sky_b",
+   "exclude": [
+    "sun_b"
+   ],
+   "exclude_res": [
+    {
+     "layer": "band_b",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "minus_res": [
+    {
+     "layer": "band",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "fill_sigma": 60,
+   "fit2d": true,
+   "window": [
+    0.0,
+    0.85
+   ],
+   "curve": "ease",
+   "minus": [
+    "sun"
+   ]
+  },
+  {
+   "name": "sun",
+   "from": "A",
+   "mask": {
+    "rule": "sun",
+    "within": "sky",
+    "thr": 92,
+    "grow": 6
+   },
+   "depth": 1.5,
+   "action": "move_to",
+   "to": "sun_b",
+   "window": [
+    0.15,
+    0.7
+   ],
+   "curve": "ease",
+   "recolor_to": "sun_b",
+   "recolor_strength": 1.0
+  },
+  {
+   "name": "sun_b_layer",
+   "from": "B",
+   "mask": {
+    "rule": "sun",
+    "within": "sky_b",
+    "thr": 92,
+    "grow": 6
+   },
+   "depth": 1.6,
+   "action": "materialise",
+   "order": "luma",
+   "noise_gain": 0.0,
+   "feather": 0.3,
+   "window": [
+    0.68,
+    0.8
+   ],
+   "curve": "ease"
+  },
+  {
+   "name": "water",
+   "from": "A",
+   "mask": {
+    "rule": "below_band",
+    "of": "band"
+   },
+   "depth": 4,
+   "action": "backdrop",
+   "opaque": false,
+   "to": "water_b",
+   "mask_to": "water_b",
+   "slide_between": [
+    "band",
+    "band_b"
+   ],
+   "fill_sigma": 60,
+   "fit2d": true,
+   "window": [
+    0.1,
+    0.85
+   ],
+   "curve": "ease"
+  }
+ ]
+}

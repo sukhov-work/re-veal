@@ -259,6 +259,8 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | TR10 built as `--camera flat\|ramp\|model` + `--zoom` (2026-09-23; sheet `benchmarks/2026-09-23-camera.md`, run dir `benchmarks/runs/2026-09-23/`) | Depth Anything V2 Small through transformers 5.17.0 + torch 2.13.0 on the CPU (6 threads): 24,785,089 parameters, 99,173,660-byte safetensors, 0.27–0.31 s per 1024-px image, 1.2 s model load per process (4.9 s cold from disk); MPS 0.06 s warm, CPU-vs-MPS normalized disparity median 0 / p99 0 / max 2e-5 (no device flag built); two CPU runs byte-identical on five inputs. Harness pair: `flat` byte-identical (14 preset × class hashes equal before and after); `ramp` at zoom 0.25 moves the bottom fifth 127.4 px against 52.3 px at the top (2.44×; flat 1.03×), holes 0.00 % at the mid frame, edge step 4 levels. Six mismatched fixtures at ≤ 1920 px, morph 2 s, zoom 0.25: `model` median displacement 26–46 % below `flat` (disparity means 0.12–0.43), mean step 4–14 % lower, warping error ≤ flat on five of six, `edge_ratio` within ±0.06 except mismatch_2 0.19 → 0.24 and mismatch_6 0.53 → 0.59; correspondence 2.4–2.9 s (model) against 0.08–0.45 s (flat), render 2.6–13.3 s per 60 frames; run 2 byte-identical (mp4 md5) on all six. Six class A pairs forced to class B with `model`: mean step 2.1–10.6 against the class A morph's 0.5–5.3. Research push-in (zero at both ends) on the class A field: `edge_ratio` 1.1–1.8 on all twelve clips, the endpoint slope of sin(πu) |
 
 | Layered probe, `scripts/research/layered_probe.py` from hand-written scores, 2026-09-26 third session (§12; sheet `benchmarks/2026-09-26-layered.md`; page `benchmarks/runs/2026-09-26/layered/`) | mismatch_6 at 1146×1524, 60 frames: prep 1.8–3.7 s (the depth model 1.3 s per photo), render 5.8 s, first / last interior step 0.05 / 0.05 levels, `edge_ratio` 0.0105; mismatch_4 at 1920×1092: render 8.0 s, steps 0.11 / 0.23, `edge_ratio` 0.188; mismatch_3 at 1920×1440: render 7.1 s, steps 0.14 / 0.00; two runs byte-identical per pair (md5 `64a54eee…`, `1d2e8bbb…`); `transitions.py` untouched |
+| Layered probe round 2 on mismatch_6, 2026-09-26 fourth session (§12.7; page `benchmarks/runs/2026-09-26/layered_r2/`; scores `mismatch_6_r2{,_L,_drift}.json`) | 1146×1524, 3 s, 90 frames: prep 3.4–5.0 s, render 7.2–8.0 s; first / last interior step 0.28 / 0.05 levels on all three clips; `edge_ratio` 0.097 / 0.0965 / 0.0934; two runs byte-identical (md5 `cddde79e…`, `f3efeeef…`, `7934592a…`); round 1's score still renders md5 `64a54eee…` through the changed probe; `transitions.py` untouched |
+| Layered probe round 2 on mismatch_4, 2026-09-26 fourth session (§12.7; the same page; score `mismatch_4_r2.json`) | 1920×1092, 3 s, 90 frames: prep 4.3 s, render 9.6 s; steps 0.12 / 0.10 levels (round 1: 0.11 / 0.23); `edge_ratio` 0.172; two runs byte-identical (md5 `b7700b4c…`); `transitions.py` untouched |
 
 Goal numbers on the real surface (2026-09-26, `benchmarks/runs/2026-09-26/surface/` and `bench/`, morph 2 s, canvas ≤ 1920 px, 480-px proxy; run 1 through the CLI and run 2 through the bench script give identical numbers):
 
@@ -903,3 +905,97 @@ erode, and their recolour), and the bottom buildings' contours (the skyline cut 
 under the exiting buildings), at 3 s. The same message schedules the box run for the next session
 without the owner present ("do not wait for me … just be careful with resources") and asks for more
 work per session with Opus 5.5 subagents; DECISIONS 2026-09-26 (third session, last).
+
+### 12.7 Round 2 on mismatch_6 at 3 s (2026-09-26, fourth session; page `benchmarks/runs/2026-09-26/layered_r2/index.html`; scores `scripts/research/scores/mismatch_6_r2{,_L,_drift}.json`)
+
+Result: three 3-second clips stand beside round 1's `layered` and `flat` on the page, rendered from
+one score that addresses the owner's three targets ("1) i see afterimage for tree crown, distinct
+clouds, bottom buildings contours 2) keep 3s for now") at their source, plus two variants of the
+clouds' colour and motion; ungraded as of 2026-09-26. Nothing in `transitions.py` changed. Round 1's
+score renders md5 `64a54eee839d72d195b04d9dc6a06c1f` through the changed probe, so every new key
+defaults to the old behaviour.
+
+What round 1's frames showed, measured on the composite rather than by eye:
+- Distinct clouds. At t = 0.5 the bright rings along every cloud edge are the cloud fringe (matte
+  alpha under 0.9) left in A's sky residual at weight 0.21. After the sky window the sky layer
+  equals B's fit plus residual to 0.28 levels in the sky interior, so nothing else leaks.
+- Bottom buildings. The light band above the roofs and the light rectangle at the "far tower"
+  polygon are the per-row day-sky fit extrapolated under the exiting buildings. The polygon
+  (604–691 × 1177–1326 px on the canvas) encloses sky and cloud, not a tower: there is no luminance
+  step at its top edge (L 66.7–67.3 across rows 1170–1210). The depth skyline sat 6–43 px above the
+  roof edges; cloud edges have vertical steps under 6 L per px, roof edges 5–17.
+- Tree crown. At t = 0.76 the leaf tips and the crown sit in the sky at their final position
+  because B's residual excluded only the interior of the leaf-level matte; the dark branches at the
+  crown's edge and the lit green leaves of an isolated branch (560–600 × 1180–1240 px) were outside it.
+
+The mechanisms, all new score keys with the old behaviour as default:
+- `region_of`: a wide soft matte (dilate 40 px, Gaussian 25 px) around a tight core, so the trees
+  and the air-conditioning unit carry B's own sky between their leaves while they enter. The core
+  (`trees_core`, not rendered) is the depth prior dilated 220 px, refined by `dark_or_chroma`
+  (darker than the per-row sky, or (a*, b*) at least `chroma_d` = 10 from the per-row sky chroma,
+  so lit leaves count), blobs under `min_blob` = 400 px dropped (stars have a leaf's chroma but not
+  its area), and `components: bottom` decided after bridging blobs over `components_bridge` = 60 px
+  (an isolated branch near the crown stays, the unit at the top does not).
+- `snap_px` / `snap_up` / `snap_min`: the per-column depth skyline moves to the topmost vertical
+  luminance step of at least 4.5 L per px between 8 px above and 45 px below the depth cut
+  (1,104 of 1,146 columns snapped). `grow` now applies to every mask rule (2 px on the buildings).
+- `minus` / `exclude` entries as `{"layer", "full": true, "dilate", "soft"}` remove a layer's
+  full alpha from the backdrop's fit and residual; `minus_res` / `exclude_res` remove it from the
+  residual only, so the fit still counts the sky seen between the leaves. The clouds' matte is
+  opaque wherever any density exists (`opaque` 0.01) and erodes thin-first (`feather` 0.1); the sky
+  under the clouds is the fit of the clear sky.
+- `fill_sigma` = 60: the holes of each residual take a normalized convolution of the known
+  residual at three scales (60, 180, 540 px) blended by confidence, computed at quarter resolution.
+  `fit2d`: the backdrop's fit is a per-band weighted quadratic in x (linear when the band's samples
+  span under half the width, constant under a quarter), so the lateral glow of B's sky is part of
+  the fit and a hole filled from its rim carries no crown-shaped step.
+- `recolor_mode: "L"` (the `_L` variant): the clouds darken in luminance only toward the night sky
+  while they erode. `fit_under` was built (rows under A's skyline take B's fit) and is not used:
+  the vacated band continues the interpolating sky instead.
+
+Tried on the frames and rejected: a semi-transparent cloud matte (`opaque` 0.5; frame 1 differed
+from A by 4.28 levels, 5.4 under the clouds, because the fringe no longer reproduced A); a hole fill
+by a global quadratic in (x, y) (`fill_mode: poly2`; a dark crown-shaped hole and a dark top-left
+corner); a fill that switches scales at a confidence threshold (an iso-distance contour inside the
+hole); the wide region as the residual hole (a hole 600 px across shows its outline whatever fills
+it); a 120-px depth prior with `components: bottom` (isolated branches dropped, leaves floated).
+
+| clip | s | edge_ratio | feat_floor | laplace_floor | contrast_floor | dissolve_fit | motion_share | step first / last | prep / render s | md5 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `layered_r2` (clouds keep their colour) | 3 | 0.097 | 0.0 | 0.099 | 0.118 | 0.054 | 0.290 | 0.28 / 0.05 | 5.0 / 7.2 | `cddde79e…` |
+| `layered_r2_L` (clouds darken in L) | 3 | 0.0965 | 0.0 | 0.099 | 0.118 | 0.211 | 0.317 | 0.28 / 0.05 | 3.4 / 8.0 | `f3efeeef…` |
+| `layered_r2_drift` (clouds drift 4 % right, zoom 4 %) | 3 | 0.0934 | 0.0 | 0.099 | 0.118 | 0.050 | 0.311 | 0.28 / 0.05 | 3.4 / 7.5 | `7934592a…` |
+| `layered` (round 1, reference) | 2 | 0.0105 | 0.055 | 0.241 | 0.197 | 0.226 | 0.290 | 0.05 / 0.05 | 3.7 / 5.8 | `64a54eee…` |
+
+The 0.28-level first step is the 4–8 px band above the roofline and the cloud sliver where the
+residual is excluded and the fill stands in for A's pixels; frame 0 is A exactly. `feat_floor` 0.0
+measures the empty smooth sky between the clouds' exit (0.52) and the trees' entry (0.55); the goal
+numbers do not see an orchestration (§12.2). Windows: clouds 0.05–0.52, sky 0–0.70, buildings
+0.30–0.75, stars 0.45–0.90 (outside the wide regions; the stars near the trees arrive with the
+trees), trees 0.55–0.95, AC unit 0.60–0.97, `ease` on every layer.
+
+Defects still visible by my eye (not evidence; the owner's boxes decide): the last cloud cores
+vanish as bright blobs on a dusk sky around t = 0.45–0.52 (the `_L` variant shows them dark grey);
+the sky under the right-hand trees is filled from far away and reads darker at the bottom-right
+corner before the trees arrive; the AC unit's region enters as a hard-edged dark wedge. Next: the
+owner's three boxes and a note per clip; the tool shape of §12.4 is unchanged and waits for that grade.
+
+mismatch_4 round 2 (the same session, Track D of the handover; the same page, section mismatch_4,
+beside `flat` and `anchors_alpha`): the sun disc (6 px of margin) moves to the second sun's place by
+the Gaussian map and a B sun layer materialises by luma once it arrives (0.68–0.80); A's skyline
+band with its masts (`band_dark` with the bottom capped at 0.56 of the height, plus `dark_in`
+silhouettes relative to the local sky brightness over 120 px) exits down as a whole behind the
+water (0.15–0.70); B's band rises behind it (0.30–0.85); the water backdrop's top edge slides from
+A's shore line to B's (`slide_between`); the sky backdrop (0–0.85, `fit2d`, `fill_sigma` 60) keeps
+the suns' interiors out of both residuals and the bands out of the residuals only; no cloud layer
+and no noise-ordered patch. Rejected on the frames: a cloud layer by L density (on a sunset sky the
+rule takes the sun's glow for cloud; the fit under it fell to L 24 at the sun and a dark disc showed
+at the target), suns carrying 40–80 px of glow behind full-alpha exclusions (a rounded patch of
+filled residual around the sun), an absolute luminance threshold for the silhouettes (B's cranes
+L 6–25, its dim sky 18–30). Numbers: steps 0.12 / 0.10 levels (round 1: 0.11 / 0.23), `edge_ratio`
+0.172, feat_floor 0.155, laplace_floor 0.636, contrast_floor 0.844, dissolve_fit 0.175,
+motion_share 0.078, prep 4.3 s, render 9.6 s at 1920×1092, md5 `b7700b4c…` on two runs. Defects by my
+eye: a faint disc-shaped patch at the second sun's place from t ≈ 0.4 until the moved sun arrives;
+the sky behind A's left buildings is a flat extrapolation until B's sky takes over; A's water
+reflections stay as stripes at the old waterline while it slides; a horizontal cut at the far-left
+structure's top as B's band rises. Ungraded as of 2026-09-26.

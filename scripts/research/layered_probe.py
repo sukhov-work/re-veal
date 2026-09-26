@@ -19,7 +19,17 @@ clip fractions and a curve, and optional colour, drift and zoom terms:
 Mask rules: depth_fg / depth_bg (Depth Anything V2 Small disparity between lo and hi, offline
 through transitions.py; `components` = bottom | top | left | right keeps the connected components
 touching that border), clouds (cloud density from the per-row blue of the sky, `within` a layer),
-stars (white top-hat blobs `within` a layer), polygon (hand-drawn, canvas fractions), all (1).
+stars (white top-hat blobs `within` a layer), polygon (hand-drawn, canvas fractions), all (1),
+region_of (a wide soft region around a tight mask; round 2). Round-2 keys (2026-09-26): a backdrop's
+`minus` / `exclude` entry as {"layer", "full", "dilate", "soft"} removes the layer's full alpha from
+the fit and the residual; `fit_under` gives the rows under A's skyline B's fit from the start;
+`snap_px` snaps the depth skyline to the photo's strongest vertical step; `recolor_mode: "L"`;
+`fill_sigma` fills the holes of a backdrop's residual by a normalized convolution (three scales),
+`fill_mode: "poly2"` by a weighted quadratic in x and y of the known residual (shape-free);
+`minus_res` / `exclude_res` remove a layer from the residual only (the fit keeps its pixels);
+`fit2d` makes the backdrop's fit a per-band quadratic in x; `refine: "dark_or_chroma"` + `chroma_d`;
+`slide_between: [bandA, bandB]` slides a backdrop's top edge from one band's bottom line to the other's;
+`dark_in` (near-black pixels in a row range), `minus_mask`, and `or: [names]` on any rule.
 Actions: backdrop (the low-order sky gradient of A moves to B's with the residual textures
 crossfaded; alpha 1 everywhere), hold, recolor (per-row Lab statistics of the layer move to the
 `to` layer's), dissolve (the layer erodes through its own density plus noise; thin parts first),
@@ -124,6 +134,48 @@ def row_stats(lab, alpha, bands=48, min_px=40):
     return out
 
 
+def sky_fit2d(lab, alpha, bands=48, min_px=300):
+    """(h, w, 3) low-order fit of a sky: per band a weighted least-squares
+    quadratic in x (linear when the samples span under half the width,
+    constant under a quarter), coefficients interpolated across bands and
+    smoothed over rows. The per-row mean alone misses a lateral glow, and
+    the hole a layer leaves in the residual then shows the layer's outline
+    whatever fills it (round 2, 2026-09-26)."""
+    h, w = alpha.shape
+    edges = np.linspace(0, h, bands + 1).astype(int)
+    xs = (np.arange(w, dtype=np.float32) / max(w - 1, 1)) * 2 - 1
+    coef = np.full((bands, 3, 3), np.nan, np.float32)      # band, channel, (a, b, c)
+    for i in range(bands):
+        sl = slice(edges[i], edges[i + 1])
+        wgt = np.clip(alpha[sl], 0, 1)
+        if wgt.sum() < min_px:
+            continue
+        cols = wgt.sum(axis=0) > 0.5
+        span = (xs[cols].max() - xs[cols].min()) / 2.0 if cols.any() else 0.0
+        order = 2 if span >= 0.5 else (1 if span >= 0.25 else 0)
+        X = np.stack([np.ones_like(xs), xs, xs * xs], axis=1)[:, :order + 1]
+        Xb = np.repeat(X[None, :, :], edges[i + 1] - edges[i], axis=0).reshape(-1, order + 1)
+        sw = np.sqrt(wgt).reshape(-1, 1)
+        for c in range(3):
+            y = lab[sl, :, c].reshape(-1, 1)
+            sol, *_ = np.linalg.lstsq(Xb * sw, y * sw, rcond=None)
+            coef[i, c, :order + 1] = sol.ravel()
+            coef[i, c, order + 1:] = 0.0
+    centers = (edges[:-1] + edges[1:]) / 2.0
+    rows = np.arange(h, dtype=np.float32)
+    ok = ~np.isnan(coef[:, 0, 0])
+    if ok.sum() == 0:
+        raise SystemExit("sky_fit2d: the mask selects no pixels")
+    out = np.zeros((h, w, 3), np.float32)
+    for c in range(3):
+        cr = np.zeros((h, 3), np.float32)
+        for k in range(3):
+            v = np.interp(rows, centers[ok], coef[ok, c, k])
+            cr[:, k] = cv2.GaussianBlur(v.reshape(-1, 1), (0, 0), h / bands * 1.5).ravel()
+        out[..., c] = cr[:, 0:1] + cr[:, 1:2] * xs[None, :] + cr[:, 2:3] * (xs * xs)[None, :]
+    return out
+
+
 def row_transfer(lab, src, dst, strength, clip=(0.4, 2.5)):
     """Move lab's per-row statistics from src toward dst (both (h, 3, 2)) by
     strength in 0..1. Returns float32 Lab."""
@@ -140,6 +192,61 @@ def row_transfer(lab, src, dst, strength, clip=(0.4, 2.5)):
 
 def lab_to_rgb(lab):
     return cv2.cvtColor(lab.astype(np.float32), cv2.COLOR_Lab2RGB) * 255.0
+
+
+def fill_poly2(res, w):
+    """Fill the holes (w < 1) of a residual with a weighted least-squares
+    quadratic in (x, y) of the known part: shape-free by construction, so a
+    hole never shows its own outline (the normalized convolution filled a
+    tree-crown hole with a crown-shaped patch of the glow at its rim)."""
+    h, w_ = w.shape
+    hs, ws = max(8, h // 4), max(8, w_ // 4)
+    rw = cv2.resize(res, (ws, hs), interpolation=cv2.INTER_AREA)
+    ws_ = cv2.resize(w, (ws, hs), interpolation=cv2.INTER_AREA)
+
+    def design(hh, ww):
+        yy, xx = np.mgrid[0:hh, 0:ww].astype(np.float32)
+        xx = xx / max(ww - 1, 1) * 2 - 1
+        yy = yy / max(hh - 1, 1) * 2 - 1
+        return np.stack([np.ones_like(xx), xx, yy, xx * xx, xx * yy, yy * yy], axis=-1).reshape(-1, 6)
+
+    Xs = design(hs, ws)
+    sw = np.sqrt(np.clip(ws_, 0, 1)).reshape(-1, 1)
+    Xf = design(h, w_)
+    fill = np.empty_like(res)
+    for c in range(res.shape[2]):
+        coef, *_ = np.linalg.lstsq(Xs * sw, rw[..., c].reshape(-1, 1) * sw, rcond=None)
+        fill[..., c] = (Xf @ coef).reshape(h, w_)
+    return res * w[..., None] + fill * (1.0 - w)[..., None]
+
+
+def fill_holes(res, w, sigma):
+    """A residual (h, w, 3) known where w is 1: fill the holes (w < 1) with a
+    normalized convolution of the known part at three scales (sigma, 3 sigma,
+    9 sigma), so a hole wider than the kernel still takes the surrounding
+    low-frequency structure (a sky's lateral glow) and never the row mean
+    alone. Round 2, 2026-09-26: a hole filled by the per-row fit showed as
+    a dark silhouette in the shape of the excluded layer."""
+    # the fill is low-frequency: computed at 1/4 resolution (16x cheaper at
+    # the 9-sigma scale) and resized back
+    h, w_ = w.shape
+    hs, ws = max(8, h // 4), max(8, w_ // 4)
+    rw = cv2.resize(res * w[..., None], (ws, hs), interpolation=cv2.INTER_AREA)
+    ws_ = cv2.resize(w, (ws, hs), interpolation=cv2.INTER_AREA)
+    # the scales blend by their confidence (the known fraction under the
+    # kernel) instead of switching at a threshold: a switch draws the
+    # iso-distance line from the hole's rim as a contour inside the hole
+    fill = np.zeros_like(rw)
+    left = np.ones(ws_.shape, np.float32)
+    for i, sc in enumerate((sigma, 3.0 * sigma, 9.0 * sigma)):
+        num = cv2.GaussianBlur(rw, (0, 0), sc / 4.0)
+        den = cv2.GaussianBlur(ws_, (0, 0), sc / 4.0)
+        f = num / np.maximum(den, 1e-6)[..., None]
+        wk = left if i == 2 else np.clip(den / 0.2, 0, 1) * left
+        fill = fill + f * wk[..., None]
+        left = left - wk
+    fill = cv2.resize(fill, (w_, h), interpolation=cv2.INTER_LINEAR)
+    return res * w[..., None] + fill * (1.0 - w)[..., None]
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +308,18 @@ class Scene:
                 # the depth model is smooth at leaf level; darkness against
                 # the per-row brightness of the rest of the photo is not
                 a = a * self._darkness(src, 1.0 - a, m)
+            elif m.get("refine") == "dark_or_chroma":
+                # a lit leaf is not dark; its chroma is far from the sky's
+                # per-row chroma (round 2, 2026-09-26: green leaf tips stayed
+                # in the sky residual and floated before the trees arrived)
+                a = a * np.maximum(self._darkness(src, 1.0 - a, m), self._chroma_far(src, 1.0 - a, m))
+            if m.get("min_blob", 0):
+                # drop the small blobs a refinement keeps (a star has the
+                # chroma of a leaf but not its area; round 2, 2026-09-26)
+                n_, lab_, st_, _ = cv2.connectedComponentsWithStats((a > 0.5).astype(np.uint8))
+                small = np.zeros(n_, bool)
+                small[1:] = st_[1:, cv2.CC_STAT_AREA] < int(m["min_blob"])
+                a = np.where(small[lab_], 0.0, a).astype(np.float32)
             if m.get("grow", 0):
                 # a moving layer carries the background within `grow` px of
                 # its edge, so its soft edge never mixes with the backdrop
@@ -209,7 +328,16 @@ class Scene:
             if rule == "depth_bg":
                 a = 1.0 - a
             if m.get("components"):
-                a = keep_components(a, m["components"], m.get("min_area", 200))
+                if m.get("components_bridge", 0):
+                    # keep the blobs that touch the border once bridged over
+                    # `components_bridge` px: an isolated branch near the
+                    # crown stays, a unit at the top does not (round 2)
+                    kb = int(m["components_bridge"])
+                    bridged = cv2.dilate((a > 0.5).astype(np.float32), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * kb + 1, 2 * kb + 1)))
+                    keep = keep_components(bridged, m["components"], m.get("min_area", 200)) > 0.5
+                    a = np.where(keep, a, 0.0).astype(np.float32)
+                else:
+                    a = keep_components(a, m["components"], m.get("min_area", 200))
             if m.get("blur", 0):
                 a = cv2.GaussianBlur(a, (0, 0), m["blur"])
         elif rule in ("skyline_below", "skyline_above"):
@@ -218,6 +346,18 @@ class Scene:
                 a = 1.0 - a
         elif rule == "invert":
             a = 1.0 - self.masks[m["of"]]
+        elif rule == "region_of":
+            # a wide, soft region around a tight mask: the rendered layer then
+            # carries the photo's own background between its leaves instead of
+            # a leaf-level cut (round 2, 2026-09-26: the tree crown afterimage)
+            k = int(m.get("dilate", 40))
+            a = (self.masks[m["of"]] > float(m.get("thr", 0.5))).astype(np.float32)
+            if k:
+                a = cv2.dilate(a, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1)))
+            if m.get("components"):
+                a = keep_components(a, m["components"], m.get("min_area", 200))
+            if m.get("soft", 0):
+                a = cv2.GaussianBlur(a, (0, 0), float(m["soft"]))
         elif rule == "invert_any":
             a = 1.0 - np.max([self.masks[n] for n in m["of"]], axis=0)
         elif rule == "depth_band":
@@ -234,6 +374,39 @@ class Scene:
             f = float(m.get("feather", 3.0))
             a = (smoothstep((yy - bottom[None, :]) / f) if rule == "below_band"
                  else smoothstep((top[None, :] - yy) / f))
+        elif rule == "dark_in":
+            # the near-black pixels (L below `L`) inside a row range (canvas
+            # fractions): the thin masts and cranes a per-column band misses
+            # (round 2 on mismatch_4, 2026-09-26)
+            L = self.lab[src][..., 0]
+            r0, r1 = m.get("rows", [0.0, 1.0])
+            if m.get("relative") == "local":
+                # dark against the local mean of the `within` region (a
+                # normalized convolution over `local_px`): a crane against
+                # the glow counts, the dim sky at the frame's side does not
+                # (an absolute L threshold cannot tell them apart: B's cranes
+                # L 6–25, its dim sky 18–30, measured 2026-09-26)
+                wm = (self.masks[m["within"]] > 0.5).astype(np.float32) if m.get("within") else np.ones_like(L)
+                sg = float(m.get("local_px", 120))
+                Lloc = cv2.GaussianBlur(L * wm, (0, 0), sg) / np.maximum(cv2.GaussianBlur(wm, (0, 0), sg), 1e-3)
+                a = (ramp((Lloc - L) / np.maximum(Lloc, 4.0), m.get("dark_lo", 0.35), m.get("dark_hi", 0.6)) > 0.5).astype(np.float32)
+            else:
+                a = (L < float(m.get("L", 15.0))).astype(np.float32)
+            a[: int(r0 * h)] = 0.0
+            a[int(r1 * h):] = 0.0
+            if m.get("within"):
+                a = a * (self.masks[m["within"]] > 0.5)
+            if m.get("min_blob", 0):
+                n_, lab_, st_, _ = cv2.connectedComponentsWithStats(a.astype(np.uint8))
+                small = np.zeros(n_, bool)
+                small[1:] = st_[1:, cv2.CC_STAT_AREA] < int(m["min_blob"])
+                a = np.where(small[lab_], 0.0, a).astype(np.float32)
+            k = int(m.get("dilate", 2))
+            if k:
+                a = cv2.dilate(a, np.ones((2 * k + 1, 2 * k + 1), np.uint8))
+            a = cv2.GaussianBlur(a, (0, 0), float(m.get("feather", 1.0)))
+        elif rule == "minus_mask":
+            a = self.masks[m["of"]] * (1.0 - self.masks[m["minus"]])
         elif rule == "polygon":
             pts = np.array([[x * w, y * h] for x, y in m["points"]], np.int32)
             a = np.zeros((h, w), np.uint8)
@@ -245,6 +418,13 @@ class Scene:
             a = self._stars(src, self.masks[m["within"]], m)
         else:
             raise SystemExit(f"unknown mask rule {rule!r}")
+        for other in m.get("or", []):
+            a = np.maximum(a, self.masks[other])      # the union with an earlier mask
+        if rule not in ("depth_fg", "depth_bg") and m.get("grow", 0):
+            # any moving layer may carry the background within `grow` px of
+            # its edge (the depth rules apply it before their inversion)
+            k = int(m["grow"])
+            a = np.maximum(a, cv2.GaussianBlur(cv2.dilate(a, np.ones((2 * k + 1, 2 * k + 1), np.uint8)), (0, 0), 1.0))
         self.masks[name] = a.astype(np.float32)
         return self.masks[name]
 
@@ -255,6 +435,16 @@ class Scene:
         st = row_stats(lab, np.clip(bg, 0, 1), min_px=300)
         Lfit = np.maximum(st[:, 0, 0], float(m.get("dark_floor", 4.0)))[:, None]
         return ramp((Lfit - lab[..., 0]) / Lfit, m.get("dark_lo", 0.35), m.get("dark_hi", 0.7))
+
+    def _chroma_far(self, src, bg, m):
+        """0..1: how far a pixel's (a*, b*) sits from the per-row chroma of
+        `bg`; 1 at `chroma_d` and beyond, 0 at half of it."""
+        lab = self.lab[src]
+        st = row_stats(lab, np.clip(bg, 0, 1), min_px=300)
+        da = lab[..., 1] - st[:, 1, 0][:, None]
+        db = lab[..., 2] - st[:, 2, 0][:, None]
+        d = float(m.get("chroma_d", 10.0))
+        return ramp(np.sqrt(da * da + db * db), 0.5 * d, d)
 
     def _skyline(self, src, m):
         """1 below a per-column skyline found from the depth: the topmost row
@@ -290,6 +480,31 @@ class Scene:
             idx = np.where(ok[:, x])[0]
             if len(idx):
                 sky_row[x] = idx[0]
+        snap = int(m.get("snap_px", 0))
+        if snap:
+            # the depth cut sits a few px off the roof edge: within +-snap px
+            # of it, take the row of the strongest vertical L step, when that
+            # step is at least `snap_min` L per px (round 2, 2026-09-26)
+            # the depth cut sits ABOVE the roof (26-43 px on mismatch_6's
+            # left block, measured 2026-09-26; cloud edges stay under 6 L/px
+            # while roof edges are 5-17): take the TOPMOST step >= snap_min
+            # from `snap_up` px above the cut down to `snap_px` px below it
+            L = cv2.GaussianBlur(self.lab[src][..., 0], (0, 0), 1.0)
+            g = np.abs(np.gradient(L, axis=0))
+            snap_min = float(m.get("snap_min", 6.0))
+            snap_up = int(m.get("snap_up", 8))
+            snapped = 0
+            for x in range(w):
+                y0 = int(sky_row[x])
+                if y0 >= h:
+                    continue
+                lo_, hi_ = max(1, y0 - snap_up), min(h - 1, y0 + snap + 1)
+                col = g[lo_:hi_, x]
+                hit = np.where(col >= snap_min)[0]
+                if len(hit):
+                    sky_row[x] = lo_ + int(hit[0])
+                    snapped += 1
+            self.masks["_snapped_" + src] = snapped
         k = int(m.get("median", 9))
         pad = np.pad(sky_row.astype(np.float32), k // 2, mode="edge")
         sk = np.median(np.lib.stride_tricks.sliding_window_view(pad, k), axis=1)
@@ -345,6 +560,10 @@ class Scene:
                     break
                 y += 1
             top[x], bottom[x] = t0, last
+        if m.get("max_bottom"):
+            # the dark run continues into a dark water reflection: cap the
+            # band's bottom at a row fraction (round 2 on mismatch_4)
+            bottom = np.minimum(bottom, float(m["max_bottom"]) * h)
         k = int(m.get("median", 9))
         for arr in (top, bottom):
             pad = np.pad(arr, k // 2, mode="edge")
@@ -525,6 +744,10 @@ class Layer:
         if p <= 0:
             return self.rgb
         dst = self.by_name[to].stats
+        if sp.get("recolor_mode") == "L":
+            # luminance only: a* and b* keep the layer's own statistics
+            dst = dst.copy()
+            dst[:, 1:, :] = self.stats[:, 1:, :]
         return lab_to_rgb(row_transfer(self.lab, self.stats, dst, p))
 
     def affine(self, t):
@@ -601,34 +824,99 @@ class Backdrop(Layer):
         # a layer drawn over the backdrop removes only its INTERIOR from the
         # residual: at its soft edge the layer's pixel composites over the
         # photo's own residual, so the endpoint frames stay exact there
-        clearA = np.ones_like(self.alpha0)
-        for name in sp.get("minus", []):
-            clearA = clearA * (1.0 - ramp(s.masks[name], 0.9, 1.0))
-        clearB = np.ones_like(self.alpha0)
-        excl = sp.get("exclude") or []
-        for name in ([excl] if isinstance(excl, str) else excl):
-            clearB = clearB * (1.0 - ramp(s.masks[name], 0.9, 1.0))
+        # an entry given as {"layer": name, "full": true, "dilate": k, "soft": s}
+        # removes the layer's FULL alpha (dilated, softened) from the fit and
+        # the residual: the fit fills under it, so nothing of the layer's
+        # fringe stays behind when it erodes or moves (round 2, 2026-09-26)
+        def clear_of(entries):
+            c = np.ones_like(self.alpha0)
+            for e in ([entries] if isinstance(entries, str) else entries):
+                if isinstance(e, str):
+                    c = c * (1.0 - ramp(s.masks[e], 0.9, 1.0))
+                    continue
+                a = (s.masks[e["layer"]] > float(e.get("thr", 0.02))).astype(np.float32)
+                k = int(e.get("dilate", 0))
+                if k:
+                    a = cv2.dilate(a, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1)))
+                if e.get("soft", 0):
+                    a = cv2.GaussianBlur(a, (0, 0), float(e["soft"]))
+                c = c * (1.0 - a)
+            return c
+        clearA = clear_of(sp.get("minus", []))
+        clearB = clear_of(sp.get("exclude") or [])
+        # `minus_res` / `exclude_res`: removed from the RESIDUAL only, so the
+        # fit still counts the sky seen between the leaves of a wide region
+        # (a fit that misses the bottom rows misses the horizon glow, and a
+        # hole filled from a wrong fit is a dark dome; round 2, 2026-09-26)
+        clearA_res = clearA * clear_of(sp.get("minus_res", []))
+        clearB_res = clearB * clear_of(sp.get("exclude_res", []))
         # the region: the base backdrop covers the canvas; a partial one (the
         # water) moves from its A mask to its B mask over the window
         self.alpha_to = s.masks[sp["mask_to"]] if sp.get("mask_to") else None
         self.opaque = bool(sp.get("opaque", self.depth == 0))
+        # slide_between: [bandA, bandB] — the backdrop's top edge is the
+        # per-column bottom line of bandA moving to bandB's over the window
+        # (a waterline that drops), instead of a blend of the two masks,
+        # which fades the strip between them (round 2, 2026-09-26)
+        self.slide = None
+        sl = sp.get("slide_between")
+        if sl:
+            self.slide = (s.masks["_band_" + sl[0]][1], s.masks["_band_" + sl[1]][1], float(sp.get("slide_feather", 3.0)))
         # the FIT counts every sky pixel, including the sky seen between the
         # leaves of a foreground layer (its soft alpha), so the gradient under
         # that layer follows the photo; the RESIDUAL is interior-only
         self.fitA = row_stats(self.lab, self.alpha0 * clearA, min_px=300)
         self.fitB = row_stats(other.lab, other.alpha0 * clearB, min_px=300)
         self.stats = self.fitA
-        wA = ramp(self.alpha0, 0.9, 1.0) * clearA
-        wB = ramp(other.alpha0, 0.9, 1.0) * clearB
-        self.resA = (self.lab - self.fitA[:, None, :, 0]) * wA[..., None]
-        self.resB = (other.lab - self.fitB[:, None, :, 0]) * wB[..., None]
+        # fit2d: the fit is a per-band quadratic in x (a lateral glow is part
+        # of the fit, not of the residual); the row stats stay for the colour path
+        self.fit2d = bool(sp.get("fit2d", False))
+        if self.fit2d:
+            self.fitA_img = sky_fit2d(self.lab, self.alpha0 * clearA)
+            self.fitB_img = sky_fit2d(other.lab, other.alpha0 * clearB)
+        else:
+            self.fitA_img = np.broadcast_to(self.fitA[:, None, :, 0], self.lab.shape)
+            self.fitB_img = np.broadcast_to(self.fitB[:, None, :, 0], self.lab.shape)
+        # fit_under: the rows below the per-column skyline of A (no sky pixel
+        # of A exists there) take B's fit from the start, so the band vacated
+        # by an exiting skyline layer is never an extrapolated day sky
+        self.under = None
+        fu = sp.get("fit_under")
+        if fu:
+            sk = s.masks["_skyline_" + fu.get("skyline", "A")]
+            yy = np.arange(s.h, dtype=np.float32)[:, None]
+            self.under = smoothstep((yy - sk[None, :] + float(fu.get("offset", 0.0))) / float(fu.get("feather", 24.0)))
+        wA = ramp(self.alpha0, 0.9, 1.0) * clearA_res
+        wB = ramp(other.alpha0, 0.9, 1.0) * clearB_res
+        fs = float(sp.get("fill_sigma", 0.0))
+        if sp.get("fill_mode") == "poly2":
+            self.resA = fill_poly2(self.lab - self.fitA_img, wA)
+            self.resB = fill_poly2(other.lab - self.fitB_img, wB)
+        elif fs > 0:
+            # the holes in each residual (under an excluded layer, under the
+            # layer's own soft edge) take the surrounding low-frequency
+            # residual instead of the row fit alone
+            self.resA = fill_holes(self.lab - self.fitA_img, wA, fs)
+            self.resB = fill_holes(other.lab - self.fitB_img, wB, fs)
+        else:
+            self.resA = (self.lab - self.fitA_img) * wA[..., None]
+            self.resB = (other.lab - self.fitB_img) * wB[..., None]
 
     def render(self, t):
         p = self.progress(t)
-        fit = self.fitA[:, None, :, 0] * (1 - p) + self.fitB[:, None, :, 0] * p
+        fA, fB = self.fitA_img, self.fitB_img
+        if self.under is not None:
+            u = self.under[..., None]
+            fA = fA * (1 - u) + fB * u
+        fit = fA * (1 - p) + fB * p
         lab = fit + self.resA * (1 - p) + self.resB * p
         if self.opaque:
             alpha = np.ones((self.scene.h, self.scene.w), np.float32)
+        elif self.slide is not None:
+            la, lb, f = self.slide
+            line = la * (1 - p) + lb * p
+            yy = np.arange(self.scene.h, dtype=np.float32)[:, None]
+            alpha = smoothstep((yy - line[None, :]) / f)
         elif self.alpha_to is not None:
             alpha = self.alpha0 * (1 - p) + self.alpha_to * p
         else:
@@ -739,15 +1027,17 @@ def render_score(score, out, seed=0):
 
 def row_from_report(pair, tag, rep, wall):
     q = rep.get("quality", {})
+    sc = rep.get("score") or {}
+    seconds = sc.get("seconds") or (rep.get("n_frames") or 0) / float(sc.get("fps") or 30)
     return {"wall_s": wall, "class": rep.get("class"), "method": rep.get("method"), "canvas": rep.get("canvas"),
-            "n_frames": rep.get("n_frames"), "warping_error": q.get("warping_error"),
+            "n_frames": rep.get("n_frames"), "seconds": round(float(seconds), 2), "warping_error": q.get("warping_error"),
             "edge_ratio": (q.get("flicker") or {}).get("edge_ratio"), "goal": q.get("goal"),
             "first_interior_vs_A": q.get("first_interior_vs_A"), "last_interior_vs_B": q.get("last_interior_vs_B"),
             "mp4": f"{pair}/{tag}/transition.mp4", "strip": f"{pair}/{tag}/strip.jpg",
             "layers": rep.get("layers"), "score": rep.get("score")}
 
 
-def write_page(out, sheet, picks):
+def write_page(out, sheet, picks, note=""):
     picks = (picks or {}).get("picks", {})
     html = ["<!doctype html><meta charset=utf-8><title>Layered transitions — mismatched pairs</title>",
             "<style>body{font:14px system-ui;margin:16px;background:#111;color:#ddd;max-width:1600px}h2{margin-top:40px;border-top:1px solid #333;padding-top:16px}"
@@ -763,10 +1053,11 @@ def write_page(out, sheet, picks):
             "depth model, cloud density from the sky's blue, stars as bright blobs), each layer gets one action with its own time window (the sky gradient darkens on its own, "
             "the clouds erode through their own density, the stars appear in brightness order, the buildings slide out, the trees and the air-conditioning unit slide in), "
             "and the layers are composited back to front. No pixel is a crossfade of A-content and B-content; the only mixed quantity is the low-amplitude sky texture. "
-            "Nothing in <code>transitions.py</code> changed. Every clip: 2 s, canvas ≤ 1920 px. Under every clip the three boxes ask for the property, not the pick: "
+            "Nothing in <code>transitions.py</code> changed. The seconds of each clip are on its line; canvas ≤ 1920 px. Under every clip the three boxes ask for the property, not the pick: "
             "<b>one picture</b> (the mid frame is one coherent picture, not two superimposed), <b>content transforms</b> (details move and change rather than the frame panning or fading), "
             "<b>nothing invented</b> (no content that is in neither photo). Pick the closer clip per pair, write what is wrong or what the score should say instead, and <b>Export picks</b>; "
             "drop the file beside sheet.json and run <code>scripts/research/layered_probe.py --out DIR --page-only --picks layered_picks.json</code>.</div>",
+            (f"<div class=hint><b>This page.</b> {note}</div>" if note else ""),
             "<p><button onclick='exportPicks()'>Export picks</button> <span id=status class=note></span></p>"
             "<details><summary class=note>preview of what Export writes</summary><pre id=preview class=note></pre></details>"]
     for pair, row in sheet["pairs"].items():
@@ -795,7 +1086,8 @@ def write_page(out, sheet, picks):
                               f"<pre class=note>{json.dumps(r.get('score', {}).get('layers', []), indent=1)}</pre></details>")
             step = (f" step first/last={r.get('first_interior_vs_A')}/{r.get('last_interior_vs_B')}"
                     if r.get("first_interior_vs_A") is not None else "")
-            html.append(f"<div class=run><div><code>{tag}</code> class={r.get('class')} {r.get('method')} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')}{goal_txt}{step}"
+            secs = f" {r.get('seconds')} s ({r.get('n_frames')} frames)" if r.get("seconds") else ""
+            html.append(f"<div class=run><div><code>{tag}</code>{secs} class={r.get('class')} {r.get('method')} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')}{goal_txt}{step}"
                         f"<br><span class=boxes>{boxes}</span><br><img src='{r['strip']}'>{score_html}</div>"
                         f"<video src='{r['mp4']}' controls loop muted playsinline preload=metadata></video></div>")
     html.append("""<script>
@@ -849,6 +1141,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--page-only", action="store_true")
     ap.add_argument("--picks", default="")
+    ap.add_argument("--note", default="", help="a paragraph for the page's head (what this round varies)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -890,7 +1183,10 @@ def main():
             row["variants"] = {k: v[k] for k in sorted(v, key=lambda k: (0 if v[k].get("layers") is None else 1, k))}
         sheet_path.write_text(json.dumps(sheet, indent=1))
     picks = json.loads(Path(a.picks).read_text()) if a.picks else None
-    write_page(out, sheet, picks)
+    if a.note:
+        sheet["note"] = a.note
+        sheet_path.write_text(json.dumps(sheet, indent=1))
+    write_page(out, sheet, picks, sheet.get("note", ""))
     write_sheet_md(out, sheet, picks)
     print(f"wrote {out / 'index.html'}, {out / 'sheet.md'}")
 

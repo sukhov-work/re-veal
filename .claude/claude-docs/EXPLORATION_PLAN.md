@@ -178,6 +178,17 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    distinct clouds, bottom buildings contours"; "keep 3s for now"; the box run (item 4) is scheduled
    for the next session without the owner ("do not wait for me … just be careful with resources");
    more work per session with Opus 5.5 subagents. Round 2 = those three targets at 3 s.
+   **Round 2 rendered (2026-09-26, fourth session; `TRANSITIONS.md §12.7`; page
+   `benchmarks/runs/2026-09-26/layered_r2/`)**: three 3-second clips from one score (`mismatch_6_r2{,_L,_drift}.json`)
+   beside round 1's `layered` and `flat`; the three targets addressed at their source (the trees carry
+   their own sky through a wide soft region around a leaf-level core; the clouds are opaque and erode
+   thin-first over the clear-sky fit; the skyline snaps to the roof edges and the vacated band continues
+   the sky; residual holes filled over a per-band quadratic fit); steps 0.28 / 0.05, `edge_ratio` 0.093–0.097,
+   two runs byte-identical. Ungraded. Next: the owner's boxes; the tool shape (§12.4) waits.
+   **mismatch_4 round 2 also rendered (Track D, the same page)**: the sun disc moves and B's sun takes
+   over on arrival, the skyline band with its masts exits down behind the water, B's band rises, the
+   waterline slides, no cloud layer (the L-density rule takes a sunset glow for cloud), no patches;
+   steps 0.12 / 0.10, `edge_ratio` 0.172, byte-identical. Ungraded.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -203,6 +214,13 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    with `--user`), the box's Tailscale logged out (reach = `ssh -J beelink yevhen@10.10.10.2`). Owner
    2026-09-26: "i am ok with your reccomended route in general" → the first one-shot run is the next
    session's item, with the owner reachable.
+   **First run 2026-09-26 (fourth session, Track B; DECISIONS Track B line; `mem:project/strix-halo-box`)**:
+   the recipe ran twice on the box without the owner (the owner's order of the same day); the inhibitor
+   needed a patch (probe once, rely on `~/halo-hold`); two keyframes byte-identical (sha256 `c8d6f50f…`),
+   wall 1,804 / 1,941 s at 1344×768, 17.7 GB of weights on the GPU, 22 GB of the 38 GB headroom used;
+   the keyframe reproduces image 2 (sun 5 px from B's, 4.8 levels from B, 33.1 from A), not a midpoint.
+   Page `benchmarks/runs/2026-09-26/keyframes/index.html`; the owner's eye decides (handover q2). Next
+   experiment: a prompt that names the change, or a single-reference edit, or FLUX.2 klein 4B.
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -284,3 +302,7 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-26 | Third session: the orchestrated layered transition designed (`TRANSITIONS.md §12`) and probed from hand-written scores on mismatch_6 (as the owner scored it, two timings), mismatch_4 (sun by the Gaussian map, skyline, water, clouds) and mismatch_3 (depth bands); page + sheet; no tool change; owner grades next | layered session, 2026-09-26 (third) |
 | 2026-09-26 | Owner picks on the layered page ingested: mismatch_6 layered clips are the first graded "content transforms" (one picture on none; contours, afterimages, rushed, crossfade present); mismatch_4 / mismatch_3 layered clips rejected as "patchy dirty" → noise-ordered patch reveals out; next = a mismatch_6 probe aimed at one picture | layered session, 2026-09-26 (third, late) |
 | 2026-09-26 | Owner orders for the next session recorded: the box run scheduled without the owner (resource rules stand); round 2 on mismatch_6 targets the tree crown, the distinct clouds and the bottom buildings' contours at 3 s; Opus 5.5 subagents for the box track and the compaction | layered session, 2026-09-26 (third, last) |
+| 2026-09-26 | Fourth session, Track A: round 2 on mismatch_6 rendered at 3 s (three clips, one score, the three afterimages addressed at their source; `TRANSITIONS.md §12.7`); no tool change; owner grades next | round-2 session, 2026-09-26 (fourth) |
+| 2026-09-26 | Fourth session, Track C: `DECISIONS.md` compacted (era 2026-09-13 → 2026-09-23, 37 lines, moved byte-verbatim to `DECISIONS_ARCHIVE.md`, md5 `70a09c0e…`; 118 KB → 71 KB) | round-2 session, 2026-09-26 (fourth) |
+| 2026-09-26 | Fourth session, Track D: mismatch_4 round 2 rendered at 3 s (sun move, sliding skyline bands and waterline, no cloud layer, no patches); no tool change; owner grades next | round-2 session, 2026-09-26 (fourth) |
+| 2026-09-26 | Fourth session, Track B: the keyframe recipe ran twice on the box (inhibitor patched; keyframes byte-identical, sha256 `c8d6f50f…`; 1,804 / 1,941 s); the keyframe reproduces image 2; box clean | round-2 session, 2026-09-26 (fourth) |

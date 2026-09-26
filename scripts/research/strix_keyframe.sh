@@ -30,6 +30,8 @@ MODELS="${MODELS:?models dir}"; IN="${IN:?input dir}"; OUT="${OUT:?output dir}"
 A="${1:?before image (in $IN)}"; B="${2:?after image (in $IN)}"; NAME="${3:-kf}"
 PROMPT="${PROMPT:?prompt}"; SEED="${SEED:-20260926}"
 NEED_GB="${NEED_GB:-26}"
+W="${W:-1024}"; H="${H:-1024}"          # output size; the canvas of mismatch_4 is 1920x1092, so W=1344 H=768 keeps its ratio (2026-09-26)
+MAX_VRAM="${MAX_VRAM:-20}"; MEM_CAP="${MEM_CAP:-12g}"   # the GPU budget (GiB) and the CPU-side cgroup cap; raise only after a measured failure
 DOCKER="${DOCKER:-sudo docker}"   # the user is not in the docker group on this box (2026-09-26)
 # ---- pre-flight: free RAM and free GTT beside the resident LLMs -------------------------------
 avail_gb=$(awk '/MemAvailable/ {printf "%d", $2/1048576}' /proc/meminfo)
@@ -42,11 +44,20 @@ if [ "$avail_gb" -lt "$NEED_GB" ] || { [ "$gtt_total" -gt 0 ] && [ "$gtt_free_gb
 fi
 mkdir -p "$OUT"
 RENDER_GID=$(getent group render | cut -d: -f3); VIDEO_GID=$(getent group video | cut -d: -f3)
-systemd-inhibit --what=sleep:idle --why="keyframe $NAME" -- \
-timeout 45m $DOCKER run --rm --init \
+# the sleep inhibitor needs interactive polkit authentication over a non-interactive ssh session
+# ("Failed to inhibit: Interactive authentication required", first run 2026-09-26); the box's idle
+# suspend is guarded by ~/halo-hold (touch it for the session), so the inhibitor is a bonus: probe
+# it once and run without it when it is refused
+INHIBIT=""
+if systemd-inhibit --what=sleep:idle --why="probe" -- true >/dev/null 2>&1; then
+  INHIBIT="systemd-inhibit --what=sleep:idle --why=keyframe-$NAME --"
+else
+  echo "note: systemd-inhibit refused in this session; relying on ~/halo-hold ($([ -e ~/halo-hold ] && echo present || echo ABSENT))"
+fi
+$INHIBIT timeout 45m $DOCKER run --rm --init \
   --user "$(id -u):$(id -g)" --group-add "$RENDER_GID" --group-add "$VIDEO_GID" \
   --device /dev/dri --network none --read-only --tmpfs /tmp \
-  --memory 12g --memory-swap 12g --pids-limit 256 --cpus 8 --oom-score-adj 1000 \
+  --memory "$MEM_CAP" --memory-swap "$MEM_CAP" --pids-limit 256 --cpus 8 --oom-score-adj 1000 \
   -v "$MODELS":/models:ro -v "$IN":/in:ro -v "$OUT":/output "$IMG" \
   --diffusion-model /models/qwen-image-edit-2511-Q4_K_M.gguf \
   --llm /models/Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf \
@@ -55,13 +66,13 @@ timeout 45m $DOCKER run --rm --init \
   --model-args qwen_image_zero_cond_t=true \
   -r "/in/$A" -r "/in/$B" -p "$PROMPT" \
   --cfg-scale 2.5 --sampling-method euler --flow-shift 3 --diffusion-fa --vae-tiling \
-  --max-vram 20 --seed "$SEED" --rng cpu --sampler-rng cpu -W 1024 -H 1024 \
+  --max-vram "$MAX_VRAM" --seed "$SEED" --rng cpu --sampler-rng cpu -W "$W" -H "$H" \
   -o "/output/${NAME}.png"
 # manifest beside the keyframe: everything a re-render needs to reproduce it
 cat > "$OUT/${NAME}.manifest.json" <<EOF
 {"image": "$IMG", "models": $(ls -1 "$MODELS" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().split()))'),
  "before": "$A", "after": "$B", "prompt": $(printf '%s' "$PROMPT" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))'),
- "seed": $SEED, "cfg": 2.5, "sampler": "euler", "flow_shift": 3, "size": [1024, 1024], "max_vram": 20,
+ "seed": $SEED, "cfg": 2.5, "sampler": "euler", "flow_shift": 3, "size": [$W, $H], "max_vram": $MAX_VRAM, "mem_cap": "$MEM_CAP",
  "sha256": "$(sha256sum "$OUT/${NAME}.png" | cut -d' ' -f1)", "date": "$(date -Is)"}
 EOF
 echo "wrote $OUT/${NAME}.png and its manifest"
