@@ -11,6 +11,14 @@
 # the model choice keeps the whole job under ~24 GB (Qwen-Image-Edit-2511 Q4_K_M 13.2 GB +
 # Qwen2.5-VL-7B Q4_K_M 4.7 GB + mmproj 0.85 GB + VAE 0.25 GB + compute buffers).
 #
+# Reach (2026-09-26 probe): the box's Tailscale was logged out; the path that works is the prod box as a
+# jump host over the direct link: `ssh -J beelink yevhen@10.10.10.2`. Wake a suspended box first with
+# `ssh beelink '~/epistemic-filter/deploy/halo/wake-halo.sh'`. The user is not in the `docker` group
+# (rootful Docker 28.2.2), so the container runs under `sudo docker` with `--user` set to the calling
+# user (no persistent change on the box); set DOCKER="docker" if the owner adds the group.
+# Host facts: Ubuntu 25.10, kernel 6.17, ROCm 7.1 on the host (unused here), Vulkan 1.4 RADV GFX1151
+# (Mesa 25.2.8), 121 GB RAM with about 35 GB available beside the resident LLMs, GTT 123 GB / 53 GB used.
+#
 # Usage on the box (after `touch ~/halo-hold` for the session; remove it afterwards):
 #   MODELS=~/keyframes/models IN=~/keyframes/in OUT=~/keyframes/out \
 #   PROMPT="..." SEED=20260926 ./strix_keyframe.sh before.png after.png kf_01
@@ -22,6 +30,7 @@ MODELS="${MODELS:?models dir}"; IN="${IN:?input dir}"; OUT="${OUT:?output dir}"
 A="${1:?before image (in $IN)}"; B="${2:?after image (in $IN)}"; NAME="${3:-kf}"
 PROMPT="${PROMPT:?prompt}"; SEED="${SEED:-20260926}"
 NEED_GB="${NEED_GB:-26}"
+DOCKER="${DOCKER:-sudo docker}"   # the user is not in the docker group on this box (2026-09-26)
 # ---- pre-flight: free RAM and free GTT beside the resident LLMs -------------------------------
 avail_gb=$(awk '/MemAvailable/ {printf "%d", $2/1048576}' /proc/meminfo)
 gtt_total=$(cat /sys/class/drm/card*/device/mem_info_gtt_total 2>/dev/null | head -1 || echo 0)
@@ -34,7 +43,7 @@ fi
 mkdir -p "$OUT"
 RENDER_GID=$(getent group render | cut -d: -f3); VIDEO_GID=$(getent group video | cut -d: -f3)
 systemd-inhibit --what=sleep:idle --why="keyframe $NAME" -- \
-timeout 45m docker run --rm --init \
+timeout 45m $DOCKER run --rm --init \
   --user "$(id -u):$(id -g)" --group-add "$RENDER_GID" --group-add "$VIDEO_GID" \
   --device /dev/dri --network none --read-only --tmpfs /tmp \
   --memory 12g --memory-swap 12g --pids-limit 256 --cpus 8 --oom-score-adj 1000 \

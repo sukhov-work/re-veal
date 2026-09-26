@@ -5,12 +5,13 @@
 .venv/bin/python -m py_compile reveal.py harness.py       # Gate 0, seconds
 .venv/bin/python harness.py                                # Gate 1, 82 checks, ~63 s
 .venv/bin/python reveal.py check                           # Gate 2, ~19 s
-.venv/bin/python transitions_harness.py                    # Gate 1b, ~5 s (transitions.py; count in TRANSITIONS.md §5)
+.venv/bin/python transitions_harness.py                    # Gate 1b, ~10 s (transitions.py; count in TRANSITIONS.md §5: 54 as of 2026-09-26)
 .venv/bin/python transitions.py check
 ```
-Baseline 2026-09-13: 82/82 · all OK · Gate 1b all green (38 that day). Exit code 1 from either
+Baseline 2026-09-13: 82/82 · all OK · Gate 1b all green (38 that day; 54 on 2026-09-26). Exit code 1 from either
 harness = at least one `[XX]` line.
-Gate 0 compiles all four files: `reveal.py harness.py transitions.py transitions_harness.py`.
+Gate 0 compiles the four tool files, `reveal.py harness.py transitions.py transitions_harness.py`, plus
+`scripts/bench_transitions.py` and every `scripts/research/*.py` touched in the session (2026-09-26).
 
 ## Transitions drive (the real surface of `transitions.py`)
 ```

@@ -13,7 +13,7 @@ Columns: `mode` = the Reveal mode that passes (`reshot` strict; `refused` = stri
 plain message, as it should for unrelated content) · `class` = transitions routing (A related /
 B unrelated) · `expected (dated)` = numbers from the last verified run: Reveal `method inliers
 rmse_px confidence`; transitions `class method sparse_inliers median_disp_px edge_ratio(morph 1 s)`.
-Transitions ran with the canvas capped at 1920 px. Full sheets: `.claude/claude-docs/benchmarks/2026-09-13-real-pairs.md` (first run, owner review and picks) and `2026-09-14-real-pairs.md` (re-run after TR2c and the `finish` canvas default; class B rows carry that date).
+Transitions ran with the canvas capped at 1920 px. Full sheets: `.claude/claude-docs/benchmarks/2026-09-13-real-pairs.md` (first run, owner review and picks) and `2026-09-14-real-pairs.md` (re-run after TR2c and the `finish` canvas default; class B rows carry that date). Later sheets: `2026-09-15-real-pairs.md` (TR14), `2026-09-15-generative.md`, `2026-09-23-camera.md` (the `--camera` sweep and the owner's picks, 0 of 12); the goal numbers (`quality.goal`, 2026-09-26) are not in the expected column yet — the reference values for match_4 and mismatch_4 at morph 2 s are in `TRANSITIONS.md §6`.
 
 | id | before | after | mode | class | exercises | expected (2026-09-13, M3 Pro, OpenCV 5.0.0) |
 |---|---|---|---|---|---|---|

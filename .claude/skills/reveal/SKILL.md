@@ -33,7 +33,7 @@ testing · naming · error-handling · verify · contracts). Known debt lives in
 | Generic term | In this repo |
 |---|---|
 | **artifact** | a section of `reveal.py` or `transitions.py` (the `# ----` blocks mapped in `conventions/architecture.md`), a lettered section of `harness.py` or `transitions_harness.py`, a doc |
-| **gate** | Gate 0 `py_compile` (four files) · Gate 1 `harness.py` (82 checks) · Gate 1b `transitions_harness.py` (count in `TRANSITIONS.md §5`) · Gate 2 `reveal.py check` + `transitions.py check` |
+| **gate** | Gate 0 `py_compile` (the four tool files plus the bench and research scripts touched) · Gate 1 `harness.py` (82 checks) · Gate 1b `transitions_harness.py` (count in `TRANSITIONS.md §5`) · Gate 2 `reveal.py check` + `transitions.py check` |
 | **verify** | harnesses green, then a catalogued real pair (`fixtures/MANIFEST.md`) through `align` or the page with `metrics.json` quoted, or through `transitions.py pair` with `report.json` quoted and the strip looked at |
 | **live drive** | `reveal.py align` on a real pair, or the served page (`conventions/verify.md`) |
 | **the deploy** | laptop only; "shipped" = committed on `main` and pushed to `origin main` by the agent at Phase 4 — no branches, no PRs (owner ruling 2026-09-13) |

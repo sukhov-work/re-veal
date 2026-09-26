@@ -223,7 +223,7 @@ red (coverage 0.00, a 56-level step); on 2026-09-23 check 46 applies its own mut
 (`depth_gain` 3 opens 2.2 % holes) and the lazy `import torch` inside the depth section turned the
 old check 3 red (it walked every import) before the amendment. Gaps: the harness inputs are synthetic by rule; the real-pair tier lives in
 `fixtures/` and the dated sheets under `.claude/claude-docs/benchmarks/` (first sheet 2026-09-13, ten
-pairs); DNG and ARW have never been decoded from a real file; the owner's usability rating is pending.
+pairs); DNG and ARW have never been decoded from a real file; the owner's usability rating was 0 of 12 on every review round from 2026-09-14 to 2026-09-25 (§11 and the retrospective of 2026-09-26 take it from there).
 
 ## 6. Measurements (2026-09-13, M3 Pro, `.venv` Python 3.13.5, OpenCV 5.0.0)
 | What | Result |
@@ -383,8 +383,12 @@ Owner order (2026-09-13): "make sure we account ( maybe you already did ) for an
 .venv/bin/python transitions.py warmup     # once, with the learned deps: fetches the depth model into models/depth/
 .venv/bin/python transitions.py pair fixtures/mismatch_1_S.jpg fixtures/mismatch_1_F.jpg --out out/cam --seconds 2 --camera model --zoom 0.25
 .venv/bin/python transitions.py pair out/before.jpg out/after_aligned.jpg --out out/tr --seconds 1.5 --preset flow-dissolve
-open out/tr/strip.jpg; cat out/tr/report.json
-.venv/bin/python transitions_harness.py            # Gate 1b
+.venv/bin/python transitions.py pair fixtures/mismatch_4_S.jpg fixtures/mismatch_4_F.jpg --out out/anc --seconds 2 \
+    --anchors "941,214,960,452;150,530,150,670;1770,530,1770,670" --anchor-falloff 0.45   # theme anchors (2026-09-26)
+open out/tr/strip.jpg; cat out/tr/report.json      # report.json: quality.goal = the goal numbers (§2 item 6)
+.venv/bin/python transitions_harness.py            # Gate 1b (54 checks, §5)
+.venv/bin/python scripts/research/theme_anchors.py --anchors benchmarks/runs/2026-09-26/anchors/anchors.json \
+    --out benchmarks/runs/2026-09-26/anchors --page-only --picks theme_anchors_picks.json   # ingest the owner's boxes
 ```
 
 ## 10. TR14 design: what the changed region does between the endpoints (2026-09-15)
@@ -619,7 +623,7 @@ depth camera move ("really liked the effect on all individual images especially 
 option"), approved on 2026-09-23 with its model leg ("yes to model, and run it on matched pairs
 too ( as a test, need to compare)"): it becomes a `transitions.py` option (plan §Rank 2026-09-23).
 Built the same day as `--camera flat|ramp|model` + `--zoom` (§2.3, harness L); the sweep with the
-three cameras is `benchmarks/2026-09-23-camera.md`, the owner's picks pending.
+three cameras is `benchmarks/2026-09-23-camera.md`; the owner's picks of 2026-09-25 (its §5): 0 of 12, every camera "unnecessary pans and basically cross fading"; `--camera` stays an option, not the transition.
 
 ### 10.9 Found on the way, not TR14's
 `hold` on mismatch_7 exposes the start frame's moved border as a rectangle at mid-transition:
@@ -635,7 +639,10 @@ Recorded as backlog T14.
    + "a bit luma" is the direction; the next page carries the partial-strength luma and a stroke-flow.
 2. `hold` (RoMa) against `hold-dis` (DIS + mask): is the background motion RoMa gives on match_4
    worth the dense matcher, or is the weight-free `hold-dis` enough?
-3. TR6: which backend may be fetched first (license and size in §10.7).
+3. TR6: which backend may be fetched first (license and size in §10.7). Answered 2026-09-22/23 and
+   2026-09-26: the per-frame bridge and the LTX clips are rejected as measured; the generative role is
+   generated keyframes on the second machine (§11, plan §Rank 2026-09-26 item 4), route approved by
+   the owner on 2026-09-26 ("i am ok with your reccomended route in general").
 
 ## 11. Goal statement and goal metrics (2026-09-26; the owner confirms the statement)
 
@@ -703,7 +710,12 @@ Research of 2026-09-26 that the next design pass starts from (primary sources; r
   if keyframes are made by a separate script the operator runs on purpose and `transitions.py`
   reads cached files. Published two-image morphers (FreeMorph, AlignMorph) fall back to plain
   interpolation on unrelated pairs by their own account. Nothing measured; every speed is reported
-  or inferred.
+  or inferred. Track F (2026-09-26, `track_F.md`) chose the container: stable-diffusion.cpp's Vulkan
+  image pinned by digest (`/dev/dri` only, no ROCm) with the Qwen-Image-Edit-2511 GGUF set (19 GB),
+  one-shot with caps and a pre-flight (`scripts/research/strix_keyframe.sh`); the owner approved the
+  route in general the same day; the box was probed read-only (35 GB available, Vulkan 1.4 RADV
+  GFX1151, rootful Docker → `sudo docker --user`, Tailscale logged out on the box, reach through the
+  prod box as a jump host). Not run yet.
 
 Theme anchors, 2026-09-26 (late; owner: "Go on with theme anchors , feel free to explore"): the
 hand-placed anchors page `benchmarks/runs/2026-09-26/anchors/index.html` renders the six mismatched
