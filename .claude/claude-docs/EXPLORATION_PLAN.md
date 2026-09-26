@@ -165,6 +165,15 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    in §12.2 (mismatch_6: first / last interior step 0.05 / 0.05 levels, `edge_ratio` 0.0105; two runs
    byte-identical). Defects by the agent's eye in §12.3; the owner's boxes decide; nothing entered
    `transitions.py`. Next: the picks, then the tool shape of §12.4 (`--score FILE`) for a graded probe.
+   **Owner picks 2026-09-26 (verbatim in DECISIONS 2026-09-26 third session late; `TRANSITIONS.md
+   §12.6`)**: mismatch_6 `layered` and `layered_overlap` are the first clips on record with "content
+   transforms" ticked ("one picture" on none): "interesting movements of clouds / front objects" but
+   "a lot of countours , afterimages", "too direct and rushed", "crossfade is present in all
+   variants"; mismatch_4 and mismatch_3 layered clips "very juny patchy dirty transitions , not useful
+   at all" (the owner's cause: luma and colours vary between frames, many distinct edges) → the
+   noise-ordered patch reveals are out. Next: one more mismatch_6 probe aimed at "one picture"
+   (no residual crossfade, no recolour during erosion, no matte contours, no afterimages, 3–4 s
+   with overlapping windows), then the owner grades; the tool shape waits for that grade.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -269,3 +278,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-26 | Second half: owner named the second machine's docs and ordered the theme anchors; hand-placed anchors page (four variants × six pairs) + automatic probe rendered; `--anchor-falloff` built (T16 closed); Strix Halo route researched (track F) and recorded, not run | retrospective session, 2026-09-26 (late) |
 | 2026-09-26 | Owner picks on the theme-anchors page ingested (no clip one picture or transforming; the frame edge rejected; whole-frame rotations rejected; per-pair layered orchestration described); item 3 rewritten as the orchestrated layered transition with a per-scene score; the anchors' default falloff set to 0.45 | retrospective session, 2026-09-26 (late) |
 | 2026-09-26 | Third session: the orchestrated layered transition designed (`TRANSITIONS.md §12`) and probed from hand-written scores on mismatch_6 (as the owner scored it, two timings), mismatch_4 (sun by the Gaussian map, skyline, water, clouds) and mismatch_3 (depth bands); page + sheet; no tool change; owner grades next | layered session, 2026-09-26 (third) |
+| 2026-09-26 | Owner picks on the layered page ingested: mismatch_6 layered clips are the first graded "content transforms" (one picture on none; contours, afterimages, rushed, crossfade present); mismatch_4 / mismatch_3 layered clips rejected as "patchy dirty" → noise-ordered patch reveals out; next = a mismatch_6 probe aimed at one picture | layered session, 2026-09-26 (third, late) |

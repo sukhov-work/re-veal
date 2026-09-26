@@ -859,3 +859,38 @@ scene"); its keys above are the contract to record in `contracts.md` on that day
 4. The moved sun's glow: re-render it around the moving centre, or accept the fade?
 5. mismatch_3: is a per-layer patch reveal with parallax a family worth tuning, or is it "cross
    fade with cheap effects"?
+
+### 12.6 Owner picks on the first three probes (2026-09-26, 13:19 UTC; `benchmarks/runs/2026-09-26/layered/layered_picks.json`)
+
+Verbatim. mismatch_6, closer: none; boxes `layered` and `layered_overlap` = content transforms +
+nothing invented (one picture on none), `flat` and `anchors_falloff` = nothing invented: "anchors_falloff
+and flat more or less same as in previous runs ( at least not worse ), layered variants added
+intneresting movements of clouds / front objects but they leave a lot of countours , afterimages and
+in general feel too direct and rushed , but i like how  you at least was able to isolate some objects
+and themes in layered variants, still very junky and crossfade is present in all variants ( although
+in anchors_falloff it is  rather subtle )". mismatch_4, closer: `anchors_alpha`; the layered clip has
+no box: "anchors feel more or less same as in previous runs ( at least not worse, somewhat smooth,
+still crossfade present ), layered variants in this example are very juny patchy dirty transitions ,
+not useful at all , i feel like this is because for this example luma and colors vary between frames
+and also lots of distinct edges". mismatch_3, closer: none; the layered clip has no box: the same
+sentence without "somewhat smooth".
+
+What follows, pair by pair (the agent's reading; the owner corrects it):
+- mismatch_6: the two layered clips are the first on record with "content transforms" ticked (none
+  of the 22 clips on the anchors page had it, nor any earlier page). "One picture" still fails.
+  The faults the owner names map onto known parts of the probe [INFERRED]: "contours" onto the
+  matte edges (the tree crown's `grow` band, the per-column skyline cut, the cloud fringe);
+  "afterimages" onto what stays behind a moving layer (the extrapolated sky fit under the exiting
+  buildings, the residual under soft edges); "too direct and rushed" onto a 2 s clip whose actions
+  run one after another with eased translations; "crossfade is present" onto the backdrop's
+  residual crossfade and the clouds' recolour while they erode. The next mismatch_6 probe removes
+  each source in turn (§12.7 in the handover) before anything enters the tool.
+- mismatch_4 and mismatch_3: noise-ordered dissolves and materialisations are rejected wherever a
+  layer has internal structure (the whole mismatch_3 score; mismatch_4's clouds and skyline band).
+  The owner's cause stands as the rule: a patch reveal shows the two photos' luma and colour
+  side by side across many edges. The mismatch_3 depth-band family is out; mismatch_4's next probe
+  keeps only the sun move and the two backdrops with a clean slide of the skyline band.
+- The gate of §12.4 reads "graded one picture or content transforms": its letter is met by
+  mismatch_6 `layered`; the owner's note grades the same clip "very junky". Recommendation: no
+  tool build yet; one more probe round on mismatch_6 aimed at "one picture", then the owner grades
+  again. The owner decides (handover question 1).
