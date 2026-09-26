@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-shot keyframe on the Strix Halo box (plan §Rank 2026-09-26 item 4; research track F, 2026-09-26).
-# NOT RUN YET (2026-09-26: the box was unreachable from the Mac). Read benchmarks/runs/2026-09-26/research/track_F.md first.
+# Ran twice on 2026-09-26 (kf_01, kf_01b: byte-identical keyframes; DECISIONS 2026-09-26 Track B). Read benchmarks/runs/2026-09-26/research/track_F.md first.
 #
 # Shape: stable-diffusion.cpp's Vulkan container (no ROCm, no /dev/kfd, host drivers untouched),
 # pinned by digest, run as the unprivileged user with /dev/dri only, no network, read-only root,
@@ -22,12 +22,14 @@
 # Usage on the box (after `touch ~/halo-hold` for the session; remove it afterwards):
 #   MODELS=~/keyframes/models IN=~/keyframes/in OUT=~/keyframes/out \
 #   PROMPT="..." SEED=20260926 ./strix_keyframe.sh before.png after.png kf_01
+#   ... ./strix_keyframe.sh before.png - kf_02        # single reference (the base picture only; 2026-09-27)
 # Run it twice with the same arguments and compare `sha256sum $OUT/kf_01*.png`: the keyframe is
 # only usable if the two runs agree byte for byte (determinism gate).
 set -euo pipefail
 IMG="ghcr.io/leejet/stable-diffusion.cpp@sha256:0ab8e0e0ef3c51db7132f5e15c9e5615a529ea4156573409e8c4b4c97ee1ac37"  # master-vulkan, 2026-09-25
 MODELS="${MODELS:?models dir}"; IN="${IN:?input dir}"; OUT="${OUT:?output dir}"
-A="${1:?before image (in $IN)}"; B="${2:?after image (in $IN)}"; NAME="${3:-kf}"
+A="${1:?before image (in $IN)}"; B="${2:-}"; NAME="${3:-kf}"   # B empty or "-" = a single-reference run (2026-09-27)
+REFS=(-r "/in/$A"); if [ -n "$B" ] && [ "$B" != "-" ]; then REFS+=(-r "/in/$B"); fi
 PROMPT="${PROMPT:?prompt}"; SEED="${SEED:-20260926}"
 NEED_GB="${NEED_GB:-26}"
 W="${W:-1024}"; H="${H:-1024}"          # output size; the canvas of mismatch_4 is 1920x1092, so W=1344 H=768 keeps its ratio (2026-09-26)
@@ -64,7 +66,7 @@ $INHIBIT timeout 45m $DOCKER run --rm --init \
   --llm_vision /models/Qwen2.5-VL-7B-Instruct.mmproj-Q8_0.gguf \
   --vae /models/qwen_image_vae.safetensors \
   --model-args qwen_image_zero_cond_t=true \
-  -r "/in/$A" -r "/in/$B" -p "$PROMPT" \
+  "${REFS[@]}" -p "$PROMPT" \
   --cfg-scale 2.5 --sampling-method euler --flow-shift 3 --diffusion-fa --vae-tiling \
   --max-vram "$MAX_VRAM" --seed "$SEED" --rng cpu --sampler-rng cpu -W "$W" -H "$H" \
   -o "/output/${NAME}.png"

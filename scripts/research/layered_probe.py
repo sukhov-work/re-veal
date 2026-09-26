@@ -30,6 +30,21 @@ the fit and the residual; `fit_under` gives the rows under A's skyline B's fit f
 `fit2d` makes the backdrop's fit a per-band quadratic in x; `refine: "dark_or_chroma"` + `chroma_d`;
 `slide_between: [bandA, bandB]` slides a backdrop's top edge from one band's bottom line to the other's;
 `dark_in` (near-black pixels in a row range), `minus_mask`, and `or: [names]` on any rule.
+Round-3 keys (2026-09-27, all default-off; the round-2 renders are byte-identical through them):
+a dissolve / materialise with `order: "edge"` erodes each cloud from its edge inward along the
+distance transform of its dense part (`edge_norm` px, the default: the front runs in px at one speed
+from every edge, `edge_thr` density bounds the dense part, `speed_density` lets it run faster through
+thin parts, `front_soft_px` is the soft band, `front_wide_px` / `wide_gain` a wide thinning ramp ahead
+of it, `turb_px_amp` at `turb_px` and 3 x `turb_px` displaces the front; global | blob: the same normalized to the largest inward distance, with `front_soft` and
+`turb` in those units) and a thinning of the thin parts (`thin`); `shutter` on a moving layer blurs its pixels and
+its alpha along the travel direction by shutter x the per-frame displacement (0.5 = a 180-degree
+shutter); `carry_fit: BACKDROP` relights a moving layer's carried sky to the backdrop's fit at the
+destination rows (a region that carries B's sky and slides shows the sky of other rows otherwise);
+`edge_feather: {min, max, grad}` on a mask rule widens the matte's feather where the photo's own
+gradient is soft; `fill_holes_px: n` on a mask rule fills its enclosed holes of up to n px; the `clouds`
+rule takes `channel: "L_hp"` (a high-pass of L at `hp_px`, `hp_sign` -1 for dark clouds); curves `smootherstep`, `fall`, `settle`. The report gains a `measure` block: the
+per-frame displacement of every moving layer, the semi-transparent share and the front width of every
+dissolve, and the luminance step across every moving layer's boundary on the composite.
 Actions: backdrop (the low-order sky gradient of A moves to B's with the residual textures
 crossfaded; alpha 1 everywhere), hold, recolor (per-row Lab statistics of the layer move to the
 `to` layer's), dissolve (the layer erodes through its own density plus noise; thin parts first),
@@ -43,6 +58,7 @@ centre). Frame 0 is A and the last frame is B, exactly; every other frame is the
 """
 import argparse
 import json
+import math
 import shutil
 import sys
 import time
@@ -82,6 +98,38 @@ def canvas_pair(pair, max_long):
 def smoothstep(x):
     x = np.clip(x, 0.0, 1.0)
     return x * x * (3.0 - 2.0 * x)
+
+
+# round 3 (2026-09-27): curves that start and end slower than the cosine ease. The cosine's middle
+# half runs at nearly constant speed (its peak speed is 1.57 x its mean), which the owner read as
+# "very linear"; smootherstep peaks at 1.875 x and has zero acceleration at both ends; `fall` is a
+# constant acceleration from rest (an exit that drops away); `settle` a decelerating arrival.
+CURVES_R3 = {
+    "smootherstep": lambda u: u * u * u * (u * (6.0 * u - 15.0) + 10.0),
+    "fall": lambda u: u * u,
+    "settle": lambda u: 1.0 - (1.0 - u) ** 3,
+}
+
+
+def curve_of(name, u):
+    if name in CURVES_R3:
+        return float(min(1.0, max(0.0, CURVES_R3[name](u))))
+    return T.curve(name, u)
+
+
+def line_kernel(v, length):
+    """A normalized line kernel `length` px long along the unit vector v: a box
+    along x with fractional ends, rotated onto v (bilinear)."""
+    k = int(2 * math.ceil(length / 2.0)) + 3
+    c = k // 2
+    base = np.zeros((k, k), np.float32)
+    x0, x1 = c - length / 2.0, c + length / 2.0
+    for x in range(k):
+        base[c, x] = max(0.0, min(x + 0.5, x1) - max(x - 0.5, x0))
+    ang = math.degrees(math.atan2(float(v[1]), float(v[0])))
+    M = cv2.getRotationMatrix2D((float(c), float(c)), -ang, 1.0)
+    kern = cv2.warpAffine(base, M, (k, k), flags=cv2.INTER_LINEAR)
+    return kern / max(float(kern.sum()), 1e-6)
 
 
 def ramp(x, lo, hi):
@@ -281,6 +329,7 @@ class Scene:
         self.disp = {}
         self.masks = {}
         self.seed = seed
+        self.n = 2          # frames of the clip; set by render_score (the shutter needs px per frame)
 
     def disparity(self, src):
         if src not in self.disp:
@@ -420,11 +469,40 @@ class Scene:
             raise SystemExit(f"unknown mask rule {rule!r}")
         for other in m.get("or", []):
             a = np.maximum(a, self.masks[other])      # the union with an earlier mask
+        if m.get("fill_holes_px", 0):
+            # round 3: fill the ENCLOSED holes of the support up to
+            # `fill_holes_px` px of area (a thin cloud band whose haze falls
+            # under the density floor left holes through which the clear-sky
+            # fill showed from frame 1: the dark patches of round 2). A
+            # morphological closing was tried first and bridged the sky
+            # between the clouds (55 % cover, many small clouds): the
+            # backdrop's fit lost every pixel.
+            hard = (a > 0.5).astype(np.uint8)
+            n_, lab_, st_, _ = cv2.connectedComponentsWithStats(1 - hard)
+            fill = np.zeros(n_, bool)
+            for i in range(1, n_):
+                x, y, bw, bh, area = st_[i]
+                touches = x <= 0 or y <= 0 or x + bw >= w or y + bh >= h
+                fill[i] = (area <= int(m["fill_holes_px"])) and not touches
+            filled = np.where(fill[lab_], 1.0, hard).astype(np.float32)
+            a = np.maximum(a, cv2.GaussianBlur(filled, (0, 0), 1.0))
         if rule not in ("depth_fg", "depth_bg") and m.get("grow", 0):
             # any moving layer may carry the background within `grow` px of
             # its edge (the depth rules apply it before their inversion)
             k = int(m["grow"])
             a = np.maximum(a, cv2.GaussianBlur(cv2.dilate(a, np.ones((2 * k + 1, 2 * k + 1), np.uint8)), (0, 0), 1.0))
+        ef = m.get("edge_feather")
+        if ef:
+            # round 3: a feather that follows the photo's own edge — tight
+            # (sigma `min`) where the L gradient under the matte edge is at
+            # least `grad` L per px, wide (sigma `max`) where the photo is smooth
+            L = cv2.GaussianBlur(self.lab[src][..., 0], (0, 0), 1.0)
+            gx = cv2.Sobel(L, cv2.CV_32F, 1, 0, ksize=3) / 8.0
+            gy = cv2.Sobel(L, cv2.CV_32F, 0, 1, ksize=3) / 8.0
+            gs = np.clip(cv2.GaussianBlur(np.sqrt(gx * gx + gy * gy), (0, 0), 3.0) / float(ef.get("grad", 6.0)), 0, 1)
+            tight = cv2.GaussianBlur(a, (0, 0), float(ef.get("min", 1.0)))
+            wide = cv2.GaussianBlur(a, (0, 0), float(ef.get("max", 10.0)))
+            a = gs * tight + (1.0 - gs) * wide
         self.masks[name] = a.astype(np.float32)
         return self.masks[name]
 
@@ -582,6 +660,20 @@ class Scene:
         sunset). Density 0..1; the matte is opaque above `opaque`."""
         lab = self.lab[src]
         chan = m.get("channel", "b")
+        if chan == "L_hp":
+            # round 3 (2026-09-27): a high-pass of L at `hp_px` — thin bright
+            # streaks stand out, a smooth glow cancels (the L-density rule took
+            # the sunset glow for cloud on mismatch_4; measured on B's sky:
+            # 99th percentile of the 40-px high-pass 16.4 L, median -0.2).
+            # `hp_sign` -1 takes the dark clouds instead.
+            L = lab[..., 0]
+            hp = (L - cv2.GaussianBlur(L, (0, 0), float(m.get("hp_px", 40)))) * float(m.get("hp_sign", 1))
+            # `hp_floor`: the noise floor of the high-pass (without it 74 % of
+            # B's sky counted as cloud at an opaque threshold of 0.02)
+            dens = np.clip((hp - float(m.get("hp_floor", 4.0))) / float(m.get("delta", 12.0)), 0, 1)
+            dens = cv2.GaussianBlur(dens.astype(np.float32), (0, 0), m.get("blur", 2.0)) * within
+            self.masks["_density_" + m["within"]] = dens
+            return np.clip(dens / float(m.get("opaque", 0.35)), 0, 1)
         v = lab[..., 2] if chan == "b" else lab[..., 0]
         h = self.h
         half = int(m.get("window", 100))
@@ -664,7 +756,7 @@ class Layer:
         # clip BEFORE the curve: the cosine ease is not monotone outside 0..1
         t0, t1 = self.window
         u = min(1.0, max(0.0, (t - t0) / max(t1 - t0, 1e-6)))
-        return T.curve(self.curve, u)
+        return curve_of(self.curve, u)
 
     def _prep(self):
         s, sp = self.scene, self.spec
@@ -695,6 +787,72 @@ class Layer:
                     base = 1.0 - base          # the top goes first when dissolving
             elif order == "blobs":
                 base = None
+            elif order == "edge":
+                # round 3 (2026-09-27): the erosion runs from each cloud's edge
+                # inward along the distance transform of its support, so the
+                # front is the cloud's own outline receding, not a threshold
+                # on density plus noise (which cuts noise-shaped holes; the
+                # owner: "a very raw and naive luma manner"). `edge_norm`
+                # global: one scale for all clouds, so the small ones go first;
+                # blob: each cloud on its own scale, all gone together.
+                mode = sp.get("edge_norm", "px")
+                dens = s.masks.get("_density_" + sp["mask"].get("within", ""))
+                self.dn = np.clip(dens, 0, 1).astype(np.float32) if dens is not None else np.ones((h, w), np.float32)
+                tp = float(sp.get("turb_px", 24))
+                n1 = noise_field(h, w, tp, s.seed + 3)
+                n2 = noise_field(h, w, 3.0 * tp, s.seed + 4)
+                if mode == "px":
+                    # px mode (the physical one; 2026-09-27): the front eats
+                    # inward at one speed from every edge of the dense part
+                    # (density above `edge_thr`; the fringe outside it goes
+                    # first, and a thin spot inside a cloud opens up as a hole),
+                    # faster through thin parts (`speed_density`), with a
+                    # `front_soft_px`-wide band and a front displaced by two
+                    # octaves of noise (`turb_px_amp` px at `turb_px` and 3 x
+                    # `turb_px`). Small clouds go early, the big core last.
+                    # The normalized modes below washed every cloud at once
+                    # (semi-transparent share 0.42 at a quarter of the window
+                    # with a 90-px band; measured 2026-09-27).
+                    thr = float(sp.get("edge_thr", 0.15))
+                    sup8 = ((self.alpha0 > 0.5) & (self.dn > thr)).astype(np.uint8)
+                    D = cv2.distanceTransform(sup8, cv2.DIST_L2, 5)
+                    sd = float(sp.get("speed_density", 0.6))
+                    if sd > 0:
+                        dl = cv2.GaussianBlur(self.dn, (0, 0), 30.0)
+                        dl = dl / max(float(dl.max()), 1e-6)
+                        D = D * ((1.0 - sd) + sd * dl)
+                    amp = float(sp.get("turb_px_amp", 12.0))
+                    self.r_edge = (D + amp * (n1 - 0.5) + 0.5 * amp * (n2 - 0.5)).astype(np.float32)
+                    self.front_soft = float(sp.get("front_soft_px", 30.0))
+                    # a second, wide ramp ahead of the cut: the cloud thins
+                    # over `front_wide_px` before its edge goes (an evaporating
+                    # shell), down to (1 - wide_gain) at the cut itself; with
+                    # a 10-px band and 20 px of turbulence alone the front was
+                    # a field of round holes (measured on the frames 2026-09-27)
+                    self.front_wide = float(sp.get("front_wide_px", 90.0))
+                    self.wide_gain = float(sp.get("wide_gain", 0.5))
+                    self.turb_max = 0.75 * amp
+                    self.d_max = max(float(D.max()), 1.0)
+                else:
+                    sup8 = (self.alpha0 > 0.5).astype(np.uint8)
+                    D = cv2.distanceTransform(sup8, cv2.DIST_L2, 5)
+                    if mode == "blob":
+                        n_, lab_ = cv2.connectedComponents(sup8)
+                        mx = np.zeros(n_, np.float32)
+                        np.maximum.at(mx, lab_.ravel(), D.ravel())
+                        r = D / np.maximum(mx[lab_], 1.0)
+                    else:
+                        r = D / max(float(D.max()), 1.0)
+                    ta = float(sp.get("turb", 0.3))
+                    self.r_edge = (r + ta * (n1 - 0.5) + 0.5 * ta * (n2 - 0.5)).astype(np.float32)
+                    self.front_soft = float(sp.get("front_soft", 0.35))
+                    self.front_wide, self.wide_gain = 0.0, 0.0
+                    self.turb_max = 0.75 * ta
+                    self.d_max = 1.0
+                self.thin = float(sp.get("thin", 0.0))
+                self.edge_mode = mode
+                self.d_max_px = round(float(D.max()), 1)
+                base = None
             else:
                 base = np.zeros((h, w), np.float32)
             self.order_kind = order
@@ -705,7 +863,7 @@ class Layer:
                 hi = float(E[sup].max()) if sup.any() else 1.0
                 self.E = ((E - lo) / max(hi - lo, 1e-6)).astype(np.float32)   # 0..1 on the support
                 self.feather = float(sp.get("feather", 0.12))
-            else:
+            elif order == "blobs":
                 self.order = s.masks["_order_" + self.src]
                 self.each = float(sp.get("each", 0.12))
         if self.action == "move_to":
@@ -733,6 +891,56 @@ class Layer:
             ty = (h - y1) / v[1] if v[1] > 0 else (y2 / -v[1] if v[1] < 0 else np.inf)
             travel = float(sp.get("travel_px", min(tx, ty) + 8))
             self.dir, self.travel = d, travel
+        # round 3: a moving layer that carries sky between its leaves shows the
+        # sky of its source rows at its destination rows; `carry_fit` names
+        # the backdrop whose fit relights the carried pixels (fit at the
+        # destination minus fit at the source, in Lab; zero at the endpoints)
+        self.carry = self.by_name[sp["carry_fit"]] if sp.get("carry_fit") else None
+        self.shutter = float(sp.get("shutter", 0.0))
+
+    def offset(self, t):
+        """The translation (px) of the layer at t: exit / enter / move, the
+        drift, and the centroid transport of move_to."""
+        sp = self.spec
+        off = np.zeros(2, np.float32)
+        p = self.progress(t)
+        if self.action == "exit":
+            off = self.dir * self.travel * p
+        elif self.action == "enter":
+            off = -self.dir * self.travel * (1.0 - p)
+        elif self.action == "move":
+            off = self.dir * float(sp.get("travel_px", 0)) * p
+        elif self.action == "move_to":
+            ms = self.scene.masks["_blob_" + self.name][0]
+            pos = ((1 - p) * np.eye(2) + p * self.T_bw) @ ms + p * self.b_bw
+            off = off + (pos - ms).astype(np.float32)
+        drift = sp.get("drift")
+        if drift:
+            off = off + np.array([drift[0] * self.scene.w, drift[1] * self.scene.h], np.float32) * p
+        return off
+
+    def velocity(self, t):
+        """px per frame at t (a central difference over one frame each side)."""
+        dt = 1.0 / max(self.scene.n - 1, 1)
+        t0, t1 = max(0.0, t - dt), min(1.0, t + dt)
+        if t1 - t0 <= 0:
+            return np.zeros(2, np.float32)
+        return (self.offset(t1) - self.offset(t0)) / ((t1 - t0) / dt)
+
+    def edge_alpha(self, p):
+        """The matte of an order-`edge` dissolve at progress p: the front f
+        runs from below the support's edge (every pixel opaque at p = 0) to
+        beyond its deepest point (nothing left at p = 1); the thin parts lose
+        opacity with `thin` x p on top."""
+        f0 = -(max(self.front_soft, self.front_wide) + self.turb_max)
+        f1 = self.d_max + self.turb_max
+        f = f0 + (f1 - f0) * p
+        a = self.alpha0 * smoothstep((self.r_edge - f) / self.front_soft)
+        if self.front_wide > 0:
+            a = a * ((1.0 - self.wide_gain) + self.wide_gain * smoothstep((self.r_edge - f) / self.front_wide))
+        if self.thin > 0:
+            a = a * (1.0 - self.thin * p * (1.0 - self.dn))
+        return a
 
     def colour(self, t):
         """The layer's RGB at time t after its colour path (float32)."""
@@ -787,13 +995,18 @@ class Layer:
         rgb = self.colour(t)
         p = self.progress(t)
         if self.action == "dissolve":
-            # the threshold rises from below the support's lowest order value
-            # to its highest: at p = 0 the whole matte, at p = 1 nothing
-            theta = -self.feather + (1.0 + self.feather) * p
-            alpha = self.alpha0 * np.clip((self.E - theta) / self.feather, 0, 1)
+            if self.order_kind == "edge":
+                alpha = self.edge_alpha(p)
+            else:
+                # the threshold rises from below the support's lowest order value
+                # to its highest: at p = 0 the whole matte, at p = 1 nothing
+                theta = -self.feather + (1.0 + self.feather) * p
+                alpha = self.alpha0 * np.clip((self.E - theta) / self.feather, 0, 1)
         elif self.action == "materialise":
             if self.order_kind == "blobs":
                 alpha = self.alpha0 * np.clip((p - self.order) / self.each, 0, 1)
+            elif self.order_kind == "edge":
+                alpha = self.edge_alpha(1.0 - p)      # the reverse: the cloud condenses from its core outward
             else:
                 # the reverse of dissolve: the highest order value comes first
                 theta = (1.0 + self.feather) * (1.0 - p) - self.feather
@@ -803,9 +1016,26 @@ class Layer:
         M = self.affine(t)
         if M is not None:
             h, w = self.scene.h, self.scene.w
+            if self.carry is not None:
+                off = self.offset(t)
+                if abs(float(off[0])) + abs(float(off[1])) > 0.01:
+                    fit = self.carry.fitA_img if self.src == "A" else self.carry.fitB_img
+                    Mf = np.array([[1, 0, -off[0]], [0, 1, -off[1]]], np.float32)
+                    fit_dest = cv2.warpAffine(np.ascontiguousarray(fit), Mf, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                    rgb = lab_to_rgb(self.lab + (fit_dest - fit))
             rgb = cv2.warpAffine(rgb, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
             alpha = cv2.warpAffine(alpha, M, (w, h), flags=cv2.INTER_LINEAR,
                                    borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            if self.shutter > 0:
+                # motion blur along the travel: the pixels and the matte both,
+                # by shutter x the per-frame displacement (0 at rest, so the
+                # endpoint frames stay exact)
+                v = self.velocity(t)
+                length = self.shutter * float(np.linalg.norm(v))
+                if length >= 1.0:
+                    kern = line_kernel(v / max(float(np.linalg.norm(v)), 1e-6), length)
+                    rgb = cv2.filter2D(rgb, -1, kern, borderType=cv2.BORDER_REPLICATE)
+                    alpha = cv2.filter2D(alpha, -1, kern, borderType=cv2.BORDER_CONSTANT)
         return rgb, alpha
 
 
@@ -950,6 +1180,108 @@ def composite(layers, t):
 
 
 # ---------------------------------------------------------------------------
+# Measurements on the composite (round 3, 2026-09-27): the numbers behind the
+# owner's three faults, so a fix is judged against a figure, not by eye
+# ---------------------------------------------------------------------------
+
+def measure_layers(layers, n):
+    """motion: per moving layer the per-frame displacement (max, mean, the
+    peak-to-mean ratio, the share of moving frames within 10 % of the peak =
+    the constant-speed plateau); dissolve: at a quarter, half and three
+    quarters of the window the share of the support that is semi-transparent
+    (0.05 < alpha < 0.95) and the mean width of that band along the front
+    (its area over the front's length); boundary: at half and three quarters
+    of a moving layer's window the mean L step across its boundary on the
+    composite (a 12-px band inside against a 12-px band outside the alpha 0.5
+    contour; the canvas edge does not count); carried: for a `region_of`
+    layer, the mean |L| difference between the composite and the layers under
+    it at the region's opaque pixels outside its core (the sky it carries
+    against the sky it covers)."""
+    out = {"motion": {}, "dissolve": {}, "boundary": {}}
+    ts = [i / (n - 1) for i in range(n)]
+    for lay in layers:
+        moving = lay.action in ("exit", "enter", "move", "move_to")
+        if moving or lay.spec.get("drift"):
+            offs = np.array([lay.offset(t) for t in ts])
+            d = np.linalg.norm(np.diff(offs, axis=0), axis=1)
+            mv = d[d > 0.01]
+            if len(mv):
+                mx = float(d.max())
+                out["motion"][lay.name] = {
+                    "curve": lay.curve, "travel_px": round(float(np.linalg.norm(offs[-1] - offs[0])), 1),
+                    "frames_moving": int(len(mv)), "max_px_per_frame": round(mx, 2),
+                    "mean_px_per_frame": round(float(mv.mean()), 2),
+                    "peak_ratio": round(mx / max(float(mv.mean()), 1e-6), 2),
+                    "plateau_share": round(float((mv >= 0.9 * mx).sum() / len(mv)), 2)}
+        if lay.action in ("dissolve", "materialise") and lay.spec["mask"]["rule"] != "stars":
+            t0, t1 = lay.window
+            shares, widths = [], []
+            sup = lay.alpha0 > 0.5
+            for q in (0.25, 0.5, 0.75):
+                _, a = lay.render(t0 + (t1 - t0) * q)
+                semi = (a > 0.05) & (a < 0.95) & sup
+                shares.append(float(semi.sum()) / max(float(sup.sum()), 1.0))
+                cs, _ = cv2.findContours((a > 0.5).astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+                per = sum(cv2.arcLength(c, True) for c in cs)
+                widths.append(float(semi.sum()) / max(per, 1.0))
+            out["dissolve"][lay.name] = {"order": getattr(lay, "order_kind", "") + (":" + lay.edge_mode if getattr(lay, "edge_mode", "") else ""),
+                                         "semi_share_q": [round(v, 3) for v in shares],
+                                         "front_width_px_q": [round(v, 1) for v in widths],
+                                         "d_max_px": getattr(lay, "d_max_px", None)}
+        if moving:
+            steps = {}
+            carried = {}
+            k = np.ones((25, 25), np.uint8)
+            core = lay.spec["mask"].get("of") if lay.spec["mask"].get("rule") == "region_of" else None
+            below = [l for l in layers if l.depth < lay.depth]
+            for q in (0.5, 0.75):
+                t = lay.window[0] + (lay.window[1] - lay.window[0]) * q
+                comp = composite(layers, t)
+                Lc = T.lab_of(comp)[..., 0]
+                _, a = lay.render(t)
+                m = (a > 0.5).astype(np.uint8)
+                inner = (m > 0) & (cv2.erode(m, k) == 0)
+                outer = (m == 0) & (cv2.dilate(m, k) > 0)
+                if inner.sum() > 50 and outer.sum() > 50:
+                    steps[str(q)] = round(float(abs(Lc[inner].mean() - Lc[outer].mean())), 2)
+                if core and below:
+                    # the sky a region carries between its leaves against the
+                    # backdrop it covers: the composite of the layers under it,
+                    # at the region's opaque pixels that are not the core
+                    # (the core warped with the layer; dilated 12 px)
+                    M = lay.affine(t)
+                    c = lay.scene.masks[core]
+                    if M is not None:
+                        c = cv2.warpAffine(c, M, (lay.scene.w, lay.scene.h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+                    c = cv2.dilate((c > 0.1).astype(np.uint8), np.ones((25, 25), np.uint8))
+                    sel = (a > 0.9) & (c == 0)
+                    if sel.sum() > 200:
+                        Lb = T.lab_of(composite(below, t))[..., 0]
+                        carried[str(q)] = round(float(np.abs(Lc[sel] - Lb[sel]).mean()), 2)
+            out["boundary"][lay.name] = steps
+            if carried:
+                out.setdefault("carried", {})[lay.name] = carried
+    return out
+
+
+def measure_text(meas):
+    """One line for the page and the sheet."""
+    if not meas:
+        return ""
+    parts = []
+    for name, m in (meas.get("motion") or {}).items():
+        parts.append(f"{name} {m['curve']} peak {m['max_px_per_frame']} px/f (x{m['peak_ratio']} mean, plateau {int(round(100 * m['plateau_share']))} %)")
+    for name, m in (meas.get("dissolve") or {}).items():
+        parts.append(f"{name} {m['order']} semi-transparent share {'/'.join(f'{v:.2f}' for v in m['semi_share_q'])}, front width {'/'.join(f'{v:.0f}' for v in m['front_width_px_q'])} px at 1/4, 1/2, 3/4")
+    for name, m in (meas.get("boundary") or {}).items():
+        if m:
+            parts.append(f"{name} boundary step " + ", ".join(f"{v} L at {q}" for q, v in m.items()))
+    for name, m in (meas.get("carried") or {}).items():
+        parts.append(f"{name} carried-sky mismatch " + ", ".join(f"{v} L at {q}" for q, v in m.items()))
+    return " · ".join(parts)
+
+
+# ---------------------------------------------------------------------------
 # Render one score to the tool's outputs
 # ---------------------------------------------------------------------------
 
@@ -971,12 +1303,14 @@ def render_score(score, out, seed=0):
     A, B = canvas_pair(score["pair"], score.get("max_long", 1920))
     h, w = A.shape[:2]
     scene = Scene(A, B, seed)
+    scene.n = max(2, int(round(score.get("seconds", 2.0) * float(score.get("fps", 30)))))
     t0 = time.time()
     layers = build_layers(scene, score)
     prep_s = round(time.time() - t0, 2)
     layer_sheet(layers, out / "layers.jpg")
     fps = float(score.get("fps", 30))
     n = max(2, int(round(score.get("seconds", 2.0) * fps)))
+    scene.n = n
     stats = T.StreamStats(n)
     enc = T.FrameEncoder(out / "transition.mp4", w, h, fps)
     t0 = time.time()
@@ -1010,12 +1344,15 @@ def render_score(score, out, seed=0):
     q = stats.quality(A, B)
     q["first_interior_vs_A"] = round(first_step, 2)
     q["last_interior_vs_B"] = round(last_step, 2)
+    t0 = time.time()
+    meas = measure_layers(layers, n)
+    meas["measure_s"] = round(time.time() - t0, 2)
     report = {"tool_version": T.VERSION, "probe": "layered_probe", "score": score,
               "class": "L", "method": "layered-score",
               "layers": [{"name": l.name, "from": l.src, "action": l.action, "window": l.window,
                           "depth": l.depth, "alpha_share": round(float(l.alpha0.mean()), 4)} for l in layers],
               "canvas": [w, h], "n_frames": written, "prep_s": prep_s, "render_s": render_s,
-              "quality": q, "total_s": round(time.time() - t_all, 2),
+              "quality": q, "measure": meas, "total_s": round(time.time() - t_all, 2),
               "outputs": ["transition.mp4", "strip.jpg", "report.json", "layers.jpg"]}
     (out / "report.json").write_text(json.dumps(report, indent=2))
     return report
@@ -1034,7 +1371,7 @@ def row_from_report(pair, tag, rep, wall):
             "edge_ratio": (q.get("flicker") or {}).get("edge_ratio"), "goal": q.get("goal"),
             "first_interior_vs_A": q.get("first_interior_vs_A"), "last_interior_vs_B": q.get("last_interior_vs_B"),
             "mp4": f"{pair}/{tag}/transition.mp4", "strip": f"{pair}/{tag}/strip.jpg",
-            "layers": rep.get("layers"), "score": rep.get("score")}
+            "layers": rep.get("layers"), "score": rep.get("score"), "measure": rep.get("measure")}
 
 
 def write_page(out, sheet, picks, note=""):
@@ -1087,7 +1424,9 @@ def write_page(out, sheet, picks, note=""):
             step = (f" step first/last={r.get('first_interior_vs_A')}/{r.get('last_interior_vs_B')}"
                     if r.get("first_interior_vs_A") is not None else "")
             secs = f" {r.get('seconds')} s ({r.get('n_frames')} frames)" if r.get("seconds") else ""
-            html.append(f"<div class=run><div><code>{tag}</code>{secs} class={r.get('class')} {r.get('method')} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')}{goal_txt}{step}"
+            mt = measure_text(r.get("measure"))
+            mt_html = f"<br><span class=note>measured: {mt}</span>" if mt else ""
+            html.append(f"<div class=run><div><code>{tag}</code>{secs} class={r.get('class')} {r.get('method')} edge_ratio={r.get('edge_ratio')} warping={r.get('warping_error')}{goal_txt}{step}{mt_html}"
                         f"<br><span class=boxes>{boxes}</span><br><img src='{r['strip']}'>{score_html}</div>"
                         f"<video src='{r['mp4']}' controls loop muted playsinline preload=metadata></video></div>")
     html.append("""<script>
@@ -1116,6 +1455,11 @@ def write_sheet_md(out, sheet, picks):
             md.append(f"| {pair} | {tag} | {r.get('class')} | {r.get('method')} | {r.get('edge_ratio')} | {r.get('warping_error')} | "
                       f"{g.get('feat_floor')} | {g.get('laplace_floor')} | {g.get('contrast_floor')} | {g.get('dissolve_fit')} | {g.get('motion_share')} | "
                       f"{r.get('first_interior_vs_A')}/{r.get('last_interior_vs_B')} | {r.get('wall_s')} |")
+    md += ["", "## Measured on the composite (per-frame displacement · dissolve front · boundary step)", ""]
+    for pair, row in sheet["pairs"].items():
+        for tag, r in row["variants"].items():
+            if r.get("measure"):
+                md.append(f"- {pair} `{tag}`: {measure_text(r['measure'])}")
     md += ["", "## Scores (layer · photo · action · window · share of the canvas)", ""]
     for pair, row in sheet["pairs"].items():
         for tag, r in row["variants"].items():

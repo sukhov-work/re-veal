@@ -1,10 +1,10 @@
 {
  "pair": "mismatch_4",
- "tag": "layered_r2",
+ "tag": "layered_r3",
  "seconds": 3.0,
  "fps": 30,
  "max_long": 1920,
- "owner": "Round 1 (2026-09-26): 'layered variants in this example are very juny patchy dirty transitions , not useful at all , i feel like this is because for this example luma and colors vary between frames and also lots of distinct edges'. Round 2 keeps the sun move and the two backdrops; the skyline band (with its masts) slides down as a whole behind the water and B's band rises behind it; the waterline slides; B's clouds arrive with B's sky texture (the L-density cloud rule takes the sun's glow for cloud on a sunset sky, so no cloud layer); B's sun takes over once the moved sun arrives; the suns carry their disc only, the glow stays in the sky.",
+ "owner": "Round 2 picks (2026-09-26): 'moving individual objects still are junky, like they are some cheap decorations in 2d scene with hard edges ... Clouds and sun reflections on water are still crossfaded and we still have some rough edges and afterimages but it all looks more dynamic now.' Round 3: motion blur along the travel (a 180-degree shutter) and a smootherstep ease on the two skylines and the sun; nothing else changed. B's thin bright clouds as a layer were tried and rejected on the frames (TRANSITIONS.md 12.9): the streaks are 3 px thin, so an edge-inward condensation is a plain fade, and a density-ordered one draws the outline of the residual hole around every streak; the clouds and the sun's water reflection are still crossfades, the next probe's targets.",
  "layers": [
   {
    "name": "band_core_b",
@@ -68,11 +68,12 @@
     0.3,
     0.85
    ],
-   "curve": "ease",
+   "curve": "smootherstep",
    "prompt": {
     "b": "the low industrial skyline with cranes, pylons and a tall chimney",
     "where": "across the middle of the frame"
-   }
+   },
+   "shutter": 0.5
   },
   {
    "name": "sky_b",
@@ -165,11 +166,12 @@
     0.15,
     0.7
    ],
-   "curve": "ease",
+   "curve": "smootherstep",
    "prompt": {
     "a": "the dark city skyline with the tall buildings on the left and its masts",
     "where": "across the middle of the frame"
-   }
+   },
+   "shutter": 0.5
   },
   {
    "name": "sky",
@@ -207,7 +209,7 @@
     0.0,
     0.85
    ],
-   "curve": "ease",
+   "curve": "smootherstep",
    "minus": [
     "sun"
    ],
@@ -233,13 +235,14 @@
     0.15,
     0.7
    ],
-   "curve": "ease",
+   "curve": "smootherstep",
    "recolor_to": "sun_b",
    "recolor_strength": 1.0,
    "prompt": {
     "a": "the sun disc",
     "b": "the sun disc sitting on the tip of the tall chimney"
-   }
+   },
+   "shutter": 0.5
   },
   {
    "name": "sun_b_layer",
@@ -286,7 +289,7 @@
     0.1,
     0.85
    ],
-   "curve": "ease",
+   "curve": "smootherstep",
    "prompt": {
     "a": "the water with the sun's bright reflection road",
     "where": "the bottom half of the frame",

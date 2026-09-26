@@ -1,0 +1,261 @@
+{
+ "pair": "mismatch_6",
+ "tag": "layered_r3_clouds",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "owner": "Round 2 picks (2026-09-26): 'weakest part still are clouds that dissolve in a very raw and naive luma manner , i would expect them to dissolve more like real clouds would do in nature ( but again , NOT crossfade) . Also still all parts of the image that move , have hard distint edges that break immersion and move in very linear manner'. Round 3: one clip per target (the cloud dissolve; the edges and the motion together) and one with both.",
+ "layers": [
+  {
+   "name": "trees_core",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "depth_fg",
+    "lo": 0.012,
+    "hi": 0.04,
+    "dilate": 220,
+    "refine": "dark_or_chroma",
+    "dark_lo": 0.3,
+    "dark_hi": 0.75,
+    "chroma_d": 10,
+    "min_blob": 400,
+    "components": "bottom",
+    "components_bridge": 60
+   }
+  },
+  {
+   "name": "trees",
+   "from": "B",
+   "mask": {
+    "rule": "region_of",
+    "of": "trees_core",
+    "dilate": 40,
+    "soft": 25
+   },
+   "depth": 4,
+   "action": "enter",
+   "direction": [
+    0,
+    -1
+   ],
+   "window": [
+    0.55,
+    0.95
+   ],
+   "curve": "ease",
+   "prompt": {
+    "b": "the dark tree crown with leaves",
+    "where": "the bottom of the frame"
+   }
+  },
+  {
+   "name": "ac_core",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "depth_fg",
+    "lo": 0.05,
+    "hi": 0.12,
+    "components": "top"
+   }
+  },
+  {
+   "name": "ac_unit",
+   "from": "B",
+   "mask": {
+    "rule": "region_of",
+    "of": "ac_core",
+    "dilate": 24,
+    "soft": 12,
+    "components": "top"
+   },
+   "depth": 5,
+   "action": "enter",
+   "direction": [
+    -1,
+    1
+   ],
+   "window": [
+    0.6,
+    0.97
+   ],
+   "curve": "ease",
+   "prompt": {
+    "b": "the air-conditioning unit hanging from above",
+    "where": "the top-right corner"
+   }
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "mask": {
+    "rule": "invert_any",
+    "of": [
+     "trees_core",
+     "ac_core"
+    ]
+   },
+   "render": false
+  },
+  {
+   "name": "sky_open",
+   "from": "B",
+   "mask": {
+    "rule": "invert_any",
+    "of": [
+     "trees",
+     "ac_unit"
+    ]
+   },
+   "render": false
+  },
+  {
+   "name": "stars",
+   "from": "B",
+   "mask": {
+    "rule": "stars",
+    "within": "sky_open",
+    "tophat": 8,
+    "max_area": 80,
+    "jitter": 0.4
+   },
+   "depth": 1,
+   "action": "materialise",
+   "window": [
+    0.45,
+    0.9
+   ],
+   "curve": "ease",
+   "each": 0.12,
+   "prompt": {
+    "b": "the stars",
+    "where": "the sky",
+    "plural": true
+   }
+  },
+  {
+   "name": "buildings",
+   "from": "A",
+   "mask": {
+    "rule": "skyline_below",
+    "d": 0.08,
+    "run": 20,
+    "frac": 0.7,
+    "bottom": 0.6,
+    "tex_sd": 3.5,
+    "tex_frac": 0.3,
+    "snap_px": 45,
+    "snap_min": 4.5,
+    "grow": 2,
+    "union": [],
+    "snap_up": 8
+   },
+   "depth": 3,
+   "action": "exit",
+   "direction": [
+    0,
+    1
+   ],
+   "window": [
+    0.3,
+    0.75
+   ],
+   "curve": "ease",
+   "prompt": {
+    "a": "the row of city buildings",
+    "where": "along the bottom of the frame"
+   }
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "invert",
+    "of": "buildings"
+   },
+   "depth": 0,
+   "action": "backdrop",
+   "to": "sky_b",
+   "exclude": [
+    "stars"
+   ],
+   "minus": [
+    {
+     "layer": "clouds",
+     "full": true,
+     "dilate": 0,
+     "soft": 2
+    },
+    {
+     "layer": "buildings",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "window": [
+    0.0,
+    0.7
+   ],
+   "curve": "ease",
+   "fill_sigma": 60,
+   "exclude_res": [
+    {
+     "layer": "trees_core",
+     "full": true,
+     "dilate": 12,
+     "soft": 6
+    },
+    {
+     "layer": "ac_core",
+     "full": true,
+     "dilate": 12,
+     "soft": 6
+    }
+   ],
+   "fit2d": true,
+   "prompt": {
+    "a": "the blue day sky",
+    "b": "the dark night sky",
+    "where": "the whole sky"
+   }
+  },
+  {
+   "name": "clouds",
+   "from": "A",
+   "mask": {
+    "rule": "clouds",
+    "within": "sky",
+    "b_cloud": -4,
+    "opaque": 0.01,
+    "clear_pct": 5,
+    "window": 100,
+    "grow": 8,
+    "fill_holes_px": 400
+   },
+   "depth": 2,
+   "action": "dissolve",
+   "window": [
+    0.05,
+    0.52
+   ],
+   "curve": "smootherstep",
+   "prompt": {
+    "a": "the white cumulus clouds",
+    "where": "the sky",
+    "plural": true
+   },
+   "order": "edge",
+   "edge_norm": "px",
+   "edge_thr": 0.1,
+   "speed_density": 0.6,
+   "front_soft_px": 30,
+   "turb_px_amp": 12,
+   "turb_px": 16,
+   "front_wide_px": 90,
+   "wide_gain": 0.5
+  }
+ ],
+ "scene_a": "a city seen from a window in daylight: a blue sky with big white cumulus clouds over a row of buildings along the bottom of the frame"
+}

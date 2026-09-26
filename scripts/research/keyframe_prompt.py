@@ -17,7 +17,10 @@ labelled "Picture 1", "Picture 2" (the diffusers pipeline and stable-diffusion.c
 FLUX.2 guides use "image 1", "image 2".
 
 A layer may carry a "prompt" key: {"a": "the day sky with cumulus clouds", "b": "the night sky",
-"where": "the top two thirds of the frame"}; without it the layer's name is used.
+"where": "the top two thirds of the frame"}; without it the layer's name is used. With `--refs 1`
+the prompt never names the second picture (2026-09-27: the first draft said "midway between
+Picture 1 and Picture 2" in a run that supplied Picture 1 only); the target state is said in the
+layer's `b` words, and a backdrop without `b` words is left out (it stays as it is).
 
   .venv/bin/python scripts/research/keyframe_prompt.py scripts/research/scores/mismatch_4_r2.json --t 0.5
   ... --dialect flux --refs 1         # image-N wording, base picture only
@@ -35,6 +38,10 @@ CURVES = {
     "ease-out": lambda u: 1 - (1 - u) ** 2,
     "snap": lambda u: 0.0 if u < 0.5 else 1.0,
     "hold-then-go": lambda u: 0.0 if u < 0.35 else (u - 0.35) / 0.65,
+    # round 3 (2026-09-27): the probe's curves that start and end slower than the cosine
+    "smootherstep": lambda u: u * u * u * (u * (6.0 * u - 15.0) + 10.0),
+    "fall": lambda u: u * u,
+    "settle": lambda u: 1.0 - (1.0 - u) ** 3,
 }
 
 DIRECTION_WORDS = {(0, 1): "down", (0, -1): "up", (1, 0): "to the right", (-1, 0): "to the left",
@@ -90,8 +97,11 @@ def origin_word(layer):
     return ORIGIN_WORDS.get(key, "from the edge")
 
 
-def clause(layer, t, P):
-    """One plain sentence for the layer's state at t. P = the picture labels (base, other)."""
+def clause(layer, t, P, single=False):
+    """One plain sentence for the layer's state at t. P = the picture labels (base, other).
+    single: the base picture is the only reference, so the other picture is never named and
+    its content is said in words (the layer's `prompt.b`); a clause that has no words for the
+    target state (a == b) is dropped, which leaves that layer "as it is"."""
     base, other = P
     p = progress(layer, t)
     act = layer.get("action", "hold")
@@ -104,6 +114,16 @@ def clause(layer, t, P):
         return None
     if act == "backdrop":
         same = (a == b)
+        if single:
+            if same:
+                return None
+            if p >= 0.98:
+                return f"{a}{w} {HAS} become {b}."
+            if p < 0.34:
+                return f"{a}{w} {IS} still mostly as it is, with a first hint of {b}."
+            if p < 0.66:
+                return f"{a}{w} {IS} half of the way, in colour and brightness, to {b}."
+            return f"{a}{w} {IS} almost {b}, with a last trace of {a}."
         if p >= 0.98:
             return f"{a}{w} {HAS} the colour and brightness of {other}." if same else f"{a}{w} {HAS} become {b}, as in {other}."
         if p < 0.34:
@@ -119,8 +139,9 @@ def clause(layer, t, P):
     if act == "enter":
         if p <= 0.02:
             return None
+        own_from = own if single else f"{own} from {other}"
         if p >= 0.98:
-            return f"{own} from {other}{w} {IS} fully in the frame."
+            return f"{own_from}{w} {IS} fully in the frame."
         org = origin_word(layer)
         # the place words: dropped when they repeat the origin ("from the top-right corner … the
         # top-right corner"); "across / along …" reads without "into"
@@ -128,10 +149,12 @@ def clause(layer, t, P):
             w_to = f" {where}" if where.startswith(("across", "along", "over")) else f" into {where}"
         else:
             w_to = ""
-        return f"{own} from {other} {HAS} slid into the frame {org}{w_to} and {IS} {f} of the way into place."
+        return f"{own_from} {HAS} slid into the frame {org}{w_to} and {IS} {f} of the way into place."
     if act in ("move", "move_to"):
         if p >= 0.98:
-            return f"{own} {IS} now where it is in {other}: {b}."
+            return f"{own} {IS} now {b}." if single else f"{own} {IS} now where it is in {other}: {b}."
+        if single:
+            return f"{own} {HAS} moved {f} of the way toward its new place ({b}), the same size and brightness."
         return f"{own} {HAS} moved {f} of the way from its place in {base} to its place in {other} ({b}), the same size and brightness."
     if act == "dissolve":
         if p >= 0.98:
@@ -140,9 +163,10 @@ def clause(layer, t, P):
     if act == "materialise":
         if p <= 0.02:
             return None
+        own_from = own if single else f"{own} from {other}"
         if p >= 0.98:
-            return f"{own} from {other}{w_in} {IS} fully present."
-        return f"{f} of {own} from {other} {IS} now present{w_in}, the brightest parts first."
+            return f"{own_from}{w_in} {IS} fully present."
+        return f"{f} of {own_from} {IS} now present{w_in}, the brightest parts first."
     if act == "recolor":
         return f"{own}{w} {HAS} taken on {f} of the colour of {b}."
     return None
@@ -156,7 +180,7 @@ def build(score, t, dialect, refs):
     base, other = P
     layers = [l for l in score["layers"] if l.get("render", True)]
     layers.sort(key=lambda l: l.get("depth", 0))
-    clauses = [c for c in (clause(l, t, P) for l in layers) if c]
+    clauses = [c for c in (clause(l, t, P, single=(refs == 1)) for l in layers) if c]
     if refs == 1:
         head = (f"Edit {base}. It shows {score.get('scene_a', 'the scene')}. Change it so that the following is true, "
                 f"and keep everything not mentioned exactly as it is in {base}:")

@@ -261,6 +261,8 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Layered probe, `scripts/research/layered_probe.py` from hand-written scores, 2026-09-26 third session (§12; sheet `benchmarks/2026-09-26-layered.md`; page `benchmarks/runs/2026-09-26/layered/`) | mismatch_6 at 1146×1524, 60 frames: prep 1.8–3.7 s (the depth model 1.3 s per photo), render 5.8 s, first / last interior step 0.05 / 0.05 levels, `edge_ratio` 0.0105; mismatch_4 at 1920×1092: render 8.0 s, steps 0.11 / 0.23, `edge_ratio` 0.188; mismatch_3 at 1920×1440: render 7.1 s, steps 0.14 / 0.00; two runs byte-identical per pair (md5 `64a54eee…`, `1d2e8bbb…`); `transitions.py` untouched |
 | Layered probe round 2 on mismatch_6, 2026-09-26 fourth session (§12.7; page `benchmarks/runs/2026-09-26/layered_r2/`; scores `mismatch_6_r2{,_L,_drift}.json`) | 1146×1524, 3 s, 90 frames: prep 3.4–5.0 s, render 7.2–8.0 s; first / last interior step 0.28 / 0.05 levels on all three clips; `edge_ratio` 0.097 / 0.0965 / 0.0934; two runs byte-identical (md5 `cddde79e…`, `f3efeeef…`, `7934592a…`); round 1's score still renders md5 `64a54eee…` through the changed probe; `transitions.py` untouched |
 | Layered probe round 2 on mismatch_4, 2026-09-26 fourth session (§12.7; the same page; score `mismatch_4_r2.json`) | 1920×1092, 3 s, 90 frames: prep 4.3 s, render 9.6 s; steps 0.12 / 0.10 levels (round 1: 0.11 / 0.23); `edge_ratio` 0.172; two runs byte-identical (md5 `b7700b4c…`); `transitions.py` untouched |
+| Layered probe round 3 on mismatch_6, 2026-09-27 (§12.9; page `benchmarks/runs/2026-09-27/layered_r3/`; scores `mismatch_6_r3{_clouds,_soft,}.json`) | 1146×1524, 3 s, 90 frames: prep 5.2–6.6 s, render 7.6 s (clouds), 13.9 s (both), 18.8 s (the shutter blur alone: 8 s over round 2's 10.6 s); first / last interior step 0.03 / 0.05 levels with the round-3 cloud matte, 0.28 / 0.05 without it; `edge_ratio` 0.0156 / 0.1056 / 0.0169; two runs byte-identical (md5 `748b68ed…` / `ecbbcb61…` / `f2c3c02f…`); round 2's `cddde79e…` unchanged through the changed probe; `transitions.py` unchanged |
+| Layered probe round 3 on mismatch_4, 2026-09-27 (§12.9; the same page; score `mismatch_4_r3.json`, motion only) | 1920×1092, 3 s, 90 frames: prep 4.7 s, render 17.2 s; steps 0.12 / 0.10; `edge_ratio` 0.1745; md5 `a9f1e3d6…` on two runs; round 2's `b7700b4c…` unchanged; the four cloud-layer attempts: last step 0.42 / 0.75, `edge_ratio` 0.67 / 1.19, rejected on the frames |
 
 Goal numbers on the real surface (2026-09-26, `benchmarks/runs/2026-09-26/surface/` and `bench/`, morph 2 s, canvas ≤ 1920 px, 480-px proxy; run 1 through the CLI and run 2 through the bench script give identical numbers):
 
@@ -1037,3 +1039,79 @@ edges on every moving layer — a matte feather that follows the photo's own edg
 gradient) plus a short motion blur along the travel direction (proportional to the per-frame
 displacement); (3) motion that is not linear — an ease that starts and ends slower than the cosine
 (a smootherstep or a physical decay) and a small acceleration profile per layer.
+
+### 12.9 Round 3 on mismatch_6 and mismatch_4 (2026-09-27; page `benchmarks/runs/2026-09-27/layered_r3/index.html`; scores `scripts/research/scores/mismatch_6_r3{_clouds,_soft,}.json`, `mismatch_4_r3.json`)
+
+Result: three 3-second clips on mismatch_6 (one per fault the owner named on round 2, one with both
+fixes) and one on mismatch_4 stand beside the round-1 and round-2 references; every clip is
+byte-identical on two runs; the round-2 clips render md5 `cddde79e…` (mismatch_6) and `b7700b4c…`
+(mismatch_4) through the changed probe, so every new key defaults to the old behaviour. Ungraded as
+of 2026-09-27. Nothing in `transitions.py` changed. The probe now writes a `measure` block per clip
+and the page prints it under each clip (§12.9.1).
+
+12.9.1 What round 2's frames showed, measured on the composite:
+- The cloud erosion (density plus noise order, feather 0.1): at a quarter and at half of the clouds'
+  window 12–14 % of the cloud support is semi-transparent, in a band 9–10 px wide along the front, so
+  the front is a hard cut in the shape of the 40-px noise. From frame 1 the thin cloud band at the
+  right shows dark patches: the density map has holes under 0.01 there and the clear-sky fill shows
+  through them (most of the 0.28-level first step).
+- The moving layers: the cosine ease peaks at 1.59–1.62 × the mean speed and spends 27–29 % of the
+  moving frames within 10 % of the peak (buildings 17.6 px per frame, trees 29.2, AC unit 37.0 at
+  30 fps, 3 s). The trees' region carries B's sky from its source rows over the rows it slides across:
+  the mean luminance mismatch between the carried sky and the sky under it is 3.97 L at the middle of
+  the window and 2.15 L at three quarters. The step across a moving layer's boundary on the composite
+  is 0.9 L (trees) and 0.7 L (AC unit) at the middle of their windows; the buildings' 30 L is the
+  roofline against the sky, the photo's own edge.
+
+12.9.2 The mechanisms (new score keys, all default-off; `scripts/research/layered_probe.py`):
+1. `order: "edge"` on a dissolve: the front runs in pixels from the edge of the cloud's dense part
+   (density at least `edge_thr` 0.1) inward along the distance transform, 2.5 × faster through thin
+   parts (`speed_density` 0.6), with a 30-px soft band (`front_soft_px`), a 90-px thinning ramp ahead
+   of it (`front_wide_px`, down to half the alpha at the cut) and a front displaced by two octaves of
+   noise (±9 px at 16 and 48 px). Small clouds go first and the big cloud's core (227 px deep) last.
+   The matte fills its enclosed holes up to 400 px (`fill_holes_px`) and grows 8 px so it covers
+   everything the backdrop excludes (the sky's `minus` of the clouds is now dilate 0, soft 2): the
+   first step falls from 0.28 to 0.03 levels. Tried on the frames and rejected: a front normalized to
+   the largest inward distance with a 0.35 band (42 % of the support semi-transparent at a quarter of
+   the window in a 90-px band: every cloud washed at once); a 10-px band with ±15 px of turbulence (a
+   field of round holes); a morphological closing of the matte (it bridged the sky between the clouds,
+   80 % of the canvas, and the backdrop's fit lost every pixel).
+2. `shutter` on a moving layer: a line kernel along the velocity, shutter × the per-frame
+   displacement long, applied to the pixels and the matte after the warp (0 at rest, so the endpoint
+   frames stay exact); 0.5 is a 180-degree shutter. `carry_fit: "sky"`: the layer's Lab gains the
+   backdrop's fit at the destination rows minus the fit at its source rows (the trees' carried-sky
+   mismatch 3.97 → 1.95 L). `edge_feather` (a feather that follows the photo's gradient) was built and
+   tested on the buildings' skyline: the first step stayed 0.28 and laplace_floor moved 0.099 → 0.077;
+   not used, because the roofline is the photo's own edge and the regions are already soft.
+3. Curves `smootherstep` (zero speed and zero acceleration at both ends; peak 1.87–1.89 × the mean,
+   plateau 22–24 %), `fall` (u², a constant acceleration from rest) and `settle` (1 − (1 − u)³); round
+   3 uses smootherstep on every moving layer, the clouds and the sky.
+
+| clip | s | edge_ratio | feat / laplace / contrast / dissolve_fit / motion | step first / last | measured | prep / render s | md5 |
+|---|---|---|---|---|---|---|---|
+| mismatch_6 `layered_r3_clouds` (the clouds only) | 3 | 0.0156 | 0.0 / 0.0999 / 0.0916 / 0.0763 / 0.3357 | 0.03 / 0.05 | semi-transparent share 0.38 / 0.13 / 0.01, front width 89 / 54 / 40 px at 1/4, 1/2, 3/4 | 5.4 / 7.6 | `748b68ed…` |
+| mismatch_6 `layered_r3_soft` (the moving layers only) | 3 | 0.1056 | 0.0 / 0.0814 / 0.1211 / 0.057 / 0.2389 | 0.28 / 0.05 | peaks 21.0 / 34.8 / 44.1 px per frame (buildings / trees / AC), 1.87–1.89 × mean, plateau 22–24 %; carried-sky mismatch 1.95 / 1.75 L | 6.6 / 18.8 | `ecbbcb61…` |
+| mismatch_6 `layered_r3` (both) | 3 | 0.0169 | 0.0 / 0.0818 / 0.0875 / 0.0807 / 0.2934 | 0.03 / 0.05 | both of the above | 5.2 / 13.9 | `f2c3c02f…` |
+| mismatch_4 `layered_r3` (motion only: `shutter` 0.5 and smootherstep on the two skylines and the sun) | 3 | 0.1745 | 0.1909 / 0.6399 / 0.8183 / 0.175 / 0.0721 | 0.12 / 0.10 | peaks 38.7 / 30.8 / 9.0 px per frame (band / band_b / sun), plateau 22–23 % (round 2: 32.4 / 25.8 / 7.6, plateau 28 %) | 4.7 / 17.2 | `a9f1e3d6…` |
+
+The shutter blur costs 8 s of render on mismatch_6 (18.8 s against 10.6 s) and 6 s on mismatch_4.
+
+12.9.3 mismatch_4's clouds, tried and rejected. The owner named the clouds and the sun's water
+reflection as crossfades. A layer for B's thin bright clouds was cut by a new `clouds` rule variant
+(`channel: "L_hp"`: a high-pass of L at 40 px with a 5-L noise floor, the sun's glow excluded within
+110 px of its disc; B's sky measured: high-pass median −0.2 L, 99th percentile 16.4 L) and rendered
+four ways: (a) `order: "edge"` — the streaks are 3.3 px deep at most, so the 70-px ramp makes the
+whole layer semi-transparent at half its window (share 1.0), a plain fade; (b) density order with a
+0.5 feather — the residual hole around every streak draws its own outline (frame 67), last step 0.42,
+`edge_ratio` 0.67; (c) a softer matte (floor 2 L, blur 4) — last step 0.75, `edge_ratio` 1.19;
+(d) the dark cloud bank as a second layer — its 200,000-px exclusion at the frame's top leaves a fill
+with no lateral support, a grey sky at t ≈ 0.45. The rule stays in the probe; the clouds and the
+reflection stay crossfades and are the next probe's targets: a streak layer whose matte boundary lies
+in smooth sky and condenses along the streak, and a reflection layer that follows the sun.
+
+Defects by my eye (not evidence; the owner's boxes decide): the eroding clouds' last remnants at
+t ≈ 0.28–0.36 read as translucent cut-outs with soft edges; the motion blur streaks the trees' leaves at
+their peak speed (17 px of blur); the right-hand tree crown at the bottom right of B enters as a dark
+mass with a soft boundary; on mismatch_4 the moved sun leaves a dark disc at its origin (the excluded
+residual; round 2 named the disc at the destination). Next: the owner's boxes and notes; the tool
+shape of §12.4 waits.

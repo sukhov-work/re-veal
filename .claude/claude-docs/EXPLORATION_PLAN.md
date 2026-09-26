@@ -196,6 +196,14 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    nature ( but again , NOT crossfade)", the "hard distint edges" on every moving part, the "very linear"
    motion; mismatch_4's clouds and sun reflection "still crossfaded". The §12.4 gate is met on its letter;
    build `pair --score FILE` or run round 3 first — the owner's call.
+   **Round 3 rendered (2026-09-27, fifth session; `TRANSITIONS.md §12.9`; page
+   `benchmarks/runs/2026-09-27/layered_r3/`)**: on mismatch_6 one clip per named fault and one with both
+   (the clouds erode from each cloud's edge inward with a soft turbulent front and the haze holes of the
+   round-2 matte filled, first step 0.28 → 0.03; motion blur at a 180-degree shutter, the trees and the
+   AC unit relit to the sky they slide over, smootherstep); on mismatch_4 the motion changes only (a
+   layer for B's thin bright clouds was tried four ways and rejected on the frames). The probe measures
+   the three faults on the composite and the page prints the numbers. Every clip byte-identical on two
+   runs; no tool change. Ungraded. Next: the owner's boxes; the tool shape (§12.4) waits.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -320,3 +328,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-26 | Fourth session, Track B: the keyframe recipe ran twice on the box (inhibitor patched; keyframes byte-identical, sha256 `c8d6f50f…`; 1,804 / 1,941 s); the keyframe reproduces image 2; box clean | round-2 session, 2026-09-26 (fourth) |
 | 2026-09-26 | Owner picks on the round-2 page ingested: the first "one picture" ticks (mismatch_6, four clips); mismatch_4 gains "transforms"; round-3 targets named (cloud dissolve like a real cloud, soft edges on moving layers, non-linear motion); the defect list confirmed | round-2 session, 2026-09-26 (fourth, late) |
 | 2026-09-27 | Keyframe prompting researched (BFL guides, Qwen rewriter rules, both pipelines' "Picture N" labels, sd.cpp reference sizing) and made dynamic (`keyframe_prompt.py` from a score at a clip time); runs kf_02–kf_05 planned | round-2 session, 2026-09-27 |
+| 2026-09-27 | Fifth session, Track A: round 3 rendered on mismatch_6 (three clips: the cloud erosion from the edge inward, motion blur + relit regions + smootherstep, both) and mismatch_4 (motion only; the streak-cloud layer rejected on the frames with numbers); the probe measures the three faults on the composite; no tool change; owner grades next | round-3 session, 2026-09-27 (fifth) |
