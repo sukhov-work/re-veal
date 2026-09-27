@@ -756,6 +756,14 @@ from an AUTOMATIC score (fixed rules, no per-pair parameter; §12.10) beside the
 hand-written score is the operator's tuning of a scene, never the proof that a mechanism works; (3)
 per-pair mask rules count as tuning (§12.11 compares them with a model that names regions); (4) video
 input is part of the goal; no slice covers it yet (TR4 in the plan is clip input and output only).
+The owner's specification of it (2026-09-27 night; verbatim in DECISIONS): start with the last frame of
+clip A into the first frame of clip B; the wanted form takes a chosen moment in each clip and reads
+"several frames before last frame in clip A and several frames after target frame in clip B to better
+capture flow and dynamic otherwise it can create inconsitent movement in transitions"; a photo has no
+such frames ("there you work with what you have"); "hybrid mode" joins video A to photo B and photo A
+to video B. Design reading [INFERRED, not built]: an endpoint is a frame plus a velocity field measured
+from its neighbouring frames, and a layer's progress curve takes that velocity as its boundary
+condition; a photo endpoint has zero velocity, so the three cases are one mechanism.
 
 ## 12. The orchestrated layered transition: the score, the probe, the first three clips (2026-09-26, third session)
 
