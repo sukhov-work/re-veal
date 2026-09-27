@@ -116,6 +116,36 @@ the 2026-09-26 figures 188 / 254 do not compare). By my eye, not evidence: kf_02
 plume and a bridge, kf_04 keeps A's daylit buildings in place under a night sky. The owner's boxes
 decide; no keyframe is graded as of 2026-09-27.
 
+### 5.2 Results of the evening runs (2026-09-27; DECISIONS 2026-09-27 evening, Track B2; page `benchmarks/runs/2026-09-27/keyframes2/index.html`)
+
+The owner on §5.1's keyframes (verbatim): "mismatch_6 (kf_04.png ) looks promising , maybe still too
+hard edges , as for mismatch_4 - all keyframes came out either too close to before, or to after,
+didn't see true blending, lets continue".
+
+| run | model | the one reference | generate s | MAD to A / B / the reference (levels) | what it tests |
+|---|---|---|---|---|---|
+| kf_06 | Qwen-Image-Edit-2511 | photo A (mismatch_4) | 1,057 | 35.33 / 39.17 / — | the midpoint said as positions and as a transformation |
+| kf_07 | Qwen | the round-3 composite at 0.5 | 969 | 32.52 / 18.30 / 14.87 | the composite as the base, a clean-up prompt |
+| kf_08 | Qwen | mismatch_6's round-3 composite at 0.5 | 832 | 108.88 / 27.76 / 10.89 | the same on the day-to-night pair |
+| kf_09 | Qwen | photo A (mismatch_6) | 737 | 123.74 / 14.61 / — | kf_04's prompt plus a clause on dusk light and soft edges |
+| kf_10, kf_10b | FLUX.2 klein 4B | photo A (mismatch_4) | 38.43 | 67.43 / 78.41 / — | kf_06's prompt through klein; two runs byte-identical |
+| kf_11 | klein | kf_07's reference | 38.56 | 48.60 / 34.06 / 32.85 | kf_07 through klein |
+| kf_12 | klein | the round-4 composite at 0.5 | 38.83 | 50.53 / 45.65 / 39.22 | the skyline mid-transformation |
+| kf_13 | klein | mismatch_6's round-4 composite at 0.62 | 28.97 | 120.92 / 14.26 / 12.11 | a double exposure of buildings and trees |
+
+Read: a prompt on a photo gives a new scene whatever its wording (kf_02 with fractions, kf_06 with
+positions: the sun 100.6 px from the midpoint, moved 108 px sideways); the edit model does not move a
+large region on request (kf_09's buildings stand where they are in A, by my eye). Given the
+deterministic composite as the base, the model keeps the layout (the sun within 1.1 px of the
+composite's on kf_07 and kf_11) and changes appearance only: Qwen stays 14.87 levels from the
+composite, klein 32.85. So rule 1 of §2 becomes: the base picture is the deterministic composite at
+the clip time, and the prompt asks for one coherent photograph with every position kept. klein at 4
+steps is 25 × faster than Qwen at 20 (38.6 s against 969 s) and deterministic on the box; it
+recolours more. The screening script's sun rule failed on kf_10 (a cloud streak was the largest
+bright blob). Next: clean-ups at three clip times (0.25, 0.5, 0.75) of one round-4 clip with klein
+and with Qwen, then the deterministic engine between consecutive keyframes; the owner's boxes
+decide. Not graded as of 2026-09-27.
+
 ## 6. Gaps
 
 - No source states what Qwen-Image-Edit-2511 does with an instruction it cannot satisfy from the

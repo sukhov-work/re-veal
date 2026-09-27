@@ -6,7 +6,7 @@ It reads files and prints numbers; the owner's eye grades the keyframe, this scr
 
 Usage:
   keyframe_screen.py --pair mismatch_4 --keyframe KF.png --before A.png --after B.png
-                     [--log kf.log] [--memlog mem_kf.log]
+                     [--log kf.log] [--memlog mem_kf.log] [--ref REF.png]
 
 Numbers (A and B are resized to the keyframe's size with INTER_AREA first):
   sun      mismatch_4 only: centroid (x, y, px in the keyframe's frame) of the largest connected
@@ -14,7 +14,8 @@ Numbers (A and B are resized to the keyframe's size with INTER_AREA first):
            rule of layered_probe.py's `sun` mask, with the top 60 % in place of the sky mask.
            Other pairs: null.
   mad      mean absolute difference in 8-bit levels over the three channels, keyframe vs A and
-           keyframe vs B.
+           keyframe vs B; with --ref (2026-09-27 evening) also keyframe vs the reference picture the
+           run was given (e.g. the layered composite), resized to the keyframe's size the same way.
   laplace  variance of the Laplacian (ksize 1, CV_32F) of the 8-bit Lab L channel (cv2 uint8 Lab,
            L scaled 0..255) on an INTER_AREA proxy whose long side is 480 px, for the keyframe, A
            and B. On 2026-09-27 this definition gives kf_01 100.4, A 118.4, B 151.2; the 2026-09-26
@@ -137,6 +138,7 @@ def main():
     ap.add_argument("--after", required=True)
     ap.add_argument("--log")
     ap.add_argument("--memlog")
+    ap.add_argument("--ref", help="optional: the run's reference picture when it is neither A nor B")
     a = ap.parse_args()
     kf = read_rgb(a.keyframe)
     h, w = kf.shape[:2]
@@ -158,6 +160,11 @@ def main():
     else:
         res["sun"] = None
     res["mad_levels"] = {"to_A": mad(kf, A), "to_B": mad(kf, B)}
+    if a.ref:
+        R0 = read_rgb(a.ref)
+        res["ref"] = a.ref
+        res["ref_size_wh"] = [R0.shape[1], R0.shape[0]]
+        res["mad_levels"]["to_ref"] = mad(kf, cv2.resize(R0, (w, h), interpolation=cv2.INTER_AREA))
     res["laplace_var_L"] = {"kf": laplace_var(kf), "A": laplace_var(A0), "B": laplace_var(B0)}
     if a.log:
         res["log"] = parse_log(a.log)

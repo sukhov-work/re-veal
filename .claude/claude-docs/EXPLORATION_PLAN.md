@@ -271,6 +271,15 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    it (82.16 s). Box clean after (hold file removed, no container, 38 GiB available). Ungraded: the
    owner's three questions are on the page. Next prompt experiment: the midpoint said as a position,
    not as a fraction of a move; then FLUX.2 klein 4B as the speed fallback.
+   **Evening runs kf_06–kf_13 (2026-09-27; DECISIONS Track B2; `research/keyframe-prompting.md §5.2`;
+   page `benchmarks/runs/2026-09-27/keyframes2/`)**: the owner found mismatch_4's keyframes "either too
+   close to before, or to after" and kf_04 "promising , maybe still too hard edges". A positions prompt
+   on photo A gives a new scene (kf_06); the deterministic composite as the only reference gives a
+   cleaned picture with the composite's layout (kf_07: the sun within 1.1 px, 14.87 levels from the
+   composite); FLUX.2 klein 4B (Apache-2.0, 9.0 GB on the box) does the same in 38.6 s against Qwen's
+   969 s, byte-deterministic, recolouring more (32.85 levels). FLUX.2 [pro] is hosted only and was never
+   used. Next: cleaned keyframes at three clip times of a round-4 clip, the deterministic engine between
+   them. Ungraded.
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -362,3 +371,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-27 | Fifth session, Track B: kf_02–kf_05 ran on the box (single reference leaves both photos, the sun at B's place; two references reproduce Picture 2; reference size does not set the step time, the second reference does); box clean; owner grades next | round-3 session, 2026-09-27 (fifth) |
 | 2026-09-27 | Owner picks on round 3 ingested (nothing picked; sliding layers rejected as "decorations in 2d scene"; the skyline must transform; the sun's move praised) and the goal restated (universal, tunable, no overfitting on the fixture pairs; photos and videos) | round-4 session, 2026-09-27 evening |
 | 2026-09-27 | Round 4 rendered: `morph_to` (layer-to-layer transformation by optimal transport), backdrop flow from the matched layers, clouds darkening and advected, an automatic score on three untuned pairs; the mask routes compared on 18 photos (rules vs Mask2Former Swin-Tiny; weights CC BY-NC 4.0); no tool change | round-4 session, 2026-09-27 evening |
+| 2026-09-27 | Evening, Track B2: kf_06–kf_13 on the box (the composite as the model's base keeps the layout; FLUX.2 klein 4B measured: 38.6 s per keyframe, deterministic); the decision log compacted (round 2, md5 `962aa787…`) | round-4 session, 2026-09-27 evening |

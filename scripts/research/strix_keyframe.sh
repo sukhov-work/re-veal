@@ -23,6 +23,13 @@
 #   MODELS=~/keyframes/models IN=~/keyframes/in OUT=~/keyframes/out \
 #   PROMPT="..." SEED=20260926 ./strix_keyframe.sh before.png after.png kf_01
 #   ... ./strix_keyframe.sh before.png - kf_02        # single reference (the base picture only; 2026-09-27)
+#   MODEL=klein MODELS=~/keyframes/models_klein ... ./strix_keyframe.sh before.png - kf_10   # FLUX.2 klein 4B (2026-09-27 evening)
+# MODEL=qwen (default) runs the Qwen-Image-Edit-2511 command unchanged. MODEL=klein runs FLUX.2 [klein] 4B
+# with the flags of stable-diffusion.cpp docs/flux2.md at the image's commit 2f886889 (--cfg-scale 1.0
+# --steps 4 --sampling-method euler --diffusion-fa; --llm = Qwen3-4B; no --llm_vision, --flow-shift or
+# --model-args); -v and --offload-to-cpu from the doc's example are left out, --vae-tiling and the caps kept.
+# Its VAE is the Apache-2.0 one in black-forest-labs/FLUX.2-klein-4B (vae/), because the doc's
+# FLUX.2-dev ae.safetensors is gated under a non-Apache licence; KLEIN_VAE names another file.
 # Run it twice with the same arguments and compare `sha256sum $OUT/kf_01*.png`: the keyframe is
 # only usable if the two runs agree byte for byte (determinism gate).
 set -euo pipefail
@@ -31,7 +38,11 @@ MODELS="${MODELS:?models dir}"; IN="${IN:?input dir}"; OUT="${OUT:?output dir}"
 A="${1:?before image (in $IN)}"; B="${2:-}"; NAME="${3:-kf}"   # B empty or "-" = a single-reference run (2026-09-27)
 REFS=(-r "/in/$A"); if [ -n "$B" ] && [ "$B" != "-" ]; then REFS+=(-r "/in/$B"); fi
 PROMPT="${PROMPT:?prompt}"; SEED="${SEED:-20260926}"
-NEED_GB="${NEED_GB:-26}"
+MODEL="${MODEL:-qwen}"   # qwen | klein (2026-09-27 evening)
+case "$MODEL" in qwen|klein) ;; *) echo "MODEL must be qwen or klein, got '$MODEL'" >&2; exit 2;; esac
+KLEIN_VAE="${KLEIN_VAE:-flux-2-klein-4b-vae.safetensors}"
+# klein weights: 4.30 GB diffusion Q8_0 + 4.28 GB Qwen3-4B Q8_0 + 0.17 GB VAE = 8.75 GB, + 4 GB buffers < 14 GB
+if [ "$MODEL" = klein ]; then NEED_GB="${NEED_GB:-14}"; else NEED_GB="${NEED_GB:-26}"; fi
 W="${W:-1024}"; H="${H:-1024}"          # output size; the canvas of mismatch_4 is 1920x1092, so W=1344 H=768 keeps its ratio (2026-09-26)
 MAX_VRAM="${MAX_VRAM:-20}"; MEM_CAP="${MEM_CAP:-12g}"   # the GPU budget (GiB) and the CPU-side cgroup cap; raise only after a measured failure
 DOCKER="${DOCKER:-sudo docker}"   # the user is not in the docker group on this box (2026-09-26)
@@ -56,6 +67,7 @@ if systemd-inhibit --what=sleep:idle --why="probe" -- true >/dev/null 2>&1; then
 else
   echo "note: systemd-inhibit refused in this session; relying on ~/halo-hold ($([ -e ~/halo-hold ] && echo present || echo ABSENT))"
 fi
+if [ "$MODEL" = qwen ]; then
 $INHIBIT timeout 45m $DOCKER run --rm --init \
   --user "$(id -u):$(id -g)" --group-add "$RENDER_GID" --group-add "$VIDEO_GID" \
   --device /dev/dri --network none --read-only --tmpfs /tmp \
@@ -70,11 +82,25 @@ $INHIBIT timeout 45m $DOCKER run --rm --init \
   --cfg-scale 2.5 --sampling-method euler --flow-shift 3 --diffusion-fa --vae-tiling \
   --max-vram "$MAX_VRAM" --seed "$SEED" --rng cpu --sampler-rng cpu -W "$W" -H "$H" \
   -o "/output/${NAME}.png"
+else
+$INHIBIT timeout 45m $DOCKER run --rm --init \
+  --user "$(id -u):$(id -g)" --group-add "$RENDER_GID" --group-add "$VIDEO_GID" \
+  --device /dev/dri --network none --read-only --tmpfs /tmp \
+  --memory "$MEM_CAP" --memory-swap "$MEM_CAP" --pids-limit 256 --cpus 8 --oom-score-adj 1000 \
+  -v "$MODELS":/models:ro -v "$IN":/in:ro -v "$OUT":/output "$IMG" \
+  --diffusion-model /models/flux-2-klein-4b-Q8_0.gguf \
+  --llm /models/Qwen3-4B-Q8_0.gguf \
+  --vae "/models/$KLEIN_VAE" \
+  "${REFS[@]}" -p "$PROMPT" \
+  --cfg-scale 1.0 --steps 4 --sampling-method euler --diffusion-fa --vae-tiling \
+  --max-vram "$MAX_VRAM" --seed "$SEED" --rng cpu --sampler-rng cpu -W "$W" -H "$H" \
+  -o "/output/${NAME}.png"
+fi
 # manifest beside the keyframe: everything a re-render needs to reproduce it
 cat > "$OUT/${NAME}.manifest.json" <<EOF
 {"image": "$IMG", "models": $(ls -1 "$MODELS" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().split()))'),
  "before": "$A", "after": "$B", "prompt": $(printf '%s' "$PROMPT" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))'),
- "seed": $SEED, "cfg": 2.5, "sampler": "euler", "flow_shift": 3, "size": [$W, $H], "max_vram": $MAX_VRAM, "mem_cap": "$MEM_CAP",
+ "model": "$MODEL", "seed": $SEED, "cfg": $([ "$MODEL" = klein ] && echo 1.0 || echo 2.5), "steps": $([ "$MODEL" = klein ] && echo 4 || echo 20), "sampler": "euler", "flow_shift": $([ "$MODEL" = klein ] && echo null || echo 3), "vae": "$([ "$MODEL" = klein ] && echo "$KLEIN_VAE" || echo qwen_image_vae.safetensors)", "size": [$W, $H], "max_vram": $MAX_VRAM, "mem_cap": "$MEM_CAP",
  "sha256": "$(sha256sum "$OUT/${NAME}.png" | cut -d' ' -f1)", "date": "$(date -Is)"}
 EOF
 echo "wrote $OUT/${NAME}.png and its manifest"
