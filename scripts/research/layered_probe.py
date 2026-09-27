@@ -45,6 +45,19 @@ gradient is soft; `fill_holes_px: n` on a mask rule fills its enclosed holes of 
 rule takes `channel: "L_hp"` (a high-pass of L at `hp_px`, `hp_sign` -1 for dark clouds); curves `smootherstep`, `fall`, `settle`. The report gains a `measure` block: the
 per-frame displacement of every moving layer, the semi-transparent share and the front width of every
 dissolve, and the luminance step across every moving layer's boundary on the composite.
+Round-4 keys (2026-09-27 evening; the owner rejected layers that slide in and out, "decorations in
+2d scene", and asked the skyline to "transform into final one"; all default-off): action `morph_to`
+carries a layer of A into a matched layer of B (`to`): an entropic optimal-transport map between the
+two mattes on a coarse grid (`ot_grid`, `ot_eps`, `ot_mass` alpha | bright | dark) gives a smooth
+displacement field each way; A's layer moves along it by the progress, B's layer comes back along the
+reverse field, the two are mixed inside `mix_window` with their Lab statistics matched, so the first
+part of the window is A's content reshaping and the last part B's content settling; a backdrop's
+`flow` moves its two residual textures while they mix (no fade in place): `from: "layers"` along the
+scene's one flow, interpolated from the matched layers' own motions; otherwise along a free transport
+between the textures' bright or dark features; `extend_bottom_px` continues a band's matte below its line;
+`advect: {amp_px, scale_px}` deforms a layer along a divergence-free noise field that grows with the
+progress; `recolor_window` gives the colour path its own window (a cloud darkens with the sky, then
+thins). `--auto PAIR` writes and renders a score built by fixed rules with no per-pair parameter.
 Actions: backdrop (the low-order sky gradient of A moves to B's with the residual textures
 crossfaded; alpha 1 everywhere), hold, recolor (per-row Lab statistics of the layer move to the
 `to` layer's), dissolve (the layer erodes through its own density plus noise; thin parts first),
@@ -130,6 +143,119 @@ def line_kernel(v, length):
     M = cv2.getRotationMatrix2D((float(c), float(c)), -ang, 1.0)
     kern = cv2.warpAffine(base, M, (k, k), flags=cv2.INTER_LINEAR)
     return kern / max(float(kern.sum()), 1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Round 4 (2026-09-27 evening): a layer transforms into its counterpart
+# ---------------------------------------------------------------------------
+
+def _logsumexp(a, axis):
+    m = a.max(axis=axis, keepdims=True)
+    return (m + np.log(np.exp(a - m).sum(axis=axis, keepdims=True))).squeeze(axis)
+
+
+def ot_fields(mass_a, mass_b, grid=64, eps=0.04, iters=60, smooth=1.5):
+    """Entropic optimal transport between two non-negative mass maps (h, w),
+    solved on a coarse grid (`grid` cells on the long side) in the log domain
+    with the regularisation halved from 8 eps down to eps (eps in units of the
+    long side). Returns the displacement field A -> B and the field B -> A in
+    px, (h, w, 2) float32 each: the barycentric projection of the plan at the
+    cells that hold mass, spread over the whole grid by a normalized
+    convolution and upsampled. Deterministic (no random start)."""
+    h, w = mass_a.shape
+    long_ = float(max(h, w))
+    gw, gh = max(4, int(round(w * grid / long_))), max(4, int(round(h * grid / long_)))
+    a = cv2.resize(mass_a.astype(np.float32), (gw, gh), interpolation=cv2.INTER_AREA).astype(np.float64).ravel()
+    b = cv2.resize(mass_b.astype(np.float32), (gw, gh), interpolation=cv2.INTER_AREA).astype(np.float64).ravel()
+    ys, xs = np.mgrid[0:gh, 0:gw]
+    pos = np.stack([(xs + 0.5) / gw * w, (ys + 0.5) / gh * h], -1).reshape(-1, 2) / long_
+    ia, ib = a > 1e-3 * max(a.max(), 1e-12), b > 1e-3 * max(b.max(), 1e-12)
+    zero = np.zeros((h, w, 2), np.float32)
+    if ia.sum() < 4 or ib.sum() < 4:
+        return zero, zero.copy(), {"cells": [int(ia.sum()), int(ib.sum())], "mean_px": 0.0, "max_px": 0.0}
+    xa, xb = pos[ia], pos[ib]
+    wa, wb = a[ia] / a[ia].sum(), b[ib] / b[ib].sum()
+    C = ((xa[:, None, :] - xb[None, :, :]) ** 2).sum(-1)
+    la, lb = np.log(wa), np.log(wb)
+    f, g = np.zeros(len(xa)), np.zeros(len(xb))
+    for k in (8.0, 4.0, 2.0, 1.0):
+        e = (eps * k) ** 2
+        for _ in range(iters):
+            f = -e * _logsumexp((g[None, :] - C) / e + lb[None, :], axis=1)
+            g = -e * _logsumexp((f[:, None] - C) / e + la[:, None], axis=0)
+    P = np.exp((f[:, None] + g[None, :] - C) / e + la[:, None] + lb[None, :])
+    d_a = ((P @ xb) / np.maximum(P.sum(1, keepdims=True), 1e-300) - xa) * long_
+    d_b = ((P.T @ xa) / np.maximum(P.sum(0)[:, None], 1e-300) - xb) * long_
+
+    def spread(d, idx):
+        field = np.zeros((gh * gw, 2), np.float32)
+        field[idx] = d
+        m = idx.astype(np.float32)
+        out = np.zeros((gh, gw, 2), np.float32)
+        left = np.ones((gh, gw), np.float32)
+        # the known cells keep their own value; the rest take the nearest
+        # known values at three scales blended by confidence (no threshold)
+        for i, sc in enumerate((smooth, 4.0 * smooth, 16.0 * smooth)):
+            num = cv2.GaussianBlur((field * m[:, None]).reshape(gh, gw, 2), (0, 0), sc)
+            den = cv2.GaussianBlur(m.reshape(gh, gw), (0, 0), sc)
+            wk = left if i == 2 else np.clip(den / 0.2, 0, 1) * left
+            out = out + num / np.maximum(den, 1e-6)[..., None] * wk[..., None]
+            left = left - wk
+        return cv2.resize(out, (w, h), interpolation=cv2.INTER_CUBIC)
+
+    info = {"cells": [int(ia.sum()), int(ib.sum())],
+            "mean_px": round(float(np.sqrt((d_a ** 2).sum(1)) @ wa), 1),
+            "max_px": round(float(np.sqrt((d_a ** 2).sum(1)).max()), 1)}
+    return spread(d_a, ia), spread(d_b, ib), info
+
+
+def warp_along(img, field, p, border=cv2.BORDER_CONSTANT):
+    """Move img along p x field (a smooth forward displacement, px): the
+    backward map comes from a fixed-point inversion at quarter resolution."""
+    if p == 0:
+        return img
+    h, w = field.shape[:2]
+    hs, ws = max(2, h // 4), max(2, w // 4)
+    fs = cv2.resize(field, (ws, hs), interpolation=cv2.INTER_AREA) * (ws / float(w))
+    gx, gy = np.meshgrid(np.arange(ws, dtype=np.float32), np.arange(hs, dtype=np.float32))
+    mx, my = gx - p * fs[..., 0], gy - p * fs[..., 1]
+    for _ in range(3):
+        fx = cv2.remap(fs[..., 0], mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        fy = cv2.remap(fs[..., 1], mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        mx, my = gx - p * fx, gy - p * fy
+    sx = float(w) / ws
+    mxf = cv2.resize(mx, (w, h), interpolation=cv2.INTER_LINEAR) * sx + (sx - 1) / 2.0
+    myf = cv2.resize(my, (w, h), interpolation=cv2.INTER_LINEAR) * sx + (sx - 1) / 2.0
+    return cv2.remap(img, mxf, myf, cv2.INTER_LINEAR, borderMode=border, borderValue=0)
+
+
+def lab_stats(lab, alpha):
+    """Alpha-weighted mean and std of a layer's Lab, (3, 2)."""
+    wsum = max(float(alpha.sum()), 1e-6)
+    out = np.zeros((3, 2), np.float32)
+    for c in range(3):
+        m = float((lab[..., c] * alpha).sum() / wsum)
+        out[c, 0] = m
+        out[c, 1] = float(np.sqrt((((lab[..., c] - m) ** 2) * alpha).sum() / wsum)) + 1e-3
+    return out
+
+
+def lab_match(lab, src, dst, clip=(0.4, 2.5)):
+    """Give lab (statistics src) the statistics dst, both (3, 2)."""
+    out = np.empty_like(lab)
+    for c in range(3):
+        gain = float(np.clip(dst[c, 1] / src[c, 1], clip[0], clip[1]))
+        out[..., c] = (lab[..., c] - src[c, 0]) * gain + dst[c, 0]
+    return out
+
+
+def curl_field(h, w, scale_px, seed):
+    """A divergence-free unit field (h, w, 2) from a smooth noise potential."""
+    psi = noise_field(h, w, scale_px, seed)
+    psi = cv2.GaussianBlur(psi, (0, 0), max(1.0, scale_px / 6.0))
+    gy, gx = np.gradient(psi)
+    v = np.stack([gy, -gx], -1).astype(np.float32)
+    return v / max(float(np.sqrt((v ** 2).sum(-1)).max()), 1e-6)
 
 
 def ramp(x, lo, hi):
@@ -330,6 +456,49 @@ class Scene:
         self.masks = {}
         self.seed = seed
         self.n = 2          # frames of the clip; set by render_score (the shutter needs px per frame)
+        self.layers_all = []    # every layer of the score, rendered or not (set by build_layers)
+
+    def layer_flow(self, sigma=0.12, kappa=0.02, names=None):
+        """One flow for the whole scene, interpolated from the motions of its
+        matched layers (a `morph_to` layer's transport field inside its matte,
+        a `move_to` layer's map at its blob): a normalized convolution at
+        `sigma` x the long side, falling to zero far from every matched layer
+        (`kappa`). Returns the field A -> B and the field B -> A, px."""
+        key = ("_flow", sigma, kappa, tuple(names) if names else None)
+        if key in self.masks:
+            return self.masks[key]
+        h, w = self.h, self.w
+        hs, ws = max(8, h // 8), max(8, w // 8)
+        gx, gy = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+        num = [np.zeros((hs, ws, 2), np.float32), np.zeros((hs, ws, 2), np.float32)]
+        den = [np.zeros((hs, ws), np.float32), np.zeros((hs, ws), np.float32)]
+        for lay in self.layers_all:
+            if names and lay.name not in names:
+                continue
+            if lay.action == "morph_to":
+                pairs = ((lay.F, lay.alpha0), (lay.G, lay.tgt.alpha0))
+            elif lay.action == "move_to":
+                Tm, b = lay.T_bw, lay.b_bw
+                Ti = np.linalg.inv(Tm)
+                fwd = np.stack([(Tm[0, 0] - 1) * gx + Tm[0, 1] * gy + b[0], Tm[1, 0] * gx + (Tm[1, 1] - 1) * gy + b[1]], -1)
+                bi = -Ti @ b
+                rev = np.stack([(Ti[0, 0] - 1) * gx + Ti[0, 1] * gy + bi[0], Ti[1, 0] * gx + (Ti[1, 1] - 1) * gy + bi[1]], -1)
+                pairs = ((fwd.astype(np.float32), lay.alpha0), (rev.astype(np.float32), lay.by_name[lay.spec["to"]].alpha0))
+            else:
+                continue
+            for k, (fld, a) in enumerate(pairs):
+                a_s = cv2.resize(a, (ws, hs), interpolation=cv2.INTER_AREA)
+                f_s = cv2.resize(fld * a[..., None], (ws, hs), interpolation=cv2.INTER_AREA)
+                num[k] += f_s
+                den[k] += a_s
+        sg = sigma * max(hs, ws)
+        out = []
+        for k in range(2):
+            n_ = cv2.GaussianBlur(num[k], (0, 0), sg)
+            d_ = cv2.GaussianBlur(den[k], (0, 0), sg)
+            out.append(cv2.resize(n_ / (d_ + kappa)[..., None], (w, h), interpolation=cv2.INTER_CUBIC))
+        self.masks[key] = (out[0], out[1])
+        return self.masks[key]
 
     def disparity(self, src):
         if src not in self.disp:
@@ -646,10 +815,28 @@ class Scene:
         for arr in (top, bottom):
             pad = np.pad(arr, k // 2, mode="edge")
             arr[:] = np.median(np.lib.stride_tricks.sliding_window_view(pad, k), axis=1)
+        if m.get("bottom_fit") is not None:
+            # round 4: a waterline is a smooth line; the per-column dark run
+            # ends early under a bright reflection and the notch let the water
+            # layer cover a block of the skyline (the light blocks of rounds
+            # 2-4). A polynomial of order `bottom_fit` through the columns
+            # within 12 px of the running fit (three passes from the median).
+            xs_ = np.arange(w, dtype=np.float64)
+            fit = np.full(w, float(np.median(bottom)))
+            for _ in range(3):
+                ok = np.abs(bottom - fit) < 12.0
+                if ok.sum() < 10:
+                    break
+                fit = np.polyval(np.polyfit(xs_[ok], bottom[ok].astype(np.float64), int(m["bottom_fit"])), xs_)
+            bottom[:] = fit.astype(np.float32)
         self.masks["_band_" + name] = (top, bottom)
         yy = np.arange(h, dtype=np.float32)[:, None]
         f = float(m.get("feather", 3.0))
-        return smoothstep((yy - top[None, :] + 1.0) / f) * smoothstep((bottom[None, :] - yy + 1.0) / f)
+        # round 4: `extend_bottom_px` continues the matte below its bottom
+        # line (the band lines stay): a band that transforms behind a water
+        # layer never shows a gap between its bottom and the moving waterline
+        low = bottom + float(m.get("extend_bottom_px", 0.0))
+        return smoothstep((yy - top[None, :] + 1.0) / f) * smoothstep((low[None, :] - yy + 1.0) / f)
 
     def _clouds(self, src, within, m):
         """Cloud density against the clear sky of the same rows: the clear sky
@@ -897,6 +1084,43 @@ class Layer:
         # destination minus fit at the source, in Lab; zero at the endpoints)
         self.carry = self.by_name[sp["carry_fit"]] if sp.get("carry_fit") else None
         self.shutter = float(sp.get("shutter", 0.0))
+        adv = sp.get("advect")
+        self.adv = None
+        if adv:
+            self.adv = curl_field(h, w, float(adv.get("scale_px", 160)), s.seed + int(adv.get("seed", 11))) * float(adv.get("amp_px", 40))
+        if self.action == "morph_to":
+            # round 4: the layer of A is carried into the layer `to` of B
+            tgt = self.by_name[sp["to"]]
+            self.tgt = tgt
+            kind = sp.get("ot_mass", "alpha")
+
+            def mass(lay):
+                if kind == "alpha":
+                    return lay.alpha0
+                L = lay.lab[..., 0]
+                mu = float((L * lay.alpha0).sum() / max(float(lay.alpha0.sum()), 1e-6))
+                dev = (L - mu) if kind == "bright" else (mu - L)
+                return lay.alpha0 * (0.15 + np.clip(dev, 0, None) / 25.0)
+            self.F, self.G, self.ot_info = ot_fields(mass(self), mass(tgt), int(sp.get("ot_grid", 64)),
+                                                     float(sp.get("ot_eps", 0.04)))
+            gain = float(sp.get("ot_gain", 1.0))
+            self.F, self.G = self.F * gain, self.G * gain
+            self.mix_window = sp.get("mix_window", [0.3, 0.7])
+            # `colour_window` (CLIP time, like `recolor_window`): the window in
+            # which the two layers' shared Lab statistics go from A's to B's;
+            # by default the mix window mapped into clip time. An earlier one
+            # lets a day-lit layer darken with the sky before its structure
+            # changes (day-lit buildings stood under a night sky otherwise).
+            t0_, t1_ = self.window
+            self.colour_window = sp.get("colour_window", [t0_ + (t1_ - t0_) * self.mix_window[0], t0_ + (t1_ - t0_) * self.mix_window[1]])
+            self.st_a = lab_stats(self.lab, self.alpha0)
+            self.st_b = lab_stats(tgt.lab, tgt.alpha0)
+            self.match = bool(sp.get("match_colour", True))
+
+    def linear(self, t, window=None):
+        """The clipped linear progress through a window (the layer's own by default)."""
+        t0, t1 = window or self.window
+        return min(1.0, max(0.0, (t - t0) / max(t1 - t0, 1e-6)))
 
     def offset(self, t):
         """The translation (px) of the layer at t: exit / enter / move, the
@@ -927,6 +1151,44 @@ class Layer:
             return np.zeros(2, np.float32)
         return (self.offset(t1) - self.offset(t0)) / ((t1 - t0) / dt)
 
+    def render_morph(self, t):
+        """The layer of A carried into its counterpart of B: geometry by the
+        progress p along the transport field, appearance by the mix q inside
+        `mix_window`, with both layers given the same Lab statistics (the
+        blend of A's and B's by q), so the mix changes structure, not colour."""
+        tgt = self.tgt
+        u = self.linear(t)
+        p = curve_of(self.curve, u)
+        m0, m1 = self.mix_window
+        q = float(smoothstep((u - m0) / max(m1 - m0, 1e-6)))
+        qc = float(smoothstep(self.linear(t, self.colour_window))) if self.match else q
+        st = (1.0 - qc) * self.st_a + qc * self.st_b
+        if u <= 0:
+            return (self.rgb if qc <= 0 else lab_to_rgb(lab_match(self.lab, self.st_a, st))), self.alpha0
+        if u >= 1:
+            return (tgt.rgb if qc >= 1 else lab_to_rgb(lab_match(tgt.lab, self.st_b, st))), tgt.alpha0
+        if self.match:
+            rgb_a = lab_to_rgb(lab_match(self.lab, self.st_a, st)) if qc > 0 else self.rgb
+            rgb_b = lab_to_rgb(lab_match(tgt.lab, self.st_b, st)) if qc < 1 else tgt.rgb
+        else:
+            rgb_a, rgb_b = self.rgb, tgt.rgb
+        a_a = warp_along(self.alpha0, self.F, p)
+        a_b = warp_along(tgt.alpha0, self.G, 1.0 - p)
+        c_a = warp_along(np.ascontiguousarray(rgb_a), self.F, p, cv2.BORDER_REPLICATE)
+        c_b = warp_along(np.ascontiguousarray(rgb_b), self.G, 1.0 - p, cv2.BORDER_REPLICATE)
+        # the two warped shapes only approximate one shape: in the middle of
+        # the mix the matte is their union (a plain (1 - q) a + q b leaves the
+        # layer half transparent wherever they do not overlap: holes in a
+        # skyline, measured on the first render of 2026-09-27), and a pixel
+        # that only one of them covers takes that one's colour
+        c = 4.0 * q * (1.0 - q)
+        lin = a_a * (1.0 - q) + a_b * q
+        alpha = lin + c * (np.maximum(a_a, a_b) - lin)
+        w_a = a_a * ((1.0 - q) + 0.5 * c)
+        w_b = a_b * (q + 0.5 * c)
+        rgb = (c_a * w_a[..., None] + c_b * w_b[..., None]) / np.maximum(w_a + w_b, 1e-4)[..., None]
+        return rgb, np.clip(alpha, 0, 1)
+
     def edge_alpha(self, p):
         """The matte of an order-`edge` dissolve at progress p: the front f
         runs from below the support's edge (every pixel opaque at p = 0) to
@@ -948,7 +1210,8 @@ class Layer:
         to = sp.get("recolor_to") or (sp.get("to") if self.action == "recolor" else None)
         if not to:
             return self.rgb
-        p = self.progress(t) * float(sp.get("recolor_strength", 1.0))
+        rw = sp.get("recolor_window")
+        p = (curve_of(self.curve, self.linear(t, rw)) if rw else self.progress(t)) * float(sp.get("recolor_strength", 1.0))
         if p <= 0:
             return self.rgb
         dst = self.by_name[to].stats
@@ -992,6 +1255,8 @@ class Layer:
     def render(self, t):
         """(rgb float32, alpha float32) of this layer at time t."""
         sp = self.spec
+        if self.action == "morph_to":
+            return self.render_morph(t)
         rgb = self.colour(t)
         p = self.progress(t)
         if self.action == "dissolve":
@@ -1013,6 +1278,11 @@ class Layer:
                 alpha = self.alpha0 * np.clip((self.E - theta) / self.feather, 0, 1)
         else:
             alpha = self.alpha0
+        if self.adv is not None and p > 0:
+            # the layer deforms along a divergence-free field that grows with
+            # its progress (a cloud's body drifts and twists while it thins)
+            rgb = warp_along(np.ascontiguousarray(rgb), self.adv, p, cv2.BORDER_REPLICATE)
+            alpha = warp_along(alpha, self.adv, p)
         M = self.affine(t)
         if M is not None:
             h, w = self.scene.h, self.scene.w
@@ -1131,6 +1401,29 @@ class Backdrop(Layer):
         else:
             self.resA = (self.lab - self.fitA_img) * wA[..., None]
             self.resB = (other.lab - self.fitB_img) * wB[..., None]
+        # round 4: `flow` moves the two residual textures along a transport
+        # map between their bright (or dark) features while they mix, so a
+        # texture travels to its counterpart instead of fading in place
+        self.flow = None
+        fl = sp.get("flow")
+        if fl and fl.get("from") == "layers":
+            # the scene's one flow, from the matched layers' own motions; the
+            # fields are read at the first render (every layer is prepared by then)
+            self.flow = ("layers", float(fl.get("sigma", 0.12)), float(fl.get("kappa", 0.02)), fl.get("mix_window", [0.25, 0.75]),
+                         float(fl.get("gain", 1.0)), fl.get("layers"))
+        elif fl:
+            # a free transport between the two textures' bright (or dark)
+            # features. Measured 2026-09-27 on mismatch_4: mean 200 px, max
+            # 715 px, curtain-shaped smears in the sky; kept as an option.
+            sign = -1.0 if fl.get("mass", "bright") == "dark" else 1.0
+            floor = float(fl.get("floor", 2.0))
+            reg_a = self.alpha0 if self.alpha_to is None else self.alpha0
+            reg_b = other.alpha0
+            ma = np.clip(sign * self.resA[..., 0] - floor, 0, None) * reg_a * wA
+            mb = np.clip(sign * self.resB[..., 0] - floor, 0, None) * reg_b * wB
+            F, G, info = ot_fields(ma, mb, int(fl.get("grid", 64)), float(fl.get("eps", 0.05)))
+            gain = float(fl.get("gain", 1.0))
+            self.flow = (F * gain, G * gain, fl.get("mix_window", [0.25, 0.75]), info)
 
     def render(self, t):
         p = self.progress(t)
@@ -1139,7 +1432,20 @@ class Backdrop(Layer):
             u = self.under[..., None]
             fA = fA * (1 - u) + fB * u
         fit = fA * (1 - p) + fB * p
-        lab = fit + self.resA * (1 - p) + self.resB * p
+        if self.flow is not None and 0 < p < 1:
+            if self.flow[0] == "layers":
+                _, sg, kp, mw, gain, names = self.flow
+                F, G = self.scene.layer_flow(sg, kp, names)
+                F, G = F * gain, G * gain
+            else:
+                F, G, mw, _ = self.flow
+            uu = self.linear(t)
+            q = float(smoothstep((uu - mw[0]) / max(mw[1] - mw[0], 1e-6)))
+            ra = warp_along(np.ascontiguousarray(self.resA), F, p, cv2.BORDER_REFLECT_101)
+            rb = warp_along(np.ascontiguousarray(self.resB), G, 1.0 - p, cv2.BORDER_REFLECT_101)
+            lab = fit + ra * (1 - q) + rb * q
+        else:
+            lab = fit + self.resA * (1 - p) + self.resB * p
         if self.opaque:
             alpha = np.ones((self.scene.h, self.scene.w), np.float32)
         elif self.slide is not None:
@@ -1162,6 +1468,7 @@ def build_layers(scene, score):
         lay = cls(scene, sp, by_name)
         by_name[lay.name] = lay
         layers.append(lay)
+    scene.layers_all = layers
     for lay in layers:          # masks first, then the actions that read other masks
         lay._prep()
     return sorted([l for l in layers if l.render_it], key=lambda l: l.depth)
@@ -1177,6 +1484,87 @@ def composite(layers, t):
         a = alpha[..., None]
         out = out * (1 - a) + rgb * a
     return T.to_u8(out)
+
+
+# ---------------------------------------------------------------------------
+# The automatic score (round 4, 2026-09-27 evening): fixed rules, no per-pair
+# parameter. The owner: "not overfit on these specific example pairs ... i want
+# this to be universal solution (tunable and adjustable)". The hand-written
+# scores tune a pair; this one is what the same mechanisms give unattended,
+# and the score it writes is the file an operator then edits.
+# ---------------------------------------------------------------------------
+
+AUTO_SKYLINE = {"rule": "skyline_below", "d": 0.03, "run": 20, "frac": 0.7, "bottom": 0.6, "grow": 2}
+
+
+def auto_score(pair, seconds=3.0, fps=30, max_long=1920, seed=0):
+    """A score for any pair from fixed rules. Both photos have a sky (the
+    depth skyline leaves 5-90 % of the canvas below it): the ground of A
+    transforms into the ground of B over a sky backdrop whose textures follow
+    the scene's flow, and a sun moves to a sun when both skies hold one.
+    Otherwise: the whole frame of A transforms into the whole frame of B
+    (transport between bright features) under a near layer cut at each
+    photo's median disparity, which transforms into B's near layer."""
+    A, B = canvas_pair(pair, max_long)
+    sc = Scene(A, B, seed)
+    h, w = sc.h, sc.w
+    ga = sc.mask({"name": "_ga", "from": "A", "mask": dict(AUTO_SKYLINE)})
+    gb = sc.mask({"name": "_gb", "from": "B", "mask": dict(AUTO_SKYLINE)})
+    share = (float(ga.mean()), float(gb.mean()))
+    facts = {"ground_share": [round(v, 3) for v in share]}
+
+    def sun_of(src, ground):
+        L = sc.lab[src][..., 0]
+        hard = ((L > 92.0) & (ground < 0.5)).astype(np.uint8)
+        n, _, st, _ = cv2.connectedComponentsWithStats(hard)
+        if n < 2:
+            return 0.0
+        return float(st[1:, cv2.CC_STAT_AREA].max()) / (h * w)
+
+    base = {"pair": pair, "tag": "auto_r4", "seconds": seconds, "fps": fps, "max_long": max_long,
+            "owner": "Automatic score (fixed rules, no per-pair parameter; layered_probe.py --auto): edit this file to tune the scene."}
+    if all(0.05 < v < 0.9 for v in share):
+        suns = (sun_of("A", ga), sun_of("B", gb))
+        facts["sun_share"] = [round(v, 5) for v in suns]
+        both_suns = all(0.0003 < v < 0.03 for v in suns)
+        layers = [{"name": "ground_b", "from": "B", "mask": dict(AUTO_SKYLINE), "render": False},
+                  {"name": "sky_b", "from": "B", "mask": {"rule": "invert", "of": "ground_b"}, "render": False}]
+        if both_suns:
+            layers.append({"name": "sun_b", "from": "B", "mask": {"rule": "sun", "within": "sky_b", "thr": 92, "grow": 6}, "render": False})
+        layers.append({"name": "ground", "from": "A", "mask": dict(AUTO_SKYLINE), "depth": 2, "action": "morph_to", "to": "ground_b",
+                       "window": [0.15, 0.85], "curve": "smootherstep", "mix_window": [0.3, 0.7], "colour_window": [0.0, 0.6],
+                       "ot_grid": 64, "ot_eps": 0.04, "ot_mass": "alpha"})
+        sky = {"name": "sky", "from": "A", "mask": {"rule": "invert", "of": "ground"}, "depth": 0, "action": "backdrop", "to": "sky_b",
+               "opaque": True, "fit2d": True, "fill_sigma": 60, "window": [0.0, 0.85], "curve": "smootherstep",
+               "minus_res": [{"layer": "ground", "full": True, "dilate": 4, "soft": 2}],
+               "exclude_res": [{"layer": "ground_b", "full": True, "dilate": 4, "soft": 2}],
+               "flow": {"from": "layers", "sigma": 0.12, "kappa": 0.02, "mix_window": [0.25, 0.75]}}
+        if both_suns:
+            sky["minus"] = ["sun"]
+            sky["exclude"] = ["sun_b"]
+            sky["flow"]["layers"] = ["sun"]
+        layers.append(sky)
+        if both_suns:
+            layers.append({"name": "sun", "from": "A", "mask": {"rule": "sun", "within": "sky", "thr": 92, "grow": 6}, "depth": 1.5,
+                           "action": "move_to", "to": "sun_b", "window": [0.15, 0.7], "curve": "smootherstep", "recolor_to": "sun_b",
+                           "shutter": 0.5})
+            layers.append({"name": "sun_b_layer", "from": "B", "mask": {"rule": "sun", "within": "sky_b", "thr": 92, "grow": 6}, "depth": 1.6,
+                           "action": "materialise", "order": "luma", "noise_gain": 0.0, "feather": 0.3, "window": [0.68, 0.8], "curve": "ease"})
+        facts["route"] = "sky + ground" + (" + sun" if both_suns else "")
+    else:
+        med = (float(np.median(sc.disparity("A"))), float(np.median(sc.disparity("B"))))
+        facts["median_disparity"] = [round(v, 3) for v in med]
+        layers = [{"name": "all_b", "from": "B", "mask": {"rule": "all"}, "render": False},
+                  {"name": "near_b", "from": "B", "mask": {"rule": "depth_fg", "lo": round(med[1], 3), "hi": round(med[1] + 0.1, 3), "blur": 3}, "render": False},
+                  {"name": "base", "from": "A", "mask": {"rule": "all"}, "depth": 0, "action": "morph_to", "to": "all_b", "ot_mass": "bright",
+                   "window": [0.1, 0.9], "curve": "smootherstep", "mix_window": [0.3, 0.7], "ot_grid": 64, "ot_eps": 0.05},
+                  {"name": "near", "from": "A", "mask": {"rule": "depth_fg", "lo": round(med[0], 3), "hi": round(med[0] + 0.1, 3), "blur": 3},
+                   "depth": 1, "action": "morph_to", "to": "near_b", "window": [0.2, 0.9], "curve": "smootherstep", "mix_window": [0.35, 0.75],
+                   "ot_grid": 64, "ot_eps": 0.04, "ot_mass": "alpha"}]
+        facts["route"] = "whole frame + near layer"
+    base["auto_facts"] = facts
+    base["layers"] = layers
+    return base
 
 
 # ---------------------------------------------------------------------------
@@ -1213,6 +1601,29 @@ def measure_layers(layers, n):
                     "mean_px_per_frame": round(float(mv.mean()), 2),
                     "peak_ratio": round(mx / max(float(mv.mean()), 1e-6), 2),
                     "plateau_share": round(float((mv >= 0.9 * mx).sum() / len(mv)), 2)}
+        if lay.action == "morph_to":
+            mag = np.sqrt((lay.F ** 2).sum(-1))
+            sel = lay.alpha0 > 0.5
+            us = [lay.linear(t) for t in ts]
+            ps = np.array([curve_of(lay.curve, u) for u in us])
+            dp = float(np.abs(np.diff(ps)).max())
+            out.setdefault("morph", {})[lay.name] = {
+                "to": lay.spec["to"], "curve": lay.curve, "cells": lay.ot_info["cells"],
+                "field_mean_px": round(float(mag[sel].mean()), 1) if sel.any() else 0.0,
+                "field_p95_px": round(float(np.percentile(mag[sel], 95)), 1) if sel.any() else 0.0,
+                "peak_px_per_frame_p95": round(float(np.percentile(mag[sel], 95)) * dp, 2) if sel.any() else 0.0,
+                "mix_window": lay.mix_window}
+        if getattr(lay, "flow", None) is not None:
+            if lay.flow[0] == "layers":
+                F, _ = lay.scene.layer_flow(lay.flow[1], lay.flow[2], lay.flow[5])
+                mag = np.sqrt((F ** 2).sum(-1)) * lay.flow[4]
+                reg = lay.alpha0 > 0.5
+                out.setdefault("flow", {})[lay.name] = {"from": "layers", "transport_mean_px": round(float(mag[reg].mean()), 1),
+                                                         "transport_max_px": round(float(mag[reg].max()), 1), "mix_window": lay.flow[3]}
+            else:
+                F, G, mw, info = lay.flow
+                out.setdefault("flow", {})[lay.name] = {"from": "ot", "cells": info["cells"], "transport_mean_px": info["mean_px"],
+                                                         "transport_max_px": info["max_px"], "mix_window": mw}
         if lay.action in ("dissolve", "materialise") and lay.spec["mask"]["rule"] != "stars":
             t0, t1 = lay.window
             shares, widths = [], []
@@ -1278,6 +1689,11 @@ def measure_text(meas):
             parts.append(f"{name} boundary step " + ", ".join(f"{v} L at {q}" for q, v in m.items()))
     for name, m in (meas.get("carried") or {}).items():
         parts.append(f"{name} carried-sky mismatch " + ", ".join(f"{v} L at {q}" for q, v in m.items()))
+    for name, m in (meas.get("morph") or {}).items():
+        parts.append(f"{name} transforms into {m['to']}: transport mean {m['field_mean_px']} px, 95th percentile {m['field_p95_px']} px "
+                     f"({m['peak_px_per_frame_p95']} px/f at the peak), appearance mixed inside {m['mix_window'][0]}–{m['mix_window'][1]} of its window")
+    for name, m in (meas.get("flow") or {}).items():
+        parts.append(f"{name} texture flow: mean {m['transport_mean_px']} px, max {m['transport_max_px']} px")
     return " · ".join(parts)
 
 
@@ -1384,12 +1800,10 @@ def write_page(out, sheet, picks, note=""):
             ".note{color:#bbb}.hint{background:#26210a;padding:10px;border-radius:6px;margin:12px 0}button{padding:6px 12px}"
             "table.score{border-collapse:collapse;font-size:13px}table.score td,table.score th{border:1px solid #333;padding:2px 8px}details{margin:6px 0}</style>",
             f"<h1>Layered, orchestrated transitions — {sheet['date']}</h1>",
-            "<div class=hint><b>What varies.</b> <code>flat</code> and <code>anchors_falloff</code> are the two clips you graded on the theme-anchors page (the shipped class B pan-and-zoom, "
-            "and the hand-placed anchors with the border falloff), copied here unchanged for the comparison. Every <code>layered…</code> clip is rendered by a research script "
-            "(<code>scripts/research/layered_probe.py</code>) from a hand-written SCORE, shown under the pair: the photos are cut into layers by rules (depth from the offline "
-            "depth model, cloud density from the sky's blue, stars as bright blobs), each layer gets one action with its own time window (the sky gradient darkens on its own, "
-            "the clouds erode through their own density, the stars appear in brightness order, the buildings slide out, the trees and the air-conditioning unit slide in), "
-            "and the layers are composited back to front. No pixel is a crossfade of A-content and B-content; the only mixed quantity is the low-amplitude sky texture. "
+            "<div class=hint><b>What is on this page.</b> A reference clip (<code>flat</code>, or an earlier round's clip) is copied here unchanged for the comparison. "
+            "Every <code>layered…</code> or <code>auto…</code> clip is rendered by a research script (<code>scripts/research/layered_probe.py</code>) from a SCORE, shown under "
+            "the clip: the two photos are cut into layers by rules, each layer gets one action with its own time window, and the layers are composited back to front. "
+            "A <code>layered…</code> score is written by hand for its pair; an <code>auto…</code> score is built by fixed rules with no per-pair parameter. "
             "Nothing in <code>transitions.py</code> changed. The seconds of each clip are on its line; canvas ≤ 1920 px. Under every clip the three boxes ask for the property, not the pick: "
             "<b>one picture</b> (the mid frame is one coherent picture, not two superimposed), <b>content transforms</b> (details move and change rather than the frame panning or fading), "
             "<b>nothing invented</b> (no content that is in neither photo). Pick the closer clip per pair, write what is wrong or what the score should say instead, and <b>Export picks</b>; "
@@ -1479,6 +1893,7 @@ def write_sheet_md(out, sheet, picks):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--score", action="append", default=[], help="a score JSON (repeatable)")
+    ap.add_argument("--auto", action="append", default=[], help="a pair id: write scores/auto/<pair>.json by the fixed rules and render it (repeatable)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ref", action="append", default=[], help="tag=DIR: copy a reference clip's outputs beside the probe (pair from the first --score)")
     ap.add_argument("--pair", default="", help="pair for --ref when no --score is given")
@@ -1493,6 +1908,13 @@ def main():
     sheet = json.loads(sheet_path.read_text()) if sheet_path.exists() else {"date": time.strftime("%Y-%m-%d"), "pairs": {}}
     pair = a.pair
     if not a.page_only:
+        for pair_id in a.auto:
+            auto = auto_score(pair_id)
+            dst = ROOT / "scripts" / "research" / "scores" / "auto" / f"{pair_id}.json"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(json.dumps(auto, indent=1) + "\n")
+            print(f"  auto {pair_id}: {auto['auto_facts']}", flush=True)
+            a.score.append(str(dst))
         for sc in a.score:
             score = json.loads(Path(sc).read_text())
             pair, tag = score["pair"], score.get("tag", Path(sc).stem)

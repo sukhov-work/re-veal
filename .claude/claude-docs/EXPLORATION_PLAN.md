@@ -204,6 +204,26 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    layer for B's thin bright clouds was tried four ways and rejected on the frames). The probe measures
    the three faults on the composite and the page prints the numbers. Every clip byte-identical on two
    runs; no tool change. Ungraded. Next: the owner's boxes; the tool shape (§12.4) waits.
+   **Owner picks on round 3 (2026-09-27 evening; verbatim in DECISIONS and `TRANSITIONS.md §12.10.1`)**:
+   nothing picked as closer; the three boxes stay on four mismatch_6 clips; the fault named on both
+   pairs is the action — "sliding of different elemetns in and out of frame is too linear and naive ,
+   again as decorations in 2d scene", "buildings skyline does not transform into final one"; "Only Sun
+   movement is cool". The owner restates the goal as a universal, tunable solution and warns against
+   overfitting on the fixture pairs (`TRANSITIONS.md §11`, amendment 2026-09-27).
+   **Round 4 rendered (2026-09-27 evening; `§12.10`; page `benchmarks/runs/2026-09-27/layered_r4/`)**: a
+   layer transforms into its counterpart (`morph_to`: an optimal-transport map between the two mattes,
+   appearance mixed mid-window with matched colour statistics) — the skyline of mismatch_4, the
+   buildings-to-trees of mismatch_6; backdrop textures follow the scene's flow; the clouds darken,
+   drift and thin. An automatic score (`--auto`, fixed rules, no per-pair parameter) renders mismatch_1,
+   mismatch_5 and mismatch_3 untuned. Five clips byte-identical on two runs; earlier md5s unchanged; no
+   tool change. Ungraded. **Rule from 2026-09-27: every review page carries automatic clips on pairs the
+   mechanism was not tuned on.**
+   **Mask routes compared (2026-09-27 evening; `§12.11`; page `benchmarks/runs/2026-09-27/masks/`)**:
+   fixed rules find a sky on 18 of 18 photos (interiors included) and have no notion of what a region
+   is; Mask2Former Swin-Tiny names regions (sky on 14–15 of 18), matches the tuned mismatch_6 buildings
+   at IoU 0.94–0.95 untuned, has no sun / cloud / star and no depth order, misnames the river and the
+   AC unit; weights 190 MB, CC BY-NC 4.0 upstream; the stock `transformers` load needs scipy and
+   torchvision. The owner decides between rules, the model behind a warmup, or both.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -340,3 +360,5 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-27 | Keyframe prompting researched (BFL guides, Qwen rewriter rules, both pipelines' "Picture N" labels, sd.cpp reference sizing) and made dynamic (`keyframe_prompt.py` from a score at a clip time); runs kf_02–kf_05 planned | round-2 session, 2026-09-27 |
 | 2026-09-27 | Fifth session, Track A: round 3 rendered on mismatch_6 (three clips: the cloud erosion from the edge inward, motion blur + relit regions + smootherstep, both) and mismatch_4 (motion only; the streak-cloud layer rejected on the frames with numbers); the probe measures the three faults on the composite; no tool change; owner grades next | round-3 session, 2026-09-27 (fifth) |
 | 2026-09-27 | Fifth session, Track B: kf_02–kf_05 ran on the box (single reference leaves both photos, the sun at B's place; two references reproduce Picture 2; reference size does not set the step time, the second reference does); box clean; owner grades next | round-3 session, 2026-09-27 (fifth) |
+| 2026-09-27 | Owner picks on round 3 ingested (nothing picked; sliding layers rejected as "decorations in 2d scene"; the skyline must transform; the sun's move praised) and the goal restated (universal, tunable, no overfitting on the fixture pairs; photos and videos) | round-4 session, 2026-09-27 evening |
+| 2026-09-27 | Round 4 rendered: `morph_to` (layer-to-layer transformation by optimal transport), backdrop flow from the matched layers, clouds darkening and advected, an automatic score on three untuned pairs; the mask routes compared on 18 photos (rules vs Mask2Former Swin-Tiny; weights CC BY-NC 4.0); no tool change | round-4 session, 2026-09-27 evening |

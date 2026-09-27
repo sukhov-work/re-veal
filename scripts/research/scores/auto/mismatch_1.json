@@ -1,0 +1,118 @@
+{
+ "pair": "mismatch_1",
+ "tag": "auto_r4",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "owner": "Automatic score (fixed rules, no per-pair parameter; layered_probe.py --auto): edit this file to tune the scene.",
+ "auto_facts": {
+  "ground_share": [
+   0.193,
+   0.398
+  ],
+  "sun_share": [
+   0.0001,
+   0.00061
+  ],
+  "route": "sky + ground"
+ },
+ "layers": [
+  {
+   "name": "ground_b",
+   "from": "B",
+   "mask": {
+    "rule": "skyline_below",
+    "d": 0.03,
+    "run": 20,
+    "frac": 0.7,
+    "bottom": 0.6,
+    "grow": 2
+   },
+   "render": false
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "mask": {
+    "rule": "invert",
+    "of": "ground_b"
+   },
+   "render": false
+  },
+  {
+   "name": "ground",
+   "from": "A",
+   "mask": {
+    "rule": "skyline_below",
+    "d": 0.03,
+    "run": 20,
+    "frac": 0.7,
+    "bottom": 0.6,
+    "grow": 2
+   },
+   "depth": 2,
+   "action": "morph_to",
+   "to": "ground_b",
+   "window": [
+    0.15,
+    0.85
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "colour_window": [
+    0.0,
+    0.6
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha"
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "invert",
+    "of": "ground"
+   },
+   "depth": 0,
+   "action": "backdrop",
+   "to": "sky_b",
+   "opaque": true,
+   "fit2d": true,
+   "fill_sigma": 60,
+   "window": [
+    0.0,
+    0.85
+   ],
+   "curve": "smootherstep",
+   "minus_res": [
+    {
+     "layer": "ground",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "exclude_res": [
+    {
+     "layer": "ground_b",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "flow": {
+    "from": "layers",
+    "sigma": 0.12,
+    "kappa": 0.02,
+    "mix_window": [
+     0.25,
+     0.75
+    ]
+   }
+  }
+ ]
+}

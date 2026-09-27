@@ -1,0 +1,87 @@
+{
+ "pair": "mismatch_5",
+ "tag": "auto_r4",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "owner": "Automatic score (fixed rules, no per-pair parameter; layered_probe.py --auto): edit this file to tune the scene.",
+ "auto_facts": {
+  "ground_share": [
+   0.769,
+   1.0
+  ],
+  "median_disparity": [
+   0.192,
+   0.409
+  ],
+  "route": "whole frame + near layer"
+ },
+ "layers": [
+  {
+   "name": "all_b",
+   "from": "B",
+   "mask": {
+    "rule": "all"
+   },
+   "render": false
+  },
+  {
+   "name": "near_b",
+   "from": "B",
+   "mask": {
+    "rule": "depth_fg",
+    "lo": 0.409,
+    "hi": 0.509,
+    "blur": 3
+   },
+   "render": false
+  },
+  {
+   "name": "base",
+   "from": "A",
+   "mask": {
+    "rule": "all"
+   },
+   "depth": 0,
+   "action": "morph_to",
+   "to": "all_b",
+   "ot_mass": "bright",
+   "window": [
+    0.1,
+    0.9
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.05
+  },
+  {
+   "name": "near",
+   "from": "A",
+   "mask": {
+    "rule": "depth_fg",
+    "lo": 0.192,
+    "hi": 0.292,
+    "blur": 3
+   },
+   "depth": 1,
+   "action": "morph_to",
+   "to": "near_b",
+   "window": [
+    0.2,
+    0.9
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.35,
+    0.75
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha"
+  }
+ ]
+}

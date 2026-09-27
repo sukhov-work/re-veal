@@ -263,6 +263,8 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Layered probe round 2 on mismatch_4, 2026-09-26 fourth session (§12.7; the same page; score `mismatch_4_r2.json`) | 1920×1092, 3 s, 90 frames: prep 4.3 s, render 9.6 s; steps 0.12 / 0.10 levels (round 1: 0.11 / 0.23); `edge_ratio` 0.172; two runs byte-identical (md5 `b7700b4c…`); `transitions.py` untouched |
 | Layered probe round 3 on mismatch_6, 2026-09-27 (§12.9; page `benchmarks/runs/2026-09-27/layered_r3/`; scores `mismatch_6_r3{_clouds,_soft,}.json`) | 1146×1524, 3 s, 90 frames: prep 5.2–6.6 s, render 7.6 s (clouds), 13.9 s (both), 18.8 s (the shutter blur alone: 8 s over round 2's 10.6 s); first / last interior step 0.03 / 0.05 levels with the round-3 cloud matte, 0.28 / 0.05 without it; `edge_ratio` 0.0156 / 0.1056 / 0.0169; two runs byte-identical (md5 `748b68ed…` / `ecbbcb61…` / `f2c3c02f…`); round 2's `cddde79e…` unchanged through the changed probe; `transitions.py` unchanged |
 | Layered probe round 3 on mismatch_4, 2026-09-27 (§12.9; the same page; score `mismatch_4_r3.json`, motion only) | 1920×1092, 3 s, 90 frames: prep 4.7 s, render 17.2 s; steps 0.12 / 0.10; `edge_ratio` 0.1745; md5 `a9f1e3d6…` on two runs; round 2's `b7700b4c…` unchanged; the four cloud-layer attempts: last step 0.42 / 0.75, `edge_ratio` 0.67 / 1.19, rejected on the frames |
+| Layered probe round 4, 2026-09-27 evening (§12.10; page `benchmarks/runs/2026-09-27/layered_r4/`; scores `mismatch_4_r4.json`, `mismatch_6_r4.json`, `scores/auto/*.json`) | 3 s, 90 frames. mismatch_4 (1920×1092): prep 6.1 s (the transport plan included), render 14.2 s, steps 0.10 / 0.10, `edge_ratio` 0.0925, md5 `e7b331de…`. mismatch_6 (1146×1524): 7.3 / 11.9 s, steps 0.06 / 0.05, 0.0318, `1aef9fa5…`. Automatic scores: mismatch_1 (1444×1920) 4.6 / 9.7 s, 0.07 / 0.04, `80dc31a9…`; mismatch_5 (1920×1080) 15.3 / 9.5 s, 0.0 / 0.0, `08bb31de…`; mismatch_3 (1920×1440) 24.7 / 12.3 s, 0.0 / 0.0, `52c4e57a…` (a whole-frame plan of 2,304–3,072 cells a side costs 10–20 s). Two runs byte-identical; the nine md5s of rounds 1–3 unchanged; `transitions.py` unchanged |
+| Mask routes on 18 fixture photos, 2026-09-27 evening (§12.11; `scripts/research/mask_routes.py`; page `benchmarks/runs/2026-09-27/masks/`; M3 Pro, CPU, 6 torch threads, beside other jobs) | Mask2Former Swin-Tiny COCO panoptic: 190,052,872 B, 47,436,800 parameters, 133 labels, load from cache 0.14 s, inference median 1.19 s (max 1.53 s) per photo, peak RSS 3.77 GiB. ADE20K semantic: 190,189,605 B (+ a second 190,070,416-B file fetched in the background), 150 labels, 0.62 s (max 1.06 s), 2.93 GiB. Offline re-run: 36 of 36 label maps byte-identical, 0 B downloaded. Rules: depth 0.28 s and the fixed rule set 0.36 s per photo (medians); the tuned masks 0.86 s (mismatch_4) and 2.41 s (mismatch_6) per pair |
 
 Goal numbers on the real surface (2026-09-26, `benchmarks/runs/2026-09-26/surface/` and `bench/`, morph 2 s, canvas ≤ 1920 px, 480-px proxy; run 1 through the CLI and run 2 through the bench script give identical numbers):
 
@@ -743,6 +745,18 @@ clip; the frame edge "hard ugly"; a few-anchor whole-frame warp reads as "one pi
 air-conditioning unit enter). The next design pass (§12, to be written) is the orchestrated layered
 transition with a per-scene score; the anchors' default falloff is 0.45 since the same day.
 
+Amendment 2026-09-27 (the owner restates the goal and warns against overfitting; verbatim, DECISIONS
+2026-09-27 evening): "I want to re-corfirm once again general idea and warn you to not overfit on these
+specific example pairs that i have provided, these are just random matches/mismathes, always remember
+that eventually i want this to be universal solution (tunable and adjustable)  to achieve some absurd
+but weirdly fitting and fluid transitions between both fully, partially and completely unrealted photos
+and videos, hence the complexity and all experimentation". What it changes in practice: (1) a mechanism
+is judged on pairs it was not tuned on, so every review page from 2026-09-27 on carries clips rendered
+from an AUTOMATIC score (fixed rules, no per-pair parameter; §12.10) beside the hand-written ones; (2) a
+hand-written score is the operator's tuning of a scene, never the proof that a mechanism works; (3)
+per-pair mask rules count as tuning (§12.11 compares them with a model that names regions); (4) video
+input is part of the goal; no slice covers it yet (TR4 in the plan is clip input and output only).
+
 ## 12. The orchestrated layered transition: the score, the probe, the first three clips (2026-09-26, third session)
 
 Result: a hand-written per-scene SCORE (layers × one action each × a time window) rendered by a
@@ -1115,3 +1129,116 @@ their peak speed (17 px of blur); the right-hand tree crown at the bottom right 
 mass with a soft boundary; on mismatch_4 the moved sun leaves a dark disc at its origin (the excluded
 residual; round 2 named the disc at the destination). Next: the owner's boxes and notes; the tool
 shape of §12.4 waits.
+
+### 12.10 Round 4: a layer transforms into its counterpart; an automatic score on untuned pairs (2026-09-27 evening; page `benchmarks/runs/2026-09-27/layered_r4/index.html`; scores `mismatch_4_r4.json`, `mismatch_6_r4.json`, `scores/auto/{mismatch_1,mismatch_5,mismatch_3}.json`)
+
+Result: five 3-second clips, every one byte-identical on two runs, in which no layer slides in or out
+of the frame: on mismatch_4 the first skyline transforms into the second, on mismatch_6 the row of
+buildings transforms into the tree line, and on three pairs that were never tuned the same mechanisms
+run from a score built by fixed rules. The nine md5s of rounds 1–3 are unchanged through the changed
+probe. Ungraded as of 2026-09-27. Nothing in `transitions.py` changed.
+
+12.10.1 The owner's picks on round 3 (2026-09-27 15:36 UTC; `benchmarks/runs/2026-09-27/layered_r3/layered_picks.json`;
+verbatim). mismatch_6, closer "none"; `layered_r2`, `layered_r3`, `layered_r3_clouds`, `layered_r3_soft`
+one picture + transforms + nothing invented, `layered` (round 1) transforms + nothing invented:
+"layered_r3_soft is closer then previous ones , still clouds dissolve with cheap linear 2d effect and
+not as real clouds would into the dark. In other regards, not better or worse than previous layered
+approaches, sliding of different elemetns in and out of frame is too linear and naive , again as
+decorations in 2d scene ". mismatch_4, closer "none"; `layered_r2` and `layered_r3` transforms only:
+"not better or worse than previous layered approaches, sliding of different elemetns in and out of
+frame is too linear and naive , again as decorations in 2d scene . ALso here it is especially important
+as buildings skyline does not transform into final one but rather first frame skyline slides out and
+final frame skyline slides in , very weird and junky. Also clouds and water are still simply
+crossfaded. Only Sun movement is cool between frames. ". Reading: round 3 refined the finish of an
+action (edge, blur, ease) and the grade did not move; the fault is the action. The one action praised
+twice is the sun's: an element of A carried to its counterpart in B.
+
+12.10.2 The mechanisms (new score keys, all default-off; `scripts/research/layered_probe.py`):
+1. Action `morph_to` (`to`: a layer of B). An entropic optimal-transport plan between the two mattes
+   is solved on a coarse grid (`ot_grid` 64 cells on the long side; regularisation `ot_eps` 0.04 of
+   the long side, halved from 8 × that; log-domain Sinkhorn in numpy, no new dependency, no random
+   start); its barycentric projection gives a displacement field A → B and one B → A, spread over the
+   canvas by a normalized convolution. At window progress u the layer of A has moved along p × the
+   field (p = the curve of u) and the layer of B has come back along (1 − p) × the reverse field; the
+   two are mixed by q, which runs only inside `mix_window` (0.3–0.7 of the window), so the first part
+   is A's content reshaping and the last part B's content settling. Both layers are given the same Lab
+   statistics (A's and B's blended over `colour_window`, in clip time), so the mix changes structure
+   and not colour, and a day-lit layer can darken with the sky before its structure changes. In the
+   middle of the mix the matte is the union of the two warped mattes. `ot_mass` alpha | bright | dark
+   chooses what is transported (the matte, or the layer's bright or dark features).
+2. A backdrop's `flow`: its two residual textures move while they mix. `from: "layers"` takes the
+   scene's one flow, a normalized convolution (σ 0.12 of the long side) of the matched layers' own
+   motions (a `morph_to` field inside its matte, a `move_to` map at its blob; `layers` names which),
+   falling to zero far from them; mirrored at the canvas border.
+3. `advect` (a displacement along a divergence-free noise field that grows with the progress),
+   `recolor_window` (a colour path with its own window), `extend_bottom_px` and `bottom_fit` on a band
+   (the matte continues behind the water; the waterline is a polynomial through the columns within
+   12 px of the running fit).
+4. `--auto PAIR`: a score from fixed rules (`auto_score`). Both photos have a sky (the depth skyline
+   leaves 5–90 % of the canvas below it): `ground` transforms into `ground_b` over a sky backdrop with
+   the scene's flow, and a sun moves to a sun when both skies hold a blob above L 92 of 0.03–3 % of
+   the canvas. Otherwise the whole frame transforms into the whole frame (transport between bright
+   features) under a near layer cut at each photo's median disparity. The score is written to
+   `scores/auto/<pair>.json`: the file an operator then edits.
+
+| clip | edge_ratio | feat / laplace / contrast / dissolve_fit / motion | step first / last | measured | prep / render s | md5 |
+|---|---|---|---|---|---|---|
+| mismatch_4 `layered_r4` | 0.0925 | 0.2926 / 0.6636 / 0.7654 / 0.1669 / 0.1447 | 0.10 / 0.10 | skyline transport mean 245.2 px, 95th percentile 322.7 px (9.71 px per frame at the peak); sky texture flow mean 57.2 px (max 145.7), water 103.8 px (max 124.3); sun 235.8 px as before | 6.1 / 14.2 | `e7b331de…` |
+| mismatch_6 `layered_r4` | 0.0318 | 0.0 / 0.1204 / 0.1214 / 0.3665 / 0.0948 | 0.06 / 0.05 | buildings → trees transport mean 77.9 px, 95th percentile 164.0 px; the buildings' mean L 43.2 → 32.0 (t 0.20) → 18.4 (0.34) → 9.2 (0.47); clouds as round 3 plus 50 px of advection and the L path | 7.3 / 11.9 | `1aef9fa5…` |
+| mismatch_1 `auto_r4` (sky + ground; ground shares 0.193 / 0.398; no sun pair) | 0.0308 | 0.0508 / 0.4696 / 0.7811 / 0.1776 / 0.1795 | 0.07 / 0.04 | ground transport mean 187.3 px; sky flow mean 73.4 px | 4.6 / 9.7 | `80dc31a9…` |
+| mismatch_5 `auto_r4` (whole frame + near layer; B has no ground under the rule) | 0.0 | 0.0 / 0.7627 / 0.9594 / 0.1894 / 0.2212 | 0.0 / 0.0 | whole-frame transport mean 154.4 px; near layer 438.9 px (95th percentile 740.5) | 15.3 / 9.5 | `08bb31de…` |
+| mismatch_3 `auto_r4` (whole frame + near layer; an interior) | 0.0 | 0.054 / 0.5339 / 0.7924 / 0.1863 / 0.1601 | 0.0 / 0.0 | whole-frame transport mean 121.2 px; near layer 143.2 px (95th percentile 596.8) | 24.7 / 12.3 | `52c4e57a…` |
+
+References on the page: mismatch_6 `layered_r3_soft`, mismatch_4 `layered_r3`, and `flat` (the shipped
+pan-and-zoom) for the three automatic pairs.
+
+12.10.3 Tried on the frames and changed (each visible in a scratch render of the same evening):
+a matte mixed as (1 − q) a + q b left the skyline half transparent wherever the two warped shapes did
+not overlap (the union in mid-mix replaced it); a free transport between the bright features of the
+two sky textures moved them 200.6 px on average and 715.3 px at most and drew curtain-shaped smears
+(the flow from the matched layers replaced it; the free transport stays an option); the band's bottom
+line had notches under the bright reflection through which the water layer covered blocks of the
+skyline, the light blocks of rounds 2–3 (the fitted waterline removed them); a colour window counted
+inside the layer's own window left day-lit buildings under a night sky (it counts in clip time now).
+
+12.10.4 What the automatic clips show, by my eye and not as evidence. mismatch_1 reads as one scene
+changing. mismatch_5's whole-frame transport stretches the sun's texture into a grain pattern mid-way
+and shows both photos at t ≈ 0.45–0.56. mismatch_3 is a warped double exposure of two groups of people
+mid-way: with no layer for a person the mechanism has nothing to match, and the depth cut at the
+median splits people. Both are what the mechanisms give unattended; the layers a scene needs are
+§12.11's question. Other defects: the moved sun's dark disc at its origin (round 2's); the mismatch_6
+tree crown at the left is stretched while it settles (t ≈ 0.70–0.76); the air-conditioning unit
+appears as a dark shape growing from its core.
+
+### 12.11 The two mask routes side by side (2026-09-27 evening; page `benchmarks/runs/2026-09-27/masks/index.html`; `scripts/research/mask_routes.py`; an Opus 5.5 subagent, its licence claim and two overlays re-checked on the main thread)
+
+Result: on 18 of the owner's photos neither route is enough alone. One fixed rule set on the depth
+model and the photo (no tuning) finds a "sky" on 18 of 18 photos, interiors included, because the
+disparity is rescaled per photo and the farthest pixels always pass; its colour cloud test covers the
+whole sunset sky of mismatch_4 and the night sky of mismatch_6. A panoptic model names regions and
+returns nothing for an absent one (sky on 14 of 18 photos with the COCO model, 15 with ADE20K), but it
+has no name for sun, cloud or star, no depth order, and it misnames what is unlike its training photos
+(the river of mismatch_4 is "building" for the COCO model; the air-conditioning unit is "airplane" or
+"bridge"). Where a real sky exists the two agree: IoU 0.96–1.00 on mismatch_1, 4, 6 and 7. Untuned,
+the models match the hand-tuned mismatch_6 buildings at IoU 0.94–0.95 and trees at 0.70–0.76, masks
+that took two sessions of per-pair rules.
+
+| | rules (the depth model already offline + photometric tests) | panoptic model (Mask2Former Swin-Tiny) |
+|---|---|---|
+| knows | which pixels are far, bright, blue, dark | a name per region from 133 (COCO panoptic) or 150 (ADE20K semantic) labels |
+| does not know | what a thing is; whether a photo has a sky at all | depth order; sun, cloud, star; things unlike its training photos |
+| cost | 0 new bytes; depth 0.28 s + rules 0.36 s per photo (medians) | 190 MB of weights per model behind `warmup` + a manifest; 1.19 s (COCO) or 0.62 s (ADE20K) per photo on the CPU; peak RSS 3.8 GiB |
+| licence | none new | the model cards say "license: other"; the upstream model zoo: "All models available for download through this document are licensed under the Creative Commons Attribution-NonCommercial 4.0 International License" [VERIFIED via github.com/facebookresearch/Mask2Former MODEL_ZOO.md, 2026-09-27]; the code is MIT |
+| loads in this venv | yes | not by the stock path: `transformers` 5.17 needs scipy (the training loss) and torchvision (the image processor); the probe stubs the loss class and does the preprocessing and the segment assembly itself, with nothing installed |
+| offline | yes (harness 48–51) | a second run with `HF_HUB_OFFLINE=1` reproduced 36 of 36 label maps byte for byte; `transformers` fetched a second 190 MB file for the ADE20K repo in the background, so a warmup must pin the revision and the file list |
+
+Layer matching by name (the input of `morph_to`): sky is in both photos of 6 of 7 mismatch pairs,
+building in both of mismatch_1, 4 and 7, tree in both of mismatch_1 and 6, person in both of mismatch_2
+and 3; water on mismatch_4 matches only across names ("water" in the start photo, "sea" in the
+finish), so pairing needs synonym groups. The options put to the owner: rules only; the panoptic
+model behind a warmup; or both (the model for WHAT a region is and whether it exists, the depth model
+for the ORDER, the photometric rules for the fine edge and for sun, cloud and star). Gaps: no Swin-Tiny
+ADE20K panoptic checkpoint exists (the ADE20K tiles are semantic, one region per label); the IoUs
+compare the routes with each other, not with a correct mask; the licence of the Hugging Face copies is
+inferred from the upstream zoo; a permissive alternative (DETR panoptic, Apache-2.0 per its card,
+UNVERIFIED) was not run.
