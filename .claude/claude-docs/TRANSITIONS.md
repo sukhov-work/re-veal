@@ -1245,7 +1245,9 @@ inferred from the upstream zoo. Two permissively licensed alternatives exist and
 instance and panoptic segmentation on ADE20K) and `facebook/detr-resnet-50-panoptic` (card licence
 "apache-2.0"; COCO panoptic) [VERIFIED via their Hugging Face model cards, 2026-09-27]. OneFormer
 Swin-Tiny is the first to measure if the owner chooses a model: it is the ADE20K panoptic model that
-Mask2Former lacks at this size.
+Mask2Former lacks at this size. Owner ruling 2026-09-27 (night; verbatim in DECISIONS): "Licensing for
+ANY model is not a problem , this whole project is pure personal non-profit research" — a licence is
+recorded as a fact and never filters or ranks a model; choose by measured accuracy, size and fit.
 
 ### 12.12 Owner picks on round 4 and the directions that follow (2026-09-27, 19:37 UTC; `benchmarks/runs/2026-09-27/layered_r4/layered_picks_.json`; verbatim in DECISIONS 2026-09-27 late evening)
 
@@ -1277,5 +1279,6 @@ keyframes: the round-4 composite of mismatch_4 is "something in the middle (but 
 crossfaded)"; kf_13's night tint on A's buildings "looks really cool" (the owner first wrote kf_09 and
 corrected it to kf_13 the same evening: klein's clean-up of the round-4 composite at 0.62, not the prompt
 on photo A). FLUX.2 [pro] through the API
-is declined; a local quant of FLUX.2 [dev] is asked for (sizes, fit on the box and quality against
-klein not measured). Round 5 comes before the tool build.
+is declined; a local quant of FLUX.2 [dev] was asked for and withdrawn the same night ("for now
+probably makes no sense … both becauase of size and quants, i don't want degraded Q 4bit  anyways");
+FLUX.2 klein 9B at 8-bit is tried instead. Round 5 comes before the tool build.
