@@ -1246,3 +1246,34 @@ instance and panoptic segmentation on ADE20K) and `facebook/detr-resnet-50-panop
 "apache-2.0"; COCO panoptic) [VERIFIED via their Hugging Face model cards, 2026-09-27]. OneFormer
 Swin-Tiny is the first to measure if the owner chooses a model: it is the ADE20K panoptic model that
 Mask2Former lacks at this size.
+
+### 12.12 Owner picks on round 4 and the directions that follow (2026-09-27, 19:37 UTC; `benchmarks/runs/2026-09-27/layered_r4/layered_picks_.json`; verbatim in DECISIONS 2026-09-27 late evening)
+
+Result: `layered_r4` is picked as closer on mismatch_6 and mismatch_4 and `auto_r4` on mismatch_1;
+mismatch_5 and mismatch_3 get no pick and their automatic clips get all three boxes, the first "one
+picture" ticks on those pairs. The owner on the mechanism: "at least content stopped sliding back and
+forth and buildings this time transtitoned to tree nicely"; "skyline now tries to morph into new one
+and moves correctly"; on the automatic clips "quite distorted with weird 3d wraps going on, but … at
+least it is not crossfading".
+
+| pair | closer | boxes (one picture / transforms / nothing invented) |
+|---|---|---|
+| mismatch_6 | `layered_r4` | `layered_r3_soft` yes/yes/yes; `layered_r4` yes/yes/yes |
+| mismatch_4 | `layered_r4` | `layered_r3` no/yes/yes; `layered_r4` no/yes/yes |
+| mismatch_1 | `auto_r4` | `flat` no/yes/yes; `auto_r4` no/yes/yes |
+| mismatch_5 | none | `flat` no/no/yes; `auto_r4` yes/yes/yes |
+| mismatch_3 | none | `flat` no/no/yes; `auto_r4` yes/yes/yes |
+
+Round-5 targets, in the owner's words: mismatch_6's clouds "dissolved with quite a solid internal
+borders , i wish they just  non-uniformly morphed into night sky parts"; mismatch_4 "at the very end
+it still seems some boundary where it crossfades to final B shot( both buildings and river )". The
+direction for matching, each given as one scene's example with "do not overfit": an element
+transforms into its closest counterpart (a building into a building, a cloud into a cloud
+independently, people into people, the sun into the galaxy's centre, the bridge into the meteor
+streak), decided from depth, labels and rules; a wall or a ceiling transforms and never moves as a
+"cheap 2d cutout". The layer source (§12.11): the owner wants "as much info you can get about frame
+as possible", judged the ADE20K labels more accurate than COCO's, and asks for better models. The
+keyframes: the round-4 composite of mismatch_4 is "something in the middle (but still like
+crossfaded)"; kf_09's night tint on A's buildings "looks really cool". FLUX.2 [pro] through the API
+is declined; a local quant of FLUX.2 [dev] is asked for (sizes, fit on the box and quality against
+klein not measured). Round 5 comes before the tool build.
