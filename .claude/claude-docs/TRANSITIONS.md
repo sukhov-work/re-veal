@@ -1274,6 +1274,8 @@ streak), decided from depth, labels and rules; a wall or a ceiling transforms an
 "cheap 2d cutout". The layer source (§12.11): the owner wants "as much info you can get about frame
 as possible", judged the ADE20K labels more accurate than COCO's, and asks for better models. The
 keyframes: the round-4 composite of mismatch_4 is "something in the middle (but still like
-crossfaded)"; kf_09's night tint on A's buildings "looks really cool". FLUX.2 [pro] through the API
+crossfaded)"; kf_13's night tint on A's buildings "looks really cool" (the owner first wrote kf_09 and
+corrected it to kf_13 the same evening: klein's clean-up of the round-4 composite at 0.62, not the prompt
+on photo A). FLUX.2 [pro] through the API
 is declined; a local quant of FLUX.2 [dev] is asked for (sizes, fit on the box and quality against
 klein not measured). Round 5 comes before the tool build.
