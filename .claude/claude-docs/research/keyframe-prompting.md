@@ -160,8 +160,10 @@ tasks as kf_11–kf_13, same references, prompts and seed:
 
 Read: 9B costs 1.7 × the time and twice the memory of 4B (−18 GiB against −9 GiB of MemAvailable) and
 changes the composite less on the sunset pair; on the night pair the two are 6 levels apart. Qwen
-(kf_07: 14.87 from the composite, 969 s) still changes it least. Which one looks best is the owner's
-call; none is graded as of 2026-09-27.
+(kf_07: 14.87 from the composite, 969 s) still changes it least. Owner's verdict (2026-09-27 night,
+verbatim): "klein 9B looks best (mismatch_6- kf_16.png; mismatch_4 - kf_15.png) use it for next
+session". klein 9B at Q8_0 is the keyframe model from here on; the base picture is the round-4
+composite and the prompt the clean-up form.
 
 ## 6. Gaps
 
