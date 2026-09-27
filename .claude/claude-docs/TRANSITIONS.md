@@ -1240,5 +1240,9 @@ model behind a warmup; or both (the model for WHAT a region is and whether it ex
 for the ORDER, the photometric rules for the fine edge and for sun, cloud and star). Gaps: no Swin-Tiny
 ADE20K panoptic checkpoint exists (the ADE20K tiles are semantic, one region per label); the IoUs
 compare the routes with each other, not with a correct mask; the licence of the Hugging Face copies is
-inferred from the upstream zoo; a permissive alternative (DETR panoptic, Apache-2.0 per its card,
-UNVERIFIED) was not run.
+inferred from the upstream zoo. Two permissively licensed alternatives exist and were not run
+(UNVERIFIED on these photos): `shi-labs/oneformer_ade20k_swin_tiny` (card licence "mit"; semantic,
+instance and panoptic segmentation on ADE20K) and `facebook/detr-resnet-50-panoptic` (card licence
+"apache-2.0"; COCO panoptic) [VERIFIED via their Hugging Face model cards, 2026-09-27]. OneFormer
+Swin-Tiny is the first to measure if the owner chooses a model: it is the ADE20K panoptic model that
+Mask2Former lacks at this size.
