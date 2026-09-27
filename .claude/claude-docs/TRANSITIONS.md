@@ -265,6 +265,9 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Layered probe round 3 on mismatch_4, 2026-09-27 (§12.9; the same page; score `mismatch_4_r3.json`, motion only) | 1920×1092, 3 s, 90 frames: prep 4.7 s, render 17.2 s; steps 0.12 / 0.10; `edge_ratio` 0.1745; md5 `a9f1e3d6…` on two runs; round 2's `b7700b4c…` unchanged; the four cloud-layer attempts: last step 0.42 / 0.75, `edge_ratio` 0.67 / 1.19, rejected on the frames |
 | Layered probe round 4, 2026-09-27 evening (§12.10; page `benchmarks/runs/2026-09-27/layered_r4/`; scores `mismatch_4_r4.json`, `mismatch_6_r4.json`, `scores/auto/*.json`) | 3 s, 90 frames. mismatch_4 (1920×1092): prep 6.1 s (the transport plan included), render 14.2 s, steps 0.10 / 0.10, `edge_ratio` 0.0925, md5 `e7b331de…`. mismatch_6 (1146×1524): 7.3 / 11.9 s, steps 0.06 / 0.05, 0.0318, `1aef9fa5…`. Automatic scores: mismatch_1 (1444×1920) 4.6 / 9.7 s, 0.07 / 0.04, `80dc31a9…`; mismatch_5 (1920×1080) 15.3 / 9.5 s, 0.0 / 0.0, `08bb31de…`; mismatch_3 (1920×1440) 24.7 / 12.3 s, 0.0 / 0.0, `52c4e57a…` (a whole-frame plan of 2,304–3,072 cells a side costs 10–20 s). Two runs byte-identical; the nine md5s of rounds 1–3 unchanged; `transitions.py` unchanged |
 | Mask routes on 18 fixture photos, 2026-09-27 evening (§12.11; `scripts/research/mask_routes.py`; page `benchmarks/runs/2026-09-27/masks/`; M3 Pro, CPU, 6 torch threads, beside other jobs) | Mask2Former Swin-Tiny COCO panoptic: 190,052,872 B, 47,436,800 parameters, 133 labels, load from cache 0.14 s, inference median 1.19 s (max 1.53 s) per photo, peak RSS 3.77 GiB. ADE20K semantic: 190,189,605 B (+ a second 190,070,416-B file fetched in the background), 150 labels, 0.62 s (max 1.06 s), 2.93 GiB. Offline re-run: 36 of 36 label maps byte-identical, 0 B downloaded. Rules: depth 0.28 s and the fixed rule set 0.36 s per photo (medians); the tuned masks 0.86 s (mismatch_4) and 2.41 s (mismatch_6) per pair |
+| Layered probe round 5, 2026-09-28 (§12.13; page `benchmarks/runs/2026-09-28/layered_r5/`; scores `mismatch_{4,6}_r5*.json`, `scores/auto/*_v2.json`; M3 Pro, CPU) | 3 s, 90 frames, twelve clips byte-identical on three runs. mismatch_6 (1146×1524): prep 17.5–18.2 s, render 15.3 s; automatic 2.4 / 17.1 s. mismatch_4 (1920×1092): prep 4.2–5.6 s, render 14.0–18.7 s; automatic 6.0 / 33.1 s. Automatic on untuned pairs: mismatch_1 5.0 / 29.5 s, mismatch_5 8.6 / 18.5 s, mismatch_3 (1920×1440, 11 layers) 20.9 / 77.1 s, mismatch_2 (602×800) 23.8 / 9.7 s, mismatch_7 (1920×1488) 7.9 / 35.7 s. Frames beside the endpoints against the photos: mismatch_4 0.000 / 0.004 levels (round 4: 0.183 / 0.151) |
+| Layer source on the 24 fixture photos, 2026-09-28 (§12.14; `scripts/research/layer_source.py`; page `benchmarks/runs/2026-09-28/layers/`; M3 Pro, CPU, 4 torch threads, beside render jobs) | OneFormer Swin-L ADE20K 880 MB (semantic 3.09 s, panoptic 2.58 s per photo, medians over 18 photos) + CLIPSeg rd64-refined 605 MB (1.99 s); the whole script 8.8–22.5 s per photo, 15.2 s for mismatch_4_S on the main thread; `layers.npz` and `layers.json` byte-identical on repeated runs; offline re-runs identical, no socket attempt |
+| Keyframe-cleaned clip, 2026-09-28 (§12.15; `scripts/research/keyframe_clip.py`; page `benchmarks/runs/2026-09-28/keyclip/`) | FLUX.2 klein 9B Q8_0 on the second machine: 68–69 s per keyframe at 1344×768, 50–51 s at 768×1024, MemAvailable 37.0 → 18.2–19.3 GiB. Clips of 90 frames at the keyframe size, byte-identical on two renders; four segments per clip through `transitions.py pair --preset morph` |
 
 Goal numbers on the real surface (2026-09-26, `benchmarks/runs/2026-09-26/surface/` and `bench/`, morph 2 s, canvas ≤ 1920 px, 480-px proxy; run 1 through the CLI and run 2 through the bench script give identical numbers):
 
@@ -1290,3 +1293,215 @@ on photo A). FLUX.2 [pro] through the API
 is declined; a local quant of FLUX.2 [dev] was asked for and withdrawn the same night ("for now
 probably makes no sense … both becauase of size and quants, i don't want degraded Q 4bit  anyways");
 FLUX.2 klein 9B at 8-bit is tried instead. Round 5 comes before the tool build.
+
+### 12.13 Round 5: the frames beside the endpoints equal the photos, the clouds transform, the automatic score matches elements (2026-09-28; page `benchmarks/runs/2026-09-28/layered_r5/index.html`; scores `mismatch_4_r5{,_stagger}.json`, `mismatch_6_r5{,_flow}.json`, `scores/auto/<pair>_v2.json`)
+
+Result: twelve new 3-second clips on seven pairs, each byte-identical on three runs, and the fourteen
+md5s of rounds 1–4 unchanged through the changed probe. Three faults were measured on round 4 before
+anything changed, and each is gone in round 5 by its own number (12.13.3). Ungraded as of 2026-09-28.
+Nothing in `transitions.py` changed. The measures are in `scripts/research/layered_diag.py`.
+
+12.13.1 Measured on round 4 first.
+1. mismatch_4, the owner's "at the very end it still seems some boundary where it crossfades to final
+   B shot( both buildings and river )". The clip holds still from t = 0.854, 14 of its 90 frames. In
+   those frames the composite stands 0.151 levels from B on average and 84 at most, and 1.096 % of the
+   canvas is more than 4 levels off; 86 % of those pixels lie within 12 px of the skyline matte's
+   contour, and the water's soft edge stands 9.35 levels off. All of it vanishes in the last frame.
+   Frame 1 stands 0.183 levels from A, 140 at most. Cause: under a layer's soft edge, and in the 4 px
+   by which the exclusion is dilated, the backdrop shows its hole fill, which stands 3.8 L (B) and
+   5.0 L (A) off the photo in the first 2 px outside the matte. That this outline is the boundary the
+   owner saw is [INFERRED]: it is the one defect measured at the end of the clip, and it lies on the
+   buildings and on the waterline.
+2. mismatch_6, the owner's "clouds dissolved with quite a solid internal borders". The clouds'
+   contrast against the sky under them changes sign: +17.41 L at t = 0.01, +12.82 at 0.11, −1.18 at
+   0.21, −9.79 at 0.32, −8.31 at 0.42. From t = 0.2 the clouds are darker than the sky around them,
+   behind an erosion front.
+3. `warp_along` scales the rows by the horizontal factor and resamples the picture at any progress
+   above zero (found while measuring the two faults above). On a canvas whose width is not a multiple of 4 the rows are stretched
+   (2.7 px at the bottom of mismatch_6's 1146 × 1524). In mismatch_6 `layered_r4` the step from frame
+   81 to 82, where the buildings' window ends and the warp is switched off, is 1.422 levels (4.418 in
+   the bottom 30 % of the rows, 15.03 % of them over 8 levels); the steps beside it are 0.03–0.12.
+   Backlog T19.
+
+One number decided nothing. In the last moving stretch of mismatch_4 (t 0.75–0.82) the frame step
+fits a fade toward B with R² 0.92 on the skyline. A fade and a motion that decays toward B are the
+same to first order once the remaining displacement is under 1 px, so that number cannot tell them
+apart.
+
+12.13.2 The mechanisms (new score keys, all default-off; `scripts/research/layered_probe.py`).
+1. At the endpoints: a backdrop's `settle` keeps the photo's own residual under a layer's fringe
+   while that layer rests, and the hole fill while it is under way (per hole, timed by the layer that
+   owns it); `fill_scales` starts the fill at 6 px, so it meets the photo at the hole's rim; `exact`
+   warps give a zero displacement back bit for bit.
+2. A half-transparent layer: `unmix` gives a layer its own colour, F = (I − (1 − α) Bg) / α against
+   the backdrop's filled estimate, with α raised to the least opacity a colour inside the gamut can
+   explain; the backdrop keeps its fill under such a layer.
+3. A layer that ends as a part of the backdrop: `morph_to` a matte of `parts` (the second photo's
+   own structure, a band-pass of L) with `to_backdrop` (the target's pixels are the backdrop's end
+   state), `colour_rel` (the layer's Lab statistics follow the backdrop's current state, so its
+   contrast decays and never changes sign) and a fade-out after the mix.
+4. Where and when a layer moves: `stagger` gives every place its own start (a smooth noise field
+   carried along the transport); `ot_local` re-weights the target's mass to the source's at a scale,
+   `ot_floor` leaves a share in place, `ot_border` pins the field at the canvas border, `ot_rigid`
+   pulls the field toward its affine part.
+5. `--auto2 PAIR` (`auto_score2`): the elements of both photos come from the layer source (§12.14).
+   An element of A is matched to the element of B with the lowest cost: 0 for the same label, 0.15
+   for the same group, 0.5 for a neighbour group, plus the centroid distance over the diagonal, plus
+   0.25 × |ln of the area ratio|, plus 0.5 × the difference of median disparity; no match above a
+   cost of 1.1 or farther than 0.35 of the diagonal; a leftover joins the matched group of its kind.
+   Each matched group is one `morph_to` layer with its own field and its own start, the nearest
+   first. The rest of the frame follows the flow interpolated from those layers.
+
+Further rules of the automatic score, each from a fault seen on a render of the same night: a group
+that keeps its shape (building, wall, furniture and nine more) moves with `ot_rigid` 0.6 and no
+stagger; a ground whose counterpart holds under 0.4 of its area transforms into parts of the second
+photo's sky where it stands; an element of B with no counterpart appears in place; when the labels
+give no pair of lights, a compact blob above L 92 in each sky is the sun (it must fill 0.4 of its
+enclosing circle: the suns of mismatch_4 fill 0.62 and 0.46, the bright clouds of mismatch_7 0.28 and
+0.06).
+
+12.13.3 Numbers.
+
+| measure | round 4 | round 5 |
+|---|---|---|
+| mismatch_4, held frames against B: mean / largest / share over 4 levels | 0.151 / 84 / 1.096 % | 0.004 / 9 / 0.019 % |
+| mismatch_4, frame 1 against A | 0.183 / 140 / 1.030 % | 0.000 / 1 / 0.000 % |
+| mismatch_4, ridge of L along the skyline matte's contour, held frames (B itself: 0.077 L, 0.48 % over 2 L) | 0.518 L, 8.56 % | 0.077 L, 0.48 % |
+| the same at frame 1 (A itself: 0.070 L, 0.64 %) | 1.155 L, 19.59 % | 0.070 L, 0.64 % |
+| mismatch_6, held frames against B | 0.108 / 74 / 0.273 % | 0.020 / 1 / 0.000 % |
+| mismatch_6, frame 1 against A | 0.119 / 86 / 0.269 % | 0.070 / 34 / 0.022 % |
+| mismatch_6, clouds' contrast against the sky at t 0.01 / 0.11 / 0.21 / 0.32 / 0.42 / 0.52 | +17.41 / +12.82 / −1.18 / −9.79 / −8.31 / −0.18 | +13.47 / +12.85 / +10.58 / +6.44 / +2.80 / +0.32 |
+| mismatch_6, the step from frame 81 to 82 (bottom 30 % of rows) | 1.422 (4.418) | 0.000 (0.000) |
+
+| clip | edge_ratio | feat / laplace / contrast / dissolve_fit / motion | step first / last | measured | prep / render s | md5 |
+|---|---|---|---|---|---|---|
+| mismatch_6 `layered_r5` | 0.0229 | 0.0 / 0.1157 / 0.1667 / 0.4472 / 0.0893 | 0.04 / 0.01 | clouds → night-sky parts: transport mean 16.1 px, 95th percentile 36.9 px | 18.2 / 15.3 | `88ac8d96…` |
+| mismatch_6 `layered_r5_flow` | 0.0229 | 0.0 / 0.1156 / 0.1636 / 0.4416 / 0.0928 | 0.04 / 0.01 | the same with larger parts: mean 40.4 px, 95th percentile 93.6 px | 17.5 / 15.3 | `fceb36e8…` |
+| mismatch_6 `auto_r5` | 0.0086 | 0.1919 / 0.2377 / 0.3729 / 0.4515 / −0.0295 | 0.01 / 0.01 | building + tree → tree (cost 0.724); `building#2` of B appears in place | 2.4 / 17.1 | `a2fa0f41…` |
+| mismatch_4 `layered_r5` | 0.0012 | 0.2863 / 0.6639 / 0.7654 / 0.1682 / 0.1459 | 0.0 / 0.0 | the round-4 score with `settle`, `fill_scales` and `exact` | 5.6 / 14.0 | `ff4c3cde…` |
+| mismatch_4 `layered_r5_stagger` | 0.0012 | 0.283 / 0.7269 / 0.7665 / 0.1668 / 0.1215 | 0.0 / 0.0 | the same, every place with its own start | 4.2 / 18.7 | `af95007c…` |
+| mismatch_4 `auto_r5` | 0.0025 | 0.2782 / 0.7669 / 0.8245 / 0.0607 / 0.0941 | 0.0 / 0.0 | three groups (building, earth, water); the sun by the photometric rule | 6.0 / 33.1 | `c4c4c976…` |
+| mismatch_1 `auto_r5` | 0.013 | 0.2773 / 0.7139 / 0.9206 / 0.0402 / 0.2043 | 0.03 / 0.01 | building → building + tree + plant + wall (0.330); cloud → cloud, mean 365.7 px | 5.0 / 29.5 | `c817dc61…` |
+| mismatch_5 `auto_r5` | 0.0116 | 0.0 / 0.6058 / 0.6659 / 0.136 / 0.116 | 0.01 / 0.0 | sun → the galaxy's centre (both labelled "sun"), mean 405.1 px; the ground transforms into parts of the sky | 8.6 / 18.5 | `66c665f2…` |
+| mismatch_3 `auto_r5` | 0.0 | 0.108 / 0.5912 / 0.824 / 0.1264 / 0.2291 | 0.0 / 0.0 | 14 groups, 10 layers: 12 people of A into 4 of B in four groups, benches into chairs, a door and a wall into walls | 20.9 / 77.1 | `73d97640…` |
+| mismatch_2 `auto_r5` | 0.0 | 0.2385 / 0.2745 / 0.7534 / 0.2699 / 0.2687 | 0.0 / 0.0 | one person into five, two trees into plants and a building | 23.8 / 9.7 | `3daaead5…` |
+| mismatch_7 `auto_r5` | 0.0118 | 0.2016 / 0.6769 / 0.7946 / 0.0635 / 0.1892 | 0.02 / 0.04 | two building groups (0.705, 0.701); cloud → clouds, mean 251.8 px | 7.9 / 35.7 | `edc192fc…` |
+
+Against round 4's automatic clips on the same pairs: `feat_floor` 0.0508 → 0.2773 on mismatch_1 and
+0.054 → 0.108 on mismatch_3; `laplace_floor` 0.4696 → 0.7139 and 0.5339 → 0.5912; on mismatch_5
+`laplace_floor` falls 0.7627 → 0.6058 and `contrast_floor` 0.9594 → 0.6659. The goal numbers do not
+see an orchestration (§12.2); the owner's boxes grade.
+
+References on the page: `layered_r4` for the two tuned pairs, `auto_r4` for mismatch_1, 5 and 3,
+`flat` for mismatch_2 and mismatch_7, which the layered probe never rendered before.
+
+12.13.4 Tried on the frames and changed, each with its number.
+1. A balanced transport of the cloud layer (80 % of the canvas) into the parts (31 %) contracted the
+   whole layer: mean 200.7 px, 95th percentile 453 px. Re-weighting the target locally, a floor of
+   0.3 and the border pin give 16.1 px.
+2. The cloud's opacity from its density alone left 5.5 % of its pixels outside the gamut (by any amount) after
+   the un-mixing, and frame 1 stood more than 4 levels off A on 2.2 % of the canvas; the least-opacity
+   bound and the rule that the fill wins where holes overlap give 0.022 %.
+3. A matte with a 16-px soft fringe outward (`halo_px`) lowered the ridge mid-way (0.92 L → 0.38 L at
+   t = 0.28) and, by my eye, drew dark smudges around the cranes; it is in no round-5 score.
+4. A match by label and position alone sent a tree 1,037 px across mismatch_1; the distance cap
+   removed that match.
+5. Without the rule for an element with no counterpart, the ground of mismatch_6 was carried to the
+   air-conditioning unit at the top of B; by my eye a smear across the sky.
+
+12.13.5 Seen by my eye and not evidence. mismatch_4 `auto_r5` shows a second bright lobe beside the
+sun between frames 28 and 48 (the sun's wider glow travels with the sky's flow; backlog T18).
+mismatch_7 `auto_r5` shows a bubble-shaped distortion in the lower sky around frames 38–48.
+mismatch_1's building bends while it reshapes (the part of its field the affine map leaves out is
+73.6 px RMS). mismatch_3 mid-way is a crowd of half-changed people.
+
+12.13.6 Limits.
+- The rules of the automatic score carry eighteen constants (`AUTO2`). None is set per pair, and every
+  one was chosen while looking at these seven pairs; two pairs the probe had never rendered
+  (mismatch_2, mismatch_7) are on the page, and no pair outside the fixtures exists to test on.
+- The labels are wrong on some photos (§12.14, limit 5), and the score inherits it: on mismatch_3 a
+  fan is matched to a chair (cost 0.821), and on mismatch_5 the galaxy's centre is a "sun".
+- The automatic score builds no layer for a star, a meteor streak or the bridge of mismatch_5: the
+  owner's "bridge itself rotate and become meteor streak" has no rule.
+- An element of B with no counterpart appears in place only when both photos hold a sky.
+
+### 12.14 The layer source: elements with a label, a group and a depth (2026-09-28; `scripts/research/layer_source.py`; page `benchmarks/runs/2026-09-28/layers/index.html`; an Opus 5.5 subagent, re-checked on the main thread)
+
+Result: one script cuts a photo into elements and runs in `.venv` with nothing installed:
+OneFormer Swin-L ADE20K (a semantic pass names every pixel, a panoptic pass gives one element per
+person or object) plus CLIPSeg with one fixed list of 20 words for what ADE20K lacks (sun, cloud, star,
+moon, galaxy core, meteor streak, air-conditioning unit), ordered by the depth model the tool already
+holds. It took 8.8–22.5 s per photo on the 24 fixture photos and writes byte-identical files on
+repeated runs (the main thread re-ran mismatch_4_S: `layers.npz` md5 `932199b5…`, `layers.json`
+`5515747c…`, 15.2 s). The per-element automatic score of §12.13 reads its output. Nothing entered
+`transitions.py`; no dependency entered `requirements*.txt`.
+
+What an element is: one instance of a thing, or one connected region of a label. ADE20K treats
+building, tree and wall as regions without instances, so two buildings that touch are one element.
+`layers.json` gives per element its label, its group (23 groups, with a neighbour list per group: a
+proposal, tuned on no pair), its share of the canvas, its box and centroid, its median disparity and
+depth rank, its mean Lab and a confidence.
+
+| model | licence (card / upstream) | bytes | s per photo | published | IoU against the tuned mattes |
+|---|---|---|---|---|---|
+| Mask2Former Swin-T ADE20K semantic (the 2026-09-27 baseline) | other / CC BY-NC 4.0 | 190 MB | 0.62 | 47.7 mIoU | 0.746 |
+| OneFormer Swin-T ADE20K | mit / MIT | 203 MB | 1.15 semantic, 0.80 panoptic | none found | 0.742, 0.712 |
+| OneFormer Swin-L ADE20K (chosen) | mit / MIT | 880 MB | 3.09 semantic, 2.58 panoptic | PQ 49.8, mIoU 57.0 | 0.787, 0.788 |
+| Mask2Former Swin-L ADE20K semantic | other / CC BY-NC 4.0 | 866 MB | 0.97 at 384², 2.41 at 640 | 56.1 mIoU | 0.784, 0.767 |
+| Mask2Former Swin-L ADE20K panoptic | other / CC BY-NC 4.0 | 866 MB | 1.01 at 384², 2.37 at 640 | PQ 48.1 | 0.808, 0.707 |
+| EoMT-L DINOv3 ADE20K semantic | mit / MIT | 1.26 GB | 3.94 | 59.5 mIoU | 0.786 |
+| EoMT-L DINOv2 ADE20K panoptic | mit / MIT | 1.27 GB | 2.59 | PQ 50.6 | 0.751 |
+| Grounding DINO base + SAM 2.1 Hiera-L | apache-2.0 | 934 MB + 898 MB | 13.7 | none | 0.614; sun 0.56 / 0.50; clouds 0.79 |
+| CLIPSeg rd64-refined (chosen for the extra words) | apache-2.0 | 605 MB | 1.99 | none | 0.568; sun 0.12 / 0.04; clouds 0.77 |
+
+Times are medians over 18 photos at 4 torch threads while render jobs ran on the same CPU. Licences
+are recorded and never a filter (owner ruling 2026-09-27); the main thread read the three chosen
+cards' licence lines on 2026-09-28. The IoU is the mean over 7 rendered mattes (sky, building, tree,
+water) of mismatch_4 and mismatch_6.
+
+Limits, each measured:
+1. The reference cannot rank the large models: it covers 4 photos and 7 mattes, and every large
+   ADE20K model lands between 0.707 and 0.808 on it. The choice of OneFormer Swin-L rests on its
+   published numbers, on one MIT checkpoint serving both passes, and on the semantic pass leaving no
+   pixel unnamed. No reference exists for people, walls or ceilings.
+2. A panoptic map alone drops regions: OneFormer Swin-L panoptic leaves out a label its own semantic
+   pass finds in 10 cases over 18 photos, among them a building over 40.9 % of mismatch_3_S and the sky
+   over 99.8 % of mismatch_5_F. The script uses both passes for that reason.
+3. No route found a star on any of the 18 photos, and both open-vocabulary routes missed the
+   air-conditioning unit of mismatch_6_F (IoU 0.00). Stars and that unit still need the photometric
+   rules or a hand score. SAM 3 was not run: the repository is gated and this machine holds no
+   Hugging Face token (HTTP 401).
+4. The sun: the photometric rule scores 0.64 / 0.60 on mismatch_4 and fires on 17 of 18 photos,
+   interiors included; Grounding DINO + SAM 2.1 scores 0.56 / 0.50 and needs torchvision; CLIPSeg with
+   a brightness core scores 0.40 / 0.05. Naming the sun with the model and cutting its edge with the
+   rule is not built.
+5. Labels are wrong on some photos and the script does not know it: mismatch_3_S's brick wall is a
+   "building" over 40 % of the frame, and CLIPSeg names a "sun" on mismatch_3_S and match_5_F and a
+   "moon" on mismatch_6_F (UNVERIFIED as true or false).
+
+Two run-time workarounds are named in every `layers.json`: an empty module replaces the training loss
+(its constructor requires scipy; inference never calls it), and a bilinear torch resize replaces a
+torchvision call that OneFormer's post-processing makes without importing torchvision. The stock path
+would need scipy 1.18.1 and torchvision 0.28.0; both were installed only into a scratch environment
+under `benchmarks/runs/2026-09-28/layers/venv`. The weights (8.3 GB for every model measured) live
+under `benchmarks/runs/2026-09-28/layers/hf_home`, outside `models/`; every route re-ran offline with
+identical label maps and no socket attempt.
+
+### 12.15 The keyframe-cleaned clip: generated keyframes, the deterministic engine between them (2026-09-28; `scripts/research/keyframe_clip.py`; page `benchmarks/runs/2026-09-28/keyclip/index.html`; an Opus 5.5 subagent, re-measured on the main thread)
+
+Result: the clips A → K1 → K2 → K3 → B exist for mismatch_4 and mismatch_6 and three measured faults
+stand against them; ungraded as of 2026-09-28. The keyframes are FLUX.2 klein 9B at Q8_0 clean-ups of
+the round-4 composite at clip times 0.25, 0.5 and 0.75, run on the second machine (68 s and 50 s
+each, 18–19 GiB of memory, every run exit 0, the box clean after). The engine between them is
+`transitions.py pair --preset morph`, unchanged. The numbers and the prompts are in
+`research/keyframe-prompting.md §5.4` and DECISIONS 2026-09-28 Track B.
+
+1. The tool's class decision does not hold between generated pictures: class B (the pan-and-zoom)
+   on 1 of 4 segments of mismatch_4 and on 4 of 4 of mismatch_6.
+2. The model changes the exposure: mismatch_4's clip runs mean L 18.8, 36.7, 33.2, 46.5, 26.2 at
+   frames 0, 22, 45, 67, 89, where `layered_r4` rises from 18.3 to 25.5.
+3. The motion stalls at every keyframe (step 0.6–1.8 levels at the joints, 4.6–6.5 mid-segment).
+
+The page shows each clip beside `layered_r4` with the three boxes, a second render with class A
+forced, and on mismatch_6 a render with the dissolve preset.
+

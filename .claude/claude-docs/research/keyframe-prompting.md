@@ -165,6 +165,49 @@ verbatim): "klein 9B looks best (mismatch_6- kf_16.png; mismatch_4 - kf_15.png) 
 session". klein 9B at Q8_0 is the keyframe model from here on; the base picture is the round-4
 composite and the prompt the clean-up form.
 
+### 5.4 The keyframe-cleaned clip (2026-09-28; DECISIONS 2026-09-28, Track B; page `benchmarks/runs/2026-09-28/keyclip/index.html`)
+
+Result: two 3-second clips A → K1 → K2 → K3 → B exist, and three measured faults stand against them as
+rendered. The clips: mismatch_4 at 1344×768 and mismatch_6 at 768×1024, 90 frames, the keyframes at
+frames 22, 45 and 67, byte-identical on two renders (mp4 md5 `215afb9f…` and `486fb6e3…`). Ungraded as
+of 2026-09-28. Script `scripts/research/keyframe_clip.py`; an Opus 5.5 subagent ran it, and the main
+thread re-measured the byte identities, the mean L, the joint steps and the segment classes.
+
+The keyframes are FLUX.2 klein 9B at Q8_0 clean-ups of the round-4 composite at clip times 0.25, 0.5
+and 0.75 (seed 20260926, 4 steps, cfg 1.0, one reference; the prompts are verbatim in DECISIONS
+2026-09-28 Track B and in `benchmarks/runs/2026-09-28/keyclip/box/prompts/`):
+
+| run | pair, clip time | size | wall s | MemAvailable minimum GiB | MAD to its composite / A / B (levels) |
+|---|---|---|---|---|---|
+| kf_17 | mismatch_4, 0.25 | 1344×768 | 68 | 18.25 | 39.53 / 40.58 / 53.78 |
+| kf_18 | mismatch_4, 0.5 | 1344×768 | 69 | 18.24 | 22.00 / 34.56 / 29.02 |
+| kf_19 | mismatch_4, 0.75 | 1344×768 | 68 | 18.25 | 44.62 / 62.73 / 44.41 |
+| kf_20, kf_20b | mismatch_6, 0.25 | 768×1024 | 50 | 19.26 | 26.27 / 95.90 / 40.70; two runs byte-identical |
+| kf_21 | mismatch_6, 0.5 | 768×1024 | 50 | 19.26 | 11.71 / 114.88 / 21.03 |
+| kf_22 | mismatch_6, 0.75 | 768×1024 | 51 | 19.28 | 13.85 / 121.15 / 13.71 |
+
+kf_18 has kf_15's reference bytes and prompt and is byte-identical to kf_15, so the recipe reproduces
+across sessions.
+
+The three faults:
+1. `transitions.py pair --preset morph`, unchanged, chose class B (the pan-and-zoom) on 1 of 4
+   segments of mismatch_4 and on 4 of 4 of mismatch_6 (0 to 11 sparse inliers between two pictures that
+   share a layout). Forcing class A falls back to `dis-only` on 3 of 4 segments of mismatch_6.
+2. klein raised the brightness of mismatch_4's keyframes. Mean L of the composite against the keyframe:
+   19.0 → 36.7 at 0.25, 23.2 → 33.2 at 0.5, 26.0 → 46.5 at 0.75 (A 18.8, B 26.1). The clip's mean L
+   runs 18.8, 36.7, 33.2, 46.5, 26.2 at frames 0, 22, 45, 67, 89; `layered_r4` rises from 18.3 to 25.5.
+   The sentence "make the light and the colour consistent" does not hold the composite's exposure.
+3. The motion stalls at every keyframe: the step between frames is 0.6–1.8 levels at the joints
+   against 4.6–6.5 mid-segment, because every segment eases in and out. Each segment's interior is 3 to
+   10 times softer than its ends (Laplacian variance).
+
+Not measured: whether kf_22's bright pixels along the bottom (2.14 % of the lowest 30 % of rows above
+L 40, against 0.01 % in its composite) are invented buildings; the subagent read them so by eye. Qwen
+was not run: the owner chose klein 9B. Next, in this order: hold the exposure (match each keyframe's
+Lab statistics to its composite's before the clip is built), one timing curve across the four
+segments, and the layered probe's own fields between the keyframes instead of the tool's class
+decision.
+
 ## 6. Gaps
 
 - No source states what Qwen-Image-Edit-2511 does with an instruction it cannot satisfy from the

@@ -224,6 +224,18 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    at IoU 0.94–0.95 untuned, has no sun / cloud / star and no depth order, misnames the river and the
    AC unit; weights 190 MB, CC BY-NC 4.0 upstream; the stock `transformers` load needs scipy and
    torchvision. The owner decides between rules, the model behind a warmup, or both.
+   **Round 5 rendered (2026-09-28; `TRANSITIONS.md §12.13`; page `benchmarks/runs/2026-09-28/layered_r5/`)**:
+   three faults measured on round 4 first (an outline of the skyline matte standing in mismatch_4's
+   held frames, 84 levels at most; mismatch_6's clouds darker than the sky around them from t = 0.2;
+   a 1.42-level step where a warp is switched off) and gone in round 5 by the same numbers. The
+   clouds transform into parts of the night sky; the automatic score matches labelled elements
+   (`--auto2`, seven pairs, two of them never rendered before). Twelve clips byte-identical on three
+   runs; the fourteen earlier md5s unchanged; no tool change. Ungraded.
+   **The layer source measured (2026-09-28; `TRANSITIONS.md §12.14`; page `benchmarks/runs/2026-09-28/layers/`)**:
+   OneFormer Swin-L ADE20K (MIT, 880 MB) + CLIPSeg (Apache-2.0, 605 MB) in `scripts/research/layer_source.py`,
+   8.8–22.5 s per photo, byte-identical, offline; mean IoU 0.788 against the tuned mattes (the Swin-T
+   baseline 0.746; the reference is 4 photos and cannot rank the large models); no model finds a star
+   or the air-conditioning unit; SAM 3 is gated and was not run.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -280,6 +292,13 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    969 s, byte-deterministic, recolouring more (32.85 levels). FLUX.2 [pro] is hosted only and was never
    used. Next: cleaned keyframes at three clip times of a round-4 clip, the deterministic engine between
    them. Ungraded.
+   **The keyframe-cleaned clip built (2026-09-28; DECISIONS Track B; `research/keyframe-prompting.md §5.4`;
+   `TRANSITIONS.md §12.15`; page `benchmarks/runs/2026-09-28/keyclip/`)**: kf_17–kf_22 (FLUX.2 klein 9B
+   Q8_0, 50–69 s each) and the clips A → K1 → K2 → K3 → B on mismatch_4 and mismatch_6. Three faults
+   measured: the tool chose class B on 1 of 4 and 4 of 4 segments; klein raised mismatch_4's exposure
+   (mean L 18.8, 36.7, 33.2, 46.5, 26.2 along the clip); the motion stalls at every keyframe. Next:
+   hold the exposure, one timing curve across the segments, the layered probe's fields between the
+   keyframes. Ungraded.
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -375,3 +394,5 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-27 | Owner picks on round 4 ingested (`layered_r4` closer on both tuned pairs, `auto_r4` on mismatch_1; first "one picture" ticks on mismatch_5 and mismatch_3) and five answers recorded: round 5 first; the layer source uses every route; FLUX.2 [dev] as a local quant wanted, [pro] declined | round-4 session, 2026-09-27 late evening |
 | 2026-09-27 | Owner rulings of the night recorded: licensing never a constraint; 8-bit files, no 4-bit quants; FLUX.2 [dev] out for now, klein 9B tried; video input specified (OUT / IN moments chosen per clip, the neighbouring frames read for the motion, a hybrid video-and-photo mode): a design pass after round 5 | round-4 session, 2026-09-27 night |
 | 2026-09-27 | Night, Track B3: FLUX.2 klein 9B at 8-bit measured on the box (68 s per keyframe, deterministic, closer to the composite than 4B; 18 GiB of memory); the recipe computes its memory floor from the files | round-4 session, 2026-09-27 night |
+| 2026-09-28 | Round 5 rendered: three faults of round 4 measured and removed (`settle`, `unmix`, the exact warp), the clouds transform into parts of the night sky, the automatic score matches labelled elements (`--auto2`) on seven pairs; twelve clips byte-identical on three runs | round-5 session, 2026-09-28 |
+| 2026-09-28 | Track E2: the layer source measured and written (`layer_source.py`: OneFormer Swin-L ADE20K + CLIPSeg, elements with label, group and depth; ten routes compared on 18 photos); Track B: the keyframe-cleaned clip built from kf_17–kf_22 with three measured faults; the decision log compacted (round 3, md5 `332c6824…`) | round-5 session, 2026-09-28 |

@@ -1,0 +1,630 @@
+{
+ "pair": "mismatch_3",
+ "tag": "auto_r5",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "layers_dir": "benchmarks/runs/2026-09-28/layers",
+ "owner": "Automatic per-element score (fixed rules, no per-pair parameter; layered_probe.py --auto2): edit this file to tune the scene.",
+ "auto_facts": {
+  "sky_share": [
+   0.001,
+   0
+  ],
+  "route": "elements",
+  "elements": [
+   53,
+   44
+  ],
+  "considered": [
+   29,
+   24
+  ],
+  "matched_groups": 14,
+  "layers": 10,
+  "matches": [
+   {
+    "layer": "e0_door",
+    "a": [
+     "door#4",
+     "building#2"
+    ],
+    "b": [
+     "wall#5",
+     "wall#19"
+    ],
+    "cost": 1.03822,
+    "mean_disparity": 0.185
+   },
+   {
+    "layer": "e1_person",
+    "a": [
+     "person#27",
+     "person#29"
+    ],
+    "b": [
+     "person#8"
+    ],
+    "cost": 0.345368,
+    "mean_disparity": 0.321
+   },
+   {
+    "layer": "e2_fan",
+    "a": [
+     "fan#5"
+    ],
+    "b": [
+     "chair#29"
+    ],
+    "cost": 0.821119,
+    "mean_disparity": 0.339
+   },
+   {
+    "layer": "e3_person",
+    "a": [
+     "person#23"
+    ],
+    "b": [
+     "person#15"
+    ],
+    "cost": 0.410973,
+    "mean_disparity": 0.458
+   },
+   {
+    "layer": "e4_person",
+    "a": [
+     "person#10",
+     "person#12",
+     "person#14"
+    ],
+    "b": [
+     "person#24"
+    ],
+    "cost": 0.136646,
+    "mean_disparity": 0.537
+   },
+   {
+    "layer": "e5_person",
+    "a": [
+     "person#25",
+     "person#28",
+     "person#34",
+     "person#38",
+     "person#39",
+     "person#43"
+    ],
+    "b": [
+     "person#21"
+    ],
+    "cost": 0.321396,
+    "mean_disparity": 0.564
+   },
+   {
+    "layer": "e6_table",
+    "a": [
+     "table#50"
+    ],
+    "b": [
+     "chair#40",
+     "sofa#23",
+     "table#28"
+    ],
+    "cost": 0.517155,
+    "mean_disparity": 0.577
+   },
+   {
+    "layer": "e7_bench",
+    "a": [
+     "bench#47",
+     "fan#3"
+    ],
+    "b": [
+     "chair#26"
+    ],
+    "cost": 0.652846,
+    "mean_disparity": 0.65
+   },
+   {
+    "layer": "e8_bench",
+    "a": [
+     "bench#46"
+    ],
+    "b": [
+     "table#42",
+     "chair#32"
+    ],
+    "cost": 0.359995,
+    "mean_disparity": 0.86
+   },
+   {
+    "layer": "e9_bench",
+    "a": [
+     "bench#48"
+    ],
+    "b": [
+     "chair#30"
+    ],
+    "cost": 0.651342,
+    "mean_disparity": 0.921
+   }
+  ],
+  "ground_share": [
+   0.999,
+   1.0
+  ],
+  "ground": "none: the rest follows the elements",
+  "rest": [
+   "person#13",
+   "person#30",
+   "person#21",
+   "person#24",
+   "bag#49"
+  ]
+ },
+ "layers": [
+  {
+   "name": "e0_door_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     5,
+     19
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e1_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     8
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e2_fan_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     29
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e3_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     15
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e4_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     24
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e5_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     21
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e6_table_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     23,
+     28,
+     40
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e7_bench_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     26
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e8_bench_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     32,
+     42
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "e9_bench_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     30
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "all_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "all"
+   }
+  },
+  {
+   "action": "morph_to",
+   "window": [
+    0.08,
+    0.92
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "bright",
+   "ot_border": 0.2,
+   "field": {
+    "from": "layers",
+    "fallback": "ot",
+    "sigma": 0.1,
+    "kappa": 0.02
+   },
+   "stagger": {
+    "amount": 0.4,
+    "scale_px": 360,
+    "seed": 29
+   },
+   "name": "rest",
+   "from": "A",
+   "mask": {
+    "rule": "all"
+   },
+   "depth": 0,
+   "to": "all_b",
+   "ot_local": 0.06,
+   "ot_floor": 0.3
+  },
+  {
+   "name": "e0_door",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2,
+     4
+    ],
+    "soft": 2
+   },
+   "depth": 2,
+   "action": "morph_to",
+   "to": "e0_door_b",
+   "window": [
+    0.1,
+    0.82
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6
+  },
+  {
+   "name": "e1_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     27,
+     29
+    ],
+    "soft": 2
+   },
+   "depth": 3,
+   "action": "morph_to",
+   "to": "e1_person_b",
+   "window": [
+    0.116,
+    0.836
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 42
+   }
+  },
+  {
+   "name": "e2_fan",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     5
+    ],
+    "soft": 2
+   },
+   "depth": 4,
+   "action": "morph_to",
+   "to": "e2_fan_b",
+   "window": [
+    0.131,
+    0.851
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6
+  },
+  {
+   "name": "e3_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     23
+    ],
+    "soft": 2
+   },
+   "depth": 5,
+   "action": "morph_to",
+   "to": "e3_person_b",
+   "window": [
+    0.147,
+    0.867
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 44
+   }
+  },
+  {
+   "name": "e4_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     10,
+     12,
+     14
+    ],
+    "soft": 2
+   },
+   "depth": 6,
+   "action": "morph_to",
+   "to": "e4_person_b",
+   "window": [
+    0.162,
+    0.882
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 45
+   }
+  },
+  {
+   "name": "e5_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     25,
+     28,
+     34,
+     38,
+     39,
+     43
+    ],
+    "soft": 2
+   },
+   "depth": 7,
+   "action": "morph_to",
+   "to": "e5_person_b",
+   "window": [
+    0.178,
+    0.898
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 46
+   }
+  },
+  {
+   "name": "e6_table",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     50
+    ],
+    "soft": 2
+   },
+   "depth": 8,
+   "action": "morph_to",
+   "to": "e6_table_b",
+   "window": [
+    0.193,
+    0.913
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6
+  },
+  {
+   "name": "e7_bench",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     3,
+     47
+    ],
+    "soft": 2
+   },
+   "depth": 9,
+   "action": "morph_to",
+   "to": "e7_bench_b",
+   "window": [
+    0.209,
+    0.929
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6
+  },
+  {
+   "name": "e8_bench",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     46
+    ],
+    "soft": 2
+   },
+   "depth": 10,
+   "action": "morph_to",
+   "to": "e8_bench_b",
+   "window": [
+    0.224,
+    0.944
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6
+  },
+  {
+   "name": "e9_bench",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     48
+    ],
+    "soft": 2
+   },
+   "depth": 11,
+   "action": "morph_to",
+   "to": "e9_bench_b",
+   "window": [
+    0.24,
+    0.96
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6
+  }
+ ]
+}

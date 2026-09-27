@@ -58,6 +58,36 @@ between the textures' bright or dark features; `extend_bottom_px` continues a ba
 `advect: {amp_px, scale_px}` deforms a layer along a divergence-free noise field that grows with the
 progress; `recolor_window` gives the colour path its own window (a cloud darkens with the sky, then
 thins). `--auto PAIR` writes and renders a score built by fixed rules with no per-pair parameter.
+Round-5 keys (2026-09-28; the owner on round 4: the clouds "dissolved with quite a solid internal
+borders , i wish they just  non-uniformly morphed into night sky parts"; "at the very end it still
+seems some boundary where it crossfades to final B shot"; all default-off, rounds 1-4 render
+byte-identical): a backdrop's `settle: {px}` keeps the photo's own residual under a layer's fringe
+while that layer rests (the first photo's until the layer has moved `px`, the second photo's once
+the arriving layer is within `px` of its place), so the frames beside the endpoints equal the
+photos and no outline of a matte stands in the held frames; mask rule `parts` cuts a region into
+soft parts along the photo's own structure (a band-pass of L between `lo_px` and `hi_px`, `share`
+of the region inside); on `morph_to`: `stagger: {amount, scale_px, seed}` gives every place its own
+start inside the window (a smooth noise field carried along the transport), `to_backdrop: NAME`
+takes the target's pixels from that backdrop's end state (a cloud becomes a part of the sky
+itself), `colour_rel: true` ties the layer's Lab statistics to the backdrop's current state (the
+contrast against the sky decays and never changes sign), `colour_curve`; a backdrop's `flow` takes
+`stagger` too (the textures change place by place, not everywhere at once); a backdrop's
+`fill_scales: [px, ...]` sets the scales of its hole fill (a small first scale meets the photo at
+the hole's rim); `halo_px` on a mask rule adds a soft fringe outward; `ot_local: s` on `morph_to`
+re-weights the target's mass to the source's at the scale s x the long side (every part goes to
+the parts near it), `exact: true` renders through the round-5 path (warps that give a zero displacement back bit for
+bit), `ot_floor` lets a share of the layer stay in place, `ot_rigid` in 0..1 pulls the field toward
+its affine part (a building keeps its straight lines), `ot_border` pins the field to zero at the
+canvas border, `gain_clip: [lo, hi]` bounds the contrast
+gain of the colour match; `unmix: BACKDROP` gives a layer its own colour, un-premultiplied against that
+backdrop's filled estimate (a half-transparent cloud carries no sky), with `"settle": false` on the
+backdrop's entry for that layer. Mask rule `element` takes its matte from the layer source
+(`scripts/research/layer_source.py`: one element per thing or per connected region of a label, with
+its label, group and depth; `layers_dir` in the score): `ids`, or `groups` / `not_groups`; `soft`.
+`morph_to` with `field: {from: "layers", fallback: "ot"}` moves along the scene's flow (the matched
+elements' own motions, the layer's own transport far from them). `--auto2 PAIR` writes and renders
+the per-element automatic score (`auto_score2`): every element of the first photo transforms into
+the closest element of its kind in the second, each with its own field and its own start.
 Actions: backdrop (the low-order sky gradient of A moves to B's with the residual textures
 crossfaded; alpha 1 everywhere), hold, recolor (per-row Lab statistics of the layer move to the
 `to` layer's), dissolve (the layer erodes through its own density plus noise; thin parts first),
@@ -85,6 +115,7 @@ sys.path.insert(0, str(ROOT))
 import transitions as T  # noqa: E402
 
 FIX = ROOT / "fixtures"
+LAYERS_DIR = "benchmarks/runs/2026-09-28/layers"      # the layer source's output (layer_source.py), per photo
 PROPS = (("one_picture", "one picture"), ("transforms", "content transforms"),
          ("not_invented", "nothing invented"))
 
@@ -209,12 +240,70 @@ def ot_fields(mass_a, mass_b, grid=64, eps=0.04, iters=60, smooth=1.5):
     return spread(d_a, ia), spread(d_b, ib), info
 
 
-def warp_along(img, field, p, border=cv2.BORDER_CONSTANT):
+def affine_part(field, alpha, step=8):
+    """The affine map closest to a displacement field over a matte (weighted
+    least squares on every `step`-th pixel): returns it as a field (h, w, 2)
+    and the RMS of what the affine map leaves out, px. Round 5: a building
+    moved by its affine part keeps its straight lines."""
+    h, w = alpha.shape
+    ys, xs = np.mgrid[0:h:step, 0:w:step]
+    wt = alpha[::step, ::step].ravel().astype(np.float64)
+    sel = wt > 0.05
+    if sel.sum() < 6:
+        return np.zeros_like(field), 0.0
+    X = np.stack([xs.ravel()[sel], ys.ravel()[sel], np.ones(int(sel.sum()))], 1).astype(np.float64)
+    D = field[::step, ::step].reshape(-1, 2)[sel].astype(np.float64)
+    sw = np.sqrt(wt[sel])[:, None]
+    coef, *_ = np.linalg.lstsq(X * sw, D * sw, rcond=None)           # (3, 2): dx, dy as affine functions of (x, y, 1)
+    gx, gy = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+    aff = np.stack([coef[0, 0] * gx + coef[1, 0] * gy + coef[2, 0], coef[0, 1] * gx + coef[1, 1] * gy + coef[2, 1]], -1).astype(np.float32)
+    res = D - X @ coef
+    return aff, float(np.sqrt(((res ** 2).sum(1) * wt[sel]).sum() / wt[sel].sum()))
+
+
+_GRID = {}
+
+
+def _full_grid(h, w):
+    if (h, w) not in _GRID:
+        _GRID.clear()
+        _GRID[(h, w)] = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+    return _GRID[(h, w)]
+
+
+def warp_along(img, field, p, border=cv2.BORDER_CONSTANT, exact=False):
     """Move img along p x field (a smooth forward displacement, px): the
-    backward map comes from a fixed-point inversion at quarter resolution."""
-    if p == 0:
-        return img
+    backward map comes from a fixed-point inversion at quarter resolution.
+    Round 5: p may be an (h, w) map in the coordinates of img (a staggered
+    progress); the field is scaled by it first. `exact` (round 5): the
+    inversion returns a displacement, upsampled and added to the full-size
+    grid, so a zero field gives the picture back bit for bit. The path without
+    it (rounds 1-4, kept for their byte-identical renders) upsamples the
+    coordinates themselves with the horizontal scale on both axes: on a canvas
+    whose width is not a multiple of 4 the rows are stretched (2.7 px at the
+    bottom of mismatch_6's 1146 x 1524), and the picture is resampled even at
+    p = 2e-5 (measured 2026-09-28: a residual moved 74 levels at its edges)."""
+    if np.ndim(p) == 0:
+        if p == 0:
+            return img
+    else:
+        field = field * np.asarray(p, np.float32)[..., None]
+        p = 1.0
     h, w = field.shape[:2]
+    if exact:
+        hs, ws = max(2, h // 4), max(2, w // 4)
+        fs = cv2.resize(field, (ws, hs), interpolation=cv2.INTER_AREA)
+        qx, qy = ws / float(w), hs / float(h)
+        gx, gy = np.meshgrid(np.arange(ws, dtype=np.float32), np.arange(hs, dtype=np.float32))
+        bx, by = -p * fs[..., 0], -p * fs[..., 1]
+        for _ in range(3):
+            fx = cv2.remap(fs[..., 0], gx + bx * qx, gy + by * qy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+            fy = cv2.remap(fs[..., 1], gx + bx * qx, gy + by * qy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+            bx, by = -p * fx, -p * fy
+        X, Y = _full_grid(h, w)
+        return cv2.remap(img, X + cv2.resize(bx, (w, h), interpolation=cv2.INTER_LINEAR),
+                         Y + cv2.resize(by, (w, h), interpolation=cv2.INTER_LINEAR),
+                         cv2.INTER_LINEAR, borderMode=border, borderValue=0)
     hs, ws = max(2, h // 4), max(2, w // 4)
     fs = cv2.resize(field, (ws, hs), interpolation=cv2.INTER_AREA) * (ws / float(w))
     gx, gy = np.meshgrid(np.arange(ws, dtype=np.float32), np.arange(hs, dtype=np.float32))
@@ -394,7 +483,7 @@ def fill_poly2(res, w):
     return res * w[..., None] + fill * (1.0 - w)[..., None]
 
 
-def fill_holes(res, w, sigma):
+def fill_holes(res, w, sigma, scales=None):
     """A residual (h, w, 3) known where w is 1: fill the holes (w < 1) with a
     normalized convolution of the known part at three scales (sigma, 3 sigma,
     9 sigma), so a hole wider than the kernel still takes the surrounding
@@ -412,11 +501,16 @@ def fill_holes(res, w, sigma):
     # iso-distance line from the hole's rim as a contour inside the hole
     fill = np.zeros_like(rw)
     left = np.ones(ws_.shape, np.float32)
-    for i, sc in enumerate((sigma, 3.0 * sigma, 9.0 * sigma)):
-        num = cv2.GaussianBlur(rw, (0, 0), sc / 4.0)
-        den = cv2.GaussianBlur(ws_, (0, 0), sc / 4.0)
+    # round 5: `scales` (px) replaces the three scales; a first scale of a few
+    # px makes the fill meet the photo at the hole's rim (measured on
+    # mismatch_4, 2026-09-28: with 60 px first the fill stands 3.8 L off the
+    # photo in the 2 px outside the skyline matte, a bright outline)
+    scs = tuple(scales) if scales else (sigma, 3.0 * sigma, 9.0 * sigma)
+    for i, sc in enumerate(scs):
+        num = cv2.GaussianBlur(rw, (0, 0), max(sc / 4.0, 0.5))
+        den = cv2.GaussianBlur(ws_, (0, 0), max(sc / 4.0, 0.5))
         f = num / np.maximum(den, 1e-6)[..., None]
-        wk = left if i == 2 else np.clip(den / 0.2, 0, 1) * left
+        wk = left if i == len(scs) - 1 else np.clip(den / 0.2, 0, 1) * left
         fill = fill + f * wk[..., None]
         left = left - wk
     fill = cv2.resize(fill, (w_, h), interpolation=cv2.INTER_LINEAR)
@@ -458,13 +552,13 @@ class Scene:
         self.n = 2          # frames of the clip; set by render_score (the shutter needs px per frame)
         self.layers_all = []    # every layer of the score, rendered or not (set by build_layers)
 
-    def layer_flow(self, sigma=0.12, kappa=0.02, names=None):
+    def layer_flow(self, sigma=0.12, kappa=0.02, names=None, fallback=None, tag=None):
         """One flow for the whole scene, interpolated from the motions of its
         matched layers (a `morph_to` layer's transport field inside its matte,
         a `move_to` layer's map at its blob): a normalized convolution at
         `sigma` x the long side, falling to zero far from every matched layer
         (`kappa`). Returns the field A -> B and the field B -> A, px."""
-        key = ("_flow", sigma, kappa, tuple(names) if names else None)
+        key = ("_flow", sigma, kappa, tuple(names) if names else None, tag)
         if key in self.masks:
             return self.masks[key]
         h, w = self.h, self.w
@@ -475,6 +569,8 @@ class Scene:
         for lay in self.layers_all:
             if names and lay.name not in names:
                 continue
+            if lay.spec.get("field"):
+                continue        # a layer that follows the flow does not make it
             if lay.action == "morph_to":
                 pairs = ((lay.F, lay.alpha0), (lay.G, lay.tgt.alpha0))
             elif lay.action == "move_to":
@@ -496,8 +592,26 @@ class Scene:
         for k in range(2):
             n_ = cv2.GaussianBlur(num[k], (0, 0), sg)
             d_ = cv2.GaussianBlur(den[k], (0, 0), sg)
+            if fallback is not None:
+                # round 5: far from every matched layer the flow is the
+                # following layer's own transport, not zero
+                n_ = n_ + kappa * cv2.resize(fallback[k], (ws, hs), interpolation=cv2.INTER_AREA)
             out.append(cv2.resize(n_ / (d_ + kappa)[..., None], (w, h), interpolation=cv2.INTER_CUBIC))
         self.masks[key] = (out[0], out[1])
+        return self.masks[key]
+
+    def elements(self, src):
+        """(element id map at the canvas, the layer source's JSON) of a photo;
+        round 5. Made by `scripts/research/layer_source.py <pair>_S|_F`."""
+        key = "_elements_" + src
+        if key not in self.masks:
+            d = ROOT / getattr(self, "layers_dir", LAYERS_DIR) / f"{self.pair}_{'S' if src == 'A' else 'F'}"
+            if not (d / "layers.npz").exists():
+                raise SystemExit(f"no layers for {d.name}: run .venv/bin/python scripts/research/layer_source.py {d.name}")
+            el = np.load(d / "layers.npz")["element"].astype(np.int32)
+            if el.shape != (self.h, self.w):
+                el = cv2.resize(el, (self.w, self.h), interpolation=cv2.INTER_NEAREST)
+            self.masks[key] = (el, json.loads((d / "layers.json").read_text()))
         return self.masks[key]
 
     def disparity(self, src):
@@ -634,6 +748,21 @@ class Scene:
             a = self._clouds(src, self.masks[m["within"]], m)
         elif rule == "stars":
             a = self._stars(src, self.masks[m["within"]], m)
+        elif rule == "parts":
+            a = self._parts(src, self.masks[m["within"]], m)
+        elif rule == "element":
+            el, meta = self.elements(src)
+            ids = set(m.get("ids", []))
+            if m.get("groups"):
+                ids |= {e["id"] for e in meta["elements"] if e["group"] in m["groups"]}
+            if m.get("not_groups") is not None:
+                ids |= {e["id"] for e in meta["elements"] if e["group"] not in m["not_groups"]}
+                ids -= set(m.get("minus_ids", []))
+                a = (np.isin(el, sorted(ids)) | (el == 0)).astype(np.float32)   # unnamed pixels count as the rest
+            else:
+                a = np.isin(el, sorted(ids - set(m.get("minus_ids", [])))).astype(np.float32)
+            if m.get("soft", 0):
+                a = cv2.GaussianBlur(a, (0, 0), float(m["soft"]))
         else:
             raise SystemExit(f"unknown mask rule {rule!r}")
         for other in m.get("or", []):
@@ -660,6 +789,13 @@ class Scene:
             # its edge (the depth rules apply it before their inversion)
             k = int(m["grow"])
             a = np.maximum(a, cv2.GaussianBlur(cv2.dilate(a, np.ones((2 * k + 1, 2 * k + 1), np.uint8)), (0, 0), 1.0))
+        if m.get("halo_px", 0):
+            # round 5: a soft fringe outward over `halo_px` px: the layer
+            # carries its surroundings with a weight that falls to zero, so
+            # its edge over a backdrop is a ramp and never a line
+            hard = (a > 0.5).astype(np.uint8)
+            dist = cv2.distanceTransform(1 - hard, cv2.DIST_L2, 5)
+            a = np.maximum(a, (1.0 - smoothstep(dist / float(m["halo_px"]))).astype(np.float32))
         ef = m.get("edge_feather")
         if ef:
             # round 3: a feather that follows the photo's own edge — tight
@@ -884,6 +1020,32 @@ class Scene:
         self.masks["_density_" + m["within"]] = dens
         return np.clip(dens / float(m.get("opaque", 0.35)), 0, 1)
 
+    def _parts(self, src, within, m):
+        """Round 5: the parts of a region along the photo's own structure: a
+        band-pass of L (a normalized blur at `lo_px` minus one at `hi_px`,
+        both inside `within`), cut at the quantile that leaves `share` of the
+        region inside the parts, soft over `soft` x the band-pass's
+        interquartile range. A night sky's parts follow its glow and its star
+        fields; no threshold in levels, so any region has parts."""
+        L = self.lab[src][..., 0]
+        wm = (within > 0.5).astype(np.float32)
+        sel = wm > 0.5
+        if sel.sum() < 100:
+            return np.zeros((self.h, self.w), np.float32)
+
+        def nblur(sg):
+            return cv2.GaussianBlur(L * wm, (0, 0), sg) / np.maximum(cv2.GaussianBlur(wm, (0, 0), sg), 1e-3)
+        bp = nblur(float(m.get("lo_px", 30))) - nblur(float(m.get("hi_px", 160)))
+        q = np.quantile(bp[sel], [0.25, 0.75, 1.0 - float(m.get("share", 0.5))])
+        soft = max(float(m.get("soft", 0.5)) * float(q[1] - q[0]), 1e-4)
+        a = smoothstep((bp - float(q[2])) / soft + 0.5)
+        if not m.get("extend"):
+            # `extend`: the parts continue outside `within` (the band-pass is
+            # a normalized blur, defined everywhere), for a target that lies
+            # behind another layer
+            a = a * np.clip(within, 0, 1)
+        return a.astype(np.float32)
+
     def _stars(self, src, within, m):
         """Bright small blobs inside the sky: white top-hat on L, thresholded,
         each blob given an appearance order (bright first, with jitter)."""
@@ -948,6 +1110,31 @@ class Layer:
     def _prep(self):
         s, sp = self.scene, self.spec
         h, w = s.h, s.w
+        if sp.get("unmix"):
+            # round 5: the layer's own colour, un-premultiplied against the
+            # backdrop's filled estimate behind it: F = (I - (1 - a) Bg) / a.
+            # A half-transparent cloud then carries cloud and no sky, and over
+            # that estimate the photo comes back exactly (a >= `unmix_floor`,
+            # no channel clipped). The backdrop keeps its fill under this
+            # layer at rest: give its entry `"settle": false`.
+            bd = self.by_name[sp["unmix"]]
+            est = (np.asarray(bd.fitA_img, np.float32) + bd.resA) if self.src == "A" else (np.asarray(bd.fitB_img, np.float32) + bd.resB)
+            bg = lab_to_rgb(est)
+            # the least opacity a colour inside the gamut can explain: a
+            # bright cloud pixel over a darker sky needs a >= (I - Bg) /
+            # (255 - Bg) (measured 2026-09-28: with the density alone 5.5 %
+            # of the cloud's pixels left the gamut and frame 1 stood more
+            # than 4 levels off A on 2.2 % of the canvas)
+            need = np.where(self.rgb > bg, (self.rgb - bg) / np.maximum(255.0 - bg, 1.0), (bg - self.rgb) / np.maximum(bg, 1.0)).max(-1)
+            sup = self.alpha0 > float(sp.get("unmix_support", 0.02))
+            self.alpha0 = np.where(sup, np.maximum(self.alpha0, np.clip(1.05 * need, 0, 1)), self.alpha0).astype(np.float32)
+            s.masks[self.name] = self.alpha0
+            a = self.alpha0[..., None]
+            fg = (self.rgb - (1.0 - a) * bg) / np.maximum(a, float(sp.get("unmix_floor", 0.02)))
+            self.unmix_clipped = float(((fg < 0) | (fg > 255)).any(-1)[self.alpha0 > 0.1].mean()) if (self.alpha0 > 0.1).any() else 0.0
+            self.rgb = np.clip(fg, 0, 255).astype(np.float32)
+            self.lab = cv2.cvtColor(self.rgb / 255.0, cv2.COLOR_RGB2Lab)
+            self.stats = row_stats(self.lab, self.alpha0)
         if self.action in ("dissolve", "materialise"):
             # the order in which the layer's pixels go (dissolve) or come
             # (materialise): its own density (clouds), its blobs (stars), its
@@ -1101,8 +1288,42 @@ class Layer:
                 mu = float((L * lay.alpha0).sum() / max(float(lay.alpha0.sum()), 1e-6))
                 dev = (L - mu) if kind == "bright" else (mu - L)
                 return lay.alpha0 * (0.15 + np.clip(dev, 0, None) / 25.0)
-            self.F, self.G, self.ot_info = ot_fields(mass(self), mass(tgt), int(sp.get("ot_grid", 64)),
+            m_a, m_b = mass(self), mass(tgt)
+            if sp.get("ot_floor"):
+                # round 5: a share of the layer stays where it is (the target's
+                # mass gets a floor), the rest gathers into the target's parts
+                m_b = m_b + float(sp["ot_floor"]) * (m_a > 0.02)
+            if sp.get("ot_local"):
+                # round 5: the target's mass is re-weighted so that at the
+                # scale `ot_local` (x the long side) it equals the source's:
+                # every part of the layer goes to the parts near it, and the
+                # layer as a whole does not contract (measured 2026-09-28 on
+                # mismatch_6: clouds over 80 % of the canvas into parts over
+                # 31 % moved 200.7 px on average, 453 px at the 95th percentile)
+                sg = float(sp["ot_local"]) * max(h, w)
+                sm_a = cv2.GaussianBlur(m_a, (0, 0), sg)
+                sm_b = cv2.GaussianBlur(m_b, (0, 0), sg)
+                m_b = m_b * sm_a / (sm_b + 0.05 * max(float(sm_b.mean()), 1e-6))
+            self.F, self.G, self.ot_info = ot_fields(m_a, m_b, int(sp.get("ot_grid", 64)),
                                                      float(sp.get("ot_eps", 0.04)))
+            if sp.get("ot_rigid"):
+                # round 5: `ot_rigid` in 0..1 pulls the field toward its affine
+                # part over the layer's matte (1 = the layer moves, turns and
+                # scales as a whole; 0 = the free transport)
+                rho = float(np.clip(sp["ot_rigid"], 0.0, 1.0))
+                fa, ra_ = affine_part(self.F, self.alpha0)
+                ga, rb_ = affine_part(self.G, tgt.alpha0)
+                self.F = (1.0 - rho) * self.F + rho * fa
+                self.G = (1.0 - rho) * self.G + rho * ga
+                self.ot_info = dict(self.ot_info, nonrigid_rms_px=[round(ra_, 1), round(rb_, 1)], rigid=rho)
+            self.field_spec = sp.get("field")
+            self._own = (self.F, self.G)
+            if sp.get("ot_border"):
+                # round 5: the field falls to zero at the canvas border over
+                # `ot_border` x the short side: a layer that touches the border
+                # never pulls away from it and shows its cut edge
+                bw = T.border_weight(h, w, float(sp["ot_border"]))[..., None]
+                self.F, self.G = self.F * bw, self.G * bw
             gain = float(sp.get("ot_gain", 1.0))
             self.F, self.G = self.F * gain, self.G * gain
             self.mix_window = sp.get("mix_window", [0.3, 0.7])
@@ -1116,6 +1337,14 @@ class Layer:
             self.st_a = lab_stats(self.lab, self.alpha0)
             self.st_b = lab_stats(tgt.lab, tgt.alpha0)
             self.match = bool(sp.get("match_colour", True))
+            # round 5 (all default-off)
+            self.colour_curve = sp.get("colour_curve", "smoothstep")
+            self.to_backdrop = sp.get("to_backdrop")
+            self.colour_rel = bool(sp.get("colour_rel", False))
+            self._tgt_px = None
+            self.stag = None
+            if not self.field_spec:
+                self._finish_fields()
 
     def linear(self, t, window=None):
         """The clipped linear progress through a window (the layer's own by default)."""
@@ -1151,11 +1380,158 @@ class Layer:
             return np.zeros(2, np.float32)
         return (self.offset(t1) - self.offset(t0)) / ((t1 - t0) / dt)
 
+    def _finish_fields(self):
+        """What depends on the layer's final field: the stagger's noise carried
+        to B's frame and the field's 95th percentiles. At once for a layer
+        with its own transport; at the first use for one that follows the
+        scene's flow (every other layer is prepared by then)."""
+        s, sp = self.scene, self.spec
+        if self.field_spec:
+            fs = self.field_spec
+            fb = self._own if fs.get("fallback") == "ot" else None
+            F, G = s.layer_flow(float(fs.get("sigma", 0.1)), float(fs.get("kappa", 0.02)), fs.get("layers"), fb, self.name)
+            g = float(fs.get("gain", 1.0))
+            self.F, self.G = F * g, G * g
+            if sp.get("ot_border"):
+                bw = T.border_weight(s.h, s.w, float(sp["ot_border"]))[..., None]
+                self.F, self.G = self.F * bw, self.G * bw
+        stg = sp.get("stagger")
+        if stg:
+            amt = float(np.clip(stg.get("amount", 0.3), 0.0, 0.8))
+            n_a = noise_field(s.h, s.w, float(stg.get("scale_px", 300)), s.seed + int(stg.get("seed", 21)))
+            # the same material keeps its start: the field of A carried to B's frame
+            n_b = warp_along(n_a, self.F, 1.0, cv2.BORDER_REPLICATE, exact=True)
+            self.stag = (amt, n_a, n_b)
+
+        def p95(field, a):
+            sel = a > 0.5
+            return float(np.percentile(np.sqrt((field ** 2).sum(-1))[sel], 95)) if sel.any() else 0.0
+        self.F_p95, self.G_p95 = p95(self.F, self.alpha0), p95(self.G, self.tgt.alpha0)
+        self.fields_done = True
+
+    def fields(self):
+        if not getattr(self, "fields_done", False):
+            self._finish_fields()
+        return self.F, self.G
+
+    def away(self, t):
+        """Round 5, for a backdrop's `settle`: (px this layer has moved from
+        its start state, px it still has to go to its end state). A dissolve
+        or a materialise counts its progress as 100 px."""
+        if self.action == "morph_to":
+            self.fields()
+            u = self.linear(t)
+            if self.stag is not None:
+                amt = self.stag[0]
+                u0 = min(1.0, u / max(1.0 - amt, 1e-6))
+                u1 = max(0.0, (u - amt) / max(1.0 - amt, 1e-6))
+            else:
+                u0 = u1 = u
+            return curve_of(self.curve, u0) * self.F_p95, (1.0 - curve_of(self.curve, u1)) * self.G_p95
+        if self.action in ("exit", "enter", "move", "move_to") or self.spec.get("drift"):
+            o0, o1, o = self.offset(0.0), self.offset(1.0), self.offset(t)
+            return float(np.linalg.norm(o - o0)), float(np.linalg.norm(o1 - o))
+        if self.action in ("dissolve", "materialise"):
+            p = self.progress(t)
+            return 100.0 * p, 100.0 * (1.0 - p)
+        return 0.0, 0.0
+
+    def _target(self):
+        """(rgb, lab, Lab statistics) of the morph's target: the layer `to` of
+        B, or with `to_backdrop` the end state of that backdrop inside the
+        matte of `to` (the layer ends as a part of the backdrop itself)."""
+        if self._tgt_px is None:
+            tgt = self.tgt
+            if self.to_backdrop:
+                bd = self.by_name[self.to_backdrop]
+                lab = (np.asarray(bd.fitB_img, np.float32) + bd.resB).astype(np.float32)
+                lab_a = (np.asarray(bd.fitA_img, np.float32) + bd.resA).astype(np.float32)
+                self._tgt_px = (lab_to_rgb(lab), lab, lab_stats(lab, tgt.alpha0), lab_stats(lab_a, self.alpha0), bd)
+            else:
+                self._tgt_px = (tgt.rgb, tgt.lab, self.st_b, None, None)
+        return self._tgt_px
+
+    def render_morph5(self, t):
+        """Round 5 path of `morph_to` (any of stagger / to_backdrop /
+        colour_rel): the progress and the mix are maps when staggered; the
+        target may be the backdrop's own end state; the shared statistics may
+        follow the backdrop's current state."""
+        tgt = self.tgt
+        self.fields()
+        t_rgb, t_lab, st_b, st_bd_a, bd = self._target()
+        u = self.linear(t)
+        m0, m1 = self.mix_window
+        # `gain_clip`: the bounds of the contrast gain of the colour match (a
+        # night sky given a cloud's statistics had its texture amplified 2.5 x
+        # and the rim of every filled zone showed; measured by eye, 2026-09-28)
+        gc = tuple(self.spec.get("gain_clip", (0.4, 2.5)))
+        qc = float(curve_of(self.colour_curve, self.linear(t, self.colour_window))) if self.colour_curve != "smoothstep" \
+            else float(smoothstep(self.linear(t, self.colour_window)))
+        if self.colour_rel and bd is not None:
+            pb = bd.progress(t)
+            st_now = (1.0 - pb) * st_bd_a + pb * st_b
+            st = st_now + (1.0 - qc) * (self.st_a - st_bd_a)
+            st[:, 1] = np.maximum(st[:, 1], 1e-3)
+        else:
+            st = (1.0 - qc) * self.st_a + qc * st_b
+        exact_b = (not self.colour_rel and qc >= 1) or (self.colour_rel and qc >= 1 and bd.progress(t) >= 1)
+        if u <= 0:
+            return (self.rgb if qc <= 0 else lab_to_rgb(lab_match(self.lab, self.st_a, st, gc))), self.alpha0
+        if u >= 1:
+            if self.to_backdrop:
+                # the layer has become a part of the backdrop: nothing of it is left
+                return t_rgb, np.zeros_like(self.alpha0)
+            return (t_rgb if exact_b else lab_to_rgb(lab_match(t_lab, st_b, st, gc))), tgt.alpha0
+        rgb_a = lab_to_rgb(lab_match(self.lab, self.st_a, st, gc)) if qc > 0 else self.rgb
+        rgb_b = t_rgb if exact_b else lab_to_rgb(lab_match(t_lab, st_b, st, gc))
+        # r: the progress past the start of the mix, 0..1; the mix q runs over
+        # its first rho, and a layer that ends as a part of the backdrop fades
+        # out over the rest (its pixels are the backdrop's by then)
+        rho = max((m1 - m0) / max(1.0 - m0, 1e-6), 1e-6)
+        if self.stag is not None:
+            amt, n_a, n_b = self.stag
+            ua = np.clip((u - amt * n_a) / max(1.0 - amt, 1e-6), 0.0, 1.0)
+            ub = np.clip((u - amt * n_b) / max(1.0 - amt, 1e-6), 0.0, 1.0)
+            cf = CURVES_R3.get(self.curve)
+            pa = (np.clip(cf(ua), 0, 1) if cf else smoothstep(ua)).astype(np.float32)
+            pb_ = (np.clip(cf(ub), 0, 1) if cf else smoothstep(ub)).astype(np.float32)
+            ra = np.clip((ua - m0) / max(1.0 - m0, 1e-6), 0, 1).astype(np.float32)
+            rb = np.clip((ub - m0) / max(1.0 - m0, 1e-6), 0, 1).astype(np.float32)
+            a_a = warp_along(self.alpha0, self.F, pa, exact=True)
+            a_b = warp_along(tgt.alpha0, self.G, 1.0 - pb_, exact=True)
+            c_a = warp_along(np.ascontiguousarray(rgb_a), self.F, pa, cv2.BORDER_REPLICATE, exact=True)
+            c_b = warp_along(np.ascontiguousarray(rgb_b), self.G, 1.0 - pb_, cv2.BORDER_REPLICATE, exact=True)
+            r_a = warp_along(ra, self.F, pa, cv2.BORDER_REPLICATE, exact=True)
+            r_b = warp_along(rb, self.G, 1.0 - pb_, cv2.BORDER_REPLICATE, exact=True)
+            r = (r_a * a_a + r_b * a_b + 0.5 * 1e-4 * (r_a + r_b)) / (a_a + a_b + 1e-4)
+            q = smoothstep(r / rho)
+            fade = smoothstep((r - rho) / max(1.0 - rho, 1e-6)) if self.to_backdrop else 0.0
+        else:
+            p = curve_of(self.curve, u)
+            r = min(1.0, max(0.0, (u - m0) / max(1.0 - m0, 1e-6)))
+            q = float(smoothstep(r / rho))
+            fade = float(smoothstep((r - rho) / max(1.0 - rho, 1e-6))) if self.to_backdrop else 0.0
+            a_a = warp_along(self.alpha0, self.F, p, exact=True)
+            a_b = warp_along(tgt.alpha0, self.G, 1.0 - p, exact=True)
+            c_a = warp_along(np.ascontiguousarray(rgb_a), self.F, p, cv2.BORDER_REPLICATE, exact=True)
+            c_b = warp_along(np.ascontiguousarray(rgb_b), self.G, 1.0 - p, cv2.BORDER_REPLICATE, exact=True)
+        c = 4.0 * q * (1.0 - q)
+        lin = a_a * (1.0 - q) + a_b * q
+        alpha = lin + c * (np.maximum(a_a, a_b) - lin)
+        w_a = a_a * ((1.0 - q) + 0.5 * c)
+        w_b = a_b * (q + 0.5 * c)
+        rgb = (c_a * w_a[..., None] + c_b * w_b[..., None]) / np.maximum(w_a + w_b, 1e-4)[..., None]
+        self.last_q = q
+        return rgb, np.clip(alpha * (1.0 - fade), 0, 1)
+
     def render_morph(self, t):
         """The layer of A carried into its counterpart of B: geometry by the
         progress p along the transport field, appearance by the mix q inside
         `mix_window`, with both layers given the same Lab statistics (the
         blend of A's and B's by q), so the mix changes structure, not colour."""
+        if self.stag is not None or self.to_backdrop or self.colour_rel or self.colour_curve != "smoothstep" \
+                or self.field_spec or self.spec.get("stagger") or self.spec.get("exact"):
+            return self.render_morph5(t)
         tgt = self.tgt
         u = self.linear(t)
         p = curve_of(self.curve, u)
@@ -1396,16 +1772,44 @@ class Backdrop(Layer):
             # the holes in each residual (under an excluded layer, under the
             # layer's own soft edge) take the surrounding low-frequency
             # residual instead of the row fit alone
-            self.resA = fill_holes(self.lab - self.fitA_img, wA, fs)
-            self.resB = fill_holes(other.lab - self.fitB_img, wB, fs)
+            self.resA = fill_holes(self.lab - self.fitA_img, wA, fs, sp.get("fill_scales"))
+            self.resB = fill_holes(other.lab - self.fitB_img, wB, fs, sp.get("fill_scales"))
         else:
             self.resA = (self.lab - self.fitA_img) * wA[..., None]
             self.resB = (other.lab - self.fitB_img) * wB[..., None]
+        # round 5: `settle` keeps the photo's own residual in the holes while
+        # the layer that owns a hole rests. Measured on mismatch_4 round 4
+        # (2026-09-28): in the 14 held frames before the last one, 86 % of the
+        # pixels more than 4 levels from B lie within 12 px of the skyline
+        # matte's contour (the fill showing under the matte's soft edge and in
+        # the 4 px the exclusion is dilated by), and they vanish in one step.
+        self.settle = None
+        stl = sp.get("settle")
+        if stl:
+            def zones(entries, res_too):
+                out = []
+                for e in ([entries] if isinstance(entries, str) else entries):
+                    nm = e if isinstance(e, str) else e["layer"]
+                    keep_fill = isinstance(e, dict) and e.get("settle") is False
+                    out.append(((1.0 - clear_of([e])) > 1e-4, None if keep_fill else self._actors(nm)))
+                return out
+            zA = zones(sp.get("minus", []), False) + zones(sp.get("minus_res", []), True)
+            zB = zones(sp.get("exclude") or [], False) + zones(sp.get("exclude_res", []), True)
+            self.settle = {"px": float(stl.get("px", 3.0)) if isinstance(stl, dict) else 3.0,
+                           "A": zA, "B": zB,
+                           "trueA": (self.lab - self.fitA_img).astype(np.float32),
+                           "trueB": (other.lab - self.fitB_img).astype(np.float32),
+                           "holeA": (1.0 - wA) > 1e-4, "holeB": (1.0 - wB) > 1e-4}
+        self.flow_stag = None
         # round 4: `flow` moves the two residual textures along a transport
         # map between their bright (or dark) features while they mix, so a
         # texture travels to its counterpart instead of fading in place
         self.flow = None
         fl = sp.get("flow")
+        if fl and fl.get("stagger"):
+            stg = fl["stagger"]
+            self.flow_stag = (float(np.clip(stg.get("amount", 0.3), 0.0, 0.8)),
+                              noise_field(s.h, s.w, float(stg.get("scale_px", 300)), s.seed + int(stg.get("seed", 23))))
         if fl and fl.get("from") == "layers":
             # the scene's one flow, from the matched layers' own motions; the
             # fields are read at the first render (every layer is prepared by then)
@@ -1425,6 +1829,55 @@ class Backdrop(Layer):
             gain = float(fl.get("gain", 1.0))
             self.flow = (F * gain, G * gain, fl.get("mix_window", [0.25, 0.75]), info)
 
+    def _actors(self, name):
+        """The rendered layers that act for the mask `name`: the layer itself,
+        a `region_of` it, a layer with the same mask rule on the same photo,
+        and any layer whose target (`to`) is one of those."""
+        alls = self.scene.layers_all
+        names = {name} | {l.name for l in alls if l.spec["mask"].get("rule") == "region_of" and l.spec["mask"].get("of") == name}
+        base = self.by_name.get(name)
+        if base is not None:
+            names |= {l.name for l in alls if l.src == base.src and l.spec["mask"] == base.spec["mask"]}
+        return [l for l in alls if l.render_it and l is not self and (l.name in names or l.spec.get("to") in names)]
+
+    def _settled(self, t, p):
+        """The residuals of A and of B at t under `settle`: the filled residual
+        where the hole's layer is under way, the photo's own where it rests."""
+        st = self.settle
+        px = st["px"]
+        out = []
+        for side, idx, fill, true, own in (("A", 0, self.resA, st["trueA"], 100.0 * p),
+                                           ("B", 1, self.resB, st["trueB"], 100.0 * (1.0 - p))):
+            ss = []
+            for zone, acts in st[side]:
+                if acts is None:        # `"settle": false`: the fill stays (an unmixed layer lies over it)
+                    ss.append((zone, 1.0))
+                    continue
+                d = max(a.away(t)[idx] for a in acts) if acts else own
+                ss.append((zone, float(smoothstep(d / px))))
+            moving = [v for (_, v), (_, acts) in zip(ss, st[side]) if acts is not None]
+            s_own = max(moving) if moving else float(smoothstep(own / px))
+            vals = [v for _, v in ss] + [s_own]
+            if min(vals) >= 1.0:
+                out.append(fill)
+                continue
+            # the own hole (the matte's edge) follows the moving layers; a
+            # named zone takes its own layer's value; where zones overlap the
+            # fill wins (an unmixed layer over the photo's own pixels would
+            # count its sky twice: 88 % of frame 1's error on mismatch_6 lay
+            # in the 20 px above the buildings, measured 2026-09-28)
+            named = np.zeros(st["hole" + side].shape, bool)
+            W = np.zeros(st["hole" + side].shape, np.float32)
+            for zone, v in ss:
+                W = np.where(zone, np.maximum(W, np.float32(v)), W)
+                named |= zone
+            W = np.where(st["hole" + side] & ~named, np.float32(s_own), W)
+            if not W.any():
+                out.append(true)
+                continue
+            out.append(true + W[..., None] * (fill - true))
+        return out[0], out[1]
+
     def render(self, t):
         p = self.progress(t)
         fA, fB = self.fitA_img, self.fitB_img
@@ -1432,7 +1885,28 @@ class Backdrop(Layer):
             u = self.under[..., None]
             fA = fA * (1 - u) + fB * u
         fit = fA * (1 - p) + fB * p
-        if self.flow is not None and 0 < p < 1:
+        if self.settle is not None or self.flow_stag is not None:
+            resA, resB = self._settled(t, p) if self.settle is not None else (self.resA, self.resB)
+            if self.flow is not None and 0 < p < 1:
+                if self.flow[0] == "layers":
+                    _, sg, kp, mw, gain, names = self.flow
+                    F, G = self.scene.layer_flow(sg, kp, names)
+                    F, G = F * gain, G * gain
+                else:
+                    F, G, mw, _ = self.flow
+                uu = self.linear(t)
+                if self.flow_stag is not None:
+                    amt, nz = self.flow_stag
+                    q = smoothstep((np.clip((uu - amt * nz) / max(1.0 - amt, 1e-6), 0, 1) - mw[0]) / max(mw[1] - mw[0], 1e-6))[..., None]
+                    self.last_q = q[..., 0]
+                else:
+                    q = float(smoothstep((uu - mw[0]) / max(mw[1] - mw[0], 1e-6)))
+                ra = warp_along(np.ascontiguousarray(resA), F, p, cv2.BORDER_REFLECT_101, exact=True)
+                rb = warp_along(np.ascontiguousarray(resB), G, 1.0 - p, cv2.BORDER_REFLECT_101, exact=True)
+                lab = fit + ra * (1 - q) + rb * q
+            else:
+                lab = fit + resA * (1 - p) + resB * p
+        elif self.flow is not None and 0 < p < 1:
             if self.flow[0] == "layers":
                 _, sg, kp, mw, gain, names = self.flow
                 F, G = self.scene.layer_flow(sg, kp, names)
@@ -1463,14 +1937,22 @@ class Backdrop(Layer):
 def build_layers(scene, score):
     by_name = {}
     layers = []
+    scene.pair = score["pair"]
+    scene.layers_dir = score.get("layers_dir", LAYERS_DIR)
     for sp in score["layers"]:
         cls = Backdrop if sp.get("action") == "backdrop" else Layer
         lay = cls(scene, sp, by_name)
         by_name[lay.name] = lay
         layers.append(lay)
     scene.layers_all = layers
-    for lay in layers:          # masks first, then the actions that read other masks
-        lay._prep()
+    # masks first, then the actions that read other masks; the backdrops
+    # before the rest (round 5: `unmix` reads a backdrop's filled estimate)
+    for lay in layers:
+        if isinstance(lay, Backdrop):
+            lay._prep()
+    for lay in layers:
+        if not isinstance(lay, Backdrop):
+            lay._prep()
     return sorted([l for l in layers if l.render_it], key=lambda l: l.depth)
 
 
@@ -1568,6 +2050,295 @@ def auto_score(pair, seconds=3.0, fps=30, max_long=1920, seed=0):
 
 
 # ---------------------------------------------------------------------------
+# The per-element automatic score (round 5, 2026-09-28). The owner on round 4's
+# automatic clips: "i would expect building from A to transform into closest
+# bulding in B and cloud in A naturally flow into cloud in B independently.You
+# could have used depth, P and R data to decide that"; "people to tranfrom into
+# other people from A group to B group"; a wall or a ceiling "transforming and
+# not just moving it as cheap 2d cutout"; and each time "this is example , do
+# not overfit!". Fixed rules, no per-pair parameter; the elements come from
+# the layer source (labels + instances + depth), the matching from a cost over
+# label group, position, size and depth; the score it writes is the file an
+# operator edits.
+# ---------------------------------------------------------------------------
+
+AUTO2 = {
+    "min_share": 0.004,        # an element under this share of the canvas stays in the rest
+    "max_layers": 10,          # matched groups rendered as layers (largest first); the others stay in the rest
+    "sky_min": 0.05,           # both photos hold a sky when the sky groups cover this share in each
+    "sky_groups": ("sky", "cloud", "luminary", "star"),
+    "cost_same_label": 0.0, "cost_same_group": 0.15, "cost_neighbour": 0.5,
+    "w_pos": 1.0,              # x the centroid distance over the canvas diagonal
+    "w_size": 0.25,            # x |ln(area_a / area_b)|
+    "w_depth": 0.5,            # x |median disparity a - b|
+    "max_cost": 1.1,           # no match above this
+    "max_dist": 0.35,          # nor between centroids farther apart than this x the canvas diagonal
+                               # (measured 2026-09-28: a tree matched 1,037 px across mismatch_1)
+    "attach_cost": 1.6,        # a leftover joins a matched group of its kind under this
+    "ground_ratio": 0.4,       # the second photo's ground under this x the first's: the ground has no counterpart
+    # things that keep their shape move as a whole (`ot_rigid`) and start at once; the rest flows and starts place by place
+    "rigid_groups": ("building", "structure", "vehicle", "furniture", "appliance", "opening", "picture", "wall",
+                     "ceiling", "floor", "light", "object"),
+    "rigid": 0.6,
+    "sun_fill": 0.4,           # the photometric sun: the blob fills this share of its enclosing circle
+    "max_orphans": 4,          # elements of the second photo with no counterpart that appear in place (largest first)
+}
+
+# the label groups and their neighbours: the layer source's proposal (layer_source.py, 2026-09-28)
+def _groups():
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import layer_source as LS
+    return LS.GROUP_NEIGHBOURS
+
+
+def match_elements(ea, eb, diag, cfg=AUTO2, neighbours=None):
+    """One-to-one matches by increasing cost, then every leftover joins the
+    matched group of its kind it is closest to. Returns a list of groups
+    {"a": [elements], "b": [elements], "cost": c}. Deterministic: ties go to
+    the lower element ids."""
+    nb = neighbours or {}
+
+    def kind(x, y):
+        if x["label"] == y["label"]:
+            return cfg["cost_same_label"]
+        if x["group"] == y["group"]:
+            return cfg["cost_same_group"]
+        if y["group"] in nb.get(x["group"], []) or x["group"] in nb.get(y["group"], []):
+            return cfg["cost_neighbour"]
+        return None
+
+    def cost(x, y):
+        k = kind(x, y)
+        if k is None:
+            return None
+        d = math.hypot(x["centroid"][0] - y["centroid"][0], x["centroid"][1] - y["centroid"][1]) / diag
+        if d > cfg["max_dist"]:
+            return None
+        return (k + cfg["w_pos"] * d + cfg["w_size"] * abs(math.log(max(x["area_share"], 1e-6) / max(y["area_share"], 1e-6)))
+                + cfg["w_depth"] * abs(x["median_disparity"] - y["median_disparity"]))
+    cand = []
+    for x in ea:
+        for y in eb:
+            c = cost(x, y)
+            if c is not None and c <= cfg["max_cost"]:
+                cand.append((round(c, 6), x["id"], y["id"]))
+    cand.sort()
+    used_a, used_b, groups = set(), set(), []
+    by_a = {x["id"]: x for x in ea}
+    by_b = {y["id"]: y for y in eb}
+    for c, ia, ib in cand:
+        if ia in used_a or ib in used_b:
+            continue
+        used_a.add(ia)
+        used_b.add(ib)
+        groups.append({"a": [by_a[ia]], "b": [by_b[ib]], "cost": c})
+    for side, els, used, other in (("a", ea, used_a, "b"), ("b", eb, used_b, "a")):
+        for x in els:
+            if x["id"] in used:
+                continue
+            best = None
+            for gi, g in enumerate(groups):
+                cs = [cost(x, y) if side == "a" else cost(y, x) for y in g[other]]
+                cs = [c for c in cs if c is not None]
+                if cs and min(cs) <= cfg["attach_cost"] and (best is None or min(cs) < best[0]):
+                    best = (min(cs), gi)
+            if best is not None:
+                groups[best[1]][side].append(x)
+                used.add(x["id"])
+    return groups
+
+
+def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920, cfg=AUTO2):
+    """The per-element automatic score. See the section comment."""
+    A, B = canvas_pair(pair, max_long)
+    h, w = A.shape[:2]
+    diag = math.hypot(w, h)
+    meta = {}
+    for src, sfx in (("A", "S"), ("B", "F")):
+        f = ROOT / layers_dir / f"{pair}_{sfx}" / "layers.json"
+        if not f.exists():
+            raise SystemExit(f"no layers for {pair}_{sfx}: run .venv/bin/python scripts/research/layer_source.py {pair}_{sfx}")
+        meta[src] = json.loads(f.read_text())
+        cw, ch = meta[src]["canvas"]
+        if (cw, ch) != (w, h):
+            # centroids scale with the canvas
+            for e in meta[src]["elements"]:
+                e["centroid"] = [e["centroid"][0] * w / cw, e["centroid"][1] * h / ch]
+    sky_g = tuple(cfg["sky_groups"])
+    share = [sum(e["area_share"] for e in meta[s_]["elements"] if e["group"] in sky_g) for s_ in ("A", "B")]
+    has_sky = all(v >= cfg["sky_min"] for v in share)
+    nb = _groups()
+    big = {s_: [e for e in meta[s_]["elements"] if e["area_share"] >= cfg["min_share"]] for s_ in ("A", "B")}
+    if has_sky:
+        things = {s_: [e for e in big[s_] if e["group"] not in sky_g] for s_ in ("A", "B")}
+        lights = {s_: [e for e in big[s_] if e["group"] == "luminary"] for s_ in ("A", "B")}
+        clouds = {s_: [e for e in big[s_] if e["group"] == "cloud"] for s_ in ("A", "B")}
+    else:
+        things = big
+        lights = {"A": [], "B": []}
+        clouds = {"A": [], "B": []}
+    groups = match_elements(things["A"], things["B"], diag, cfg, nb)
+    groups.sort(key=lambda g: (-(sum(e["area_share"] for e in g["a"]) + sum(e["area_share"] for e in g["b"])), g["a"][0]["id"]))
+    kept, rest = groups[:cfg["max_layers"]], groups[cfg["max_layers"]:]
+    lum = match_elements(lights["A"], lights["B"], diag, cfg, nb)[:1]
+    cl = match_elements(clouds["A"], clouds["B"], diag, cfg, nb)[:3]
+    ground = [sum(e["area_share"] for e in meta[s_]["elements"] if e["group"] not in sky_g) for s_ in ("A", "B")]
+    # the ground of the first photo has no counterpart when the second holds under `ground_ratio` of it
+    melt = has_sky and ground[1] < cfg["ground_ratio"] * ground[0]
+    # an element of the second photo with no counterpart appears where it stands; it is not a
+    # target of the ground's transport (measured by eye 2026-09-28 on mismatch_6: the ground of A
+    # was carried to the air-conditioning unit at the top of B as a smear across the sky)
+    grouped_b = {e["id"] for g in groups for e in g["b"]}
+    orphans = sorted([e for e in things["B"] if e["id"] not in grouped_b], key=lambda e: (-e["area_share"], e["id"]))
+    orphans = orphans[:cfg["max_orphans"]] if has_sky else []
+    # no pair of lights by their labels: the photometric rule of the first automatic score (a blob
+    # above L 92 of 0.03-3 % of the canvas inside each sky; measured 2026-09-28 on mismatch_4: the
+    # labels found no sun above `min_share` and the two suns crossed as a double disc)
+    sun_rule = False
+    if has_sky and not lum:
+        sc_ = Scene(A, B, 0)
+        sc_.pair, sc_.layers_dir = pair, layers_dir
+        suns = []
+        for src in ("A", "B"):
+            gm = sc_.mask({"name": "_g" + src, "from": src, "mask": {"rule": "element", "not_groups": list(sky_g), "soft": 2}})
+            hard = ((sc_.lab[src][..., 0] > 92.0) & (gm < 0.5)).astype(np.uint8)
+            n_, lb_, st_, _ = cv2.connectedComponentsWithStats(hard)
+            if n_ < 2:
+                suns.append((0.0, 0.0))
+                continue
+            i_ = 1 + int(np.argmax(st_[1:, cv2.CC_STAT_AREA]))
+            cs_, _ = cv2.findContours((lb_ == i_).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            _, r_ = cv2.minEnclosingCircle(max(cs_, key=cv2.contourArea))
+            area_ = float(st_[i_, cv2.CC_STAT_AREA])
+            suns.append((area_ / (h * w), area_ / max(math.pi * r_ * r_, 1.0)))
+        # a sun is compact: it fills its enclosing circle (mismatch_4: 0.62 and 0.46; the bright
+        # clouds of mismatch_7: 0.28 and 0.06; five pairs measured, 2026-09-28)
+        sun_rule = all(0.0003 < v < 0.03 and f_ >= cfg["sun_fill"] for v, f_ in suns)
+
+    def disp(g):
+        v = [e["median_disparity"] for e in g["a"] + g["b"]]
+        return sum(v) / len(v)
+    order = sorted(range(len(kept)), key=lambda i: (disp(kept[i]), i))          # far first
+    layers = []
+    names_el = []
+    facts = {"sky_share": [round(v, 3) for v in share], "route": ("sky + elements" if has_sky else "elements"),
+             "elements": [len(meta["A"]["elements"]), len(meta["B"]["elements"])],
+             "considered": [len(things["A"]), len(things["B"])], "matched_groups": len(groups), "layers": len(kept),
+             "matches": []}
+    # the targets first (masks of B), then the layers of A
+    for rank, gi in enumerate(order):
+        g = kept[gi]
+        nm = f"e{rank}_{g['a'][0]['label'].replace(' ', '_')}"
+        layers.append({"name": nm + "_b", "from": "B", "render": False,
+                       "mask": {"rule": "element", "ids": sorted(e["id"] for e in g["b"]), "soft": 2}})
+        names_el.append(nm)
+        facts["matches"].append({"layer": nm, "a": [f"{e['label']}#{e['id']}" for e in g["a"]],
+                                 "b": [f"{e['label']}#{e['id']}" for e in g["b"]], "cost": g["cost"],
+                                 "mean_disparity": round(disp(g), 3)})
+    if lum:
+        layers.append({"name": "light_b", "from": "B", "render": False,
+                       "mask": {"rule": "element", "ids": sorted(e["id"] for e in lum[0]["b"]), "soft": 12}, "unmix": "sky"})
+        facts["light"] = {"a": [f"{e['label']}#{e['id']}" for e in lum[0]["a"]], "b": [f"{e['label']}#{e['id']}" for e in lum[0]["b"]]}
+    for k, g in enumerate(cl):
+        layers.append({"name": f"cloud{k}_b", "from": "B", "render": False,
+                       "mask": {"rule": "element", "ids": sorted(e["id"] for e in g["b"]), "soft": 16}, "unmix": "sky"})
+    if cl:
+        facts["clouds"] = [{"a": [f"{e['label']}#{e['id']}" for e in g["a"]], "b": [f"{e['label']}#{e['id']}" for e in g["b"]],
+                            "cost": g["cost"]} for g in cl]
+    if sun_rule:
+        facts["light"] = {"rule": "a compact blob above L 92 inside each sky", "share": [round(v, 5) for v, _ in suns],
+                          "circle_fill": [round(f_, 2) for _, f_ in suns]}
+    facts["ground_share"] = [round(v, 3) for v in ground]
+    facts["ground"] = "melts into the sky's parts" if melt else ("transforms into the ground" if has_sky else "none: the rest follows the elements")
+    n = max(len(order), 1)
+    if orphans:
+        facts["appear_in_place"] = [f"{e['label']}#{e['id']}" for e in orphans]
+    if has_sky:
+        gb = {"rule": "element", "not_groups": list(sky_g), "soft": 2}
+        if orphans:
+            gb["minus_ids"] = [e["id"] for e in orphans]
+        layers.append({"name": "ground_b", "from": "B", "render": False, "mask": gb})
+        layers.append({"name": "sky_b", "from": "B", "render": False, "mask": {"rule": "invert", "of": "ground_b"}})
+        sky = {"name": "sky", "from": "A", "mask": {"rule": "invert", "of": "ground"}, "depth": 0, "action": "backdrop", "to": "sky_b",
+               "opaque": True, "fit2d": True, "fill_sigma": 60, "fill_scales": [6, 18, 54, 162], "settle": {"px": 3.0},
+               "window": [0.0, 0.85], "curve": "smootherstep",
+               "minus_res": [{"layer": "ground", "full": True, "dilate": 4, "soft": 2}],
+               "exclude_res": [{"layer": "ground_b", "full": True, "dilate": 4, "soft": 2}],
+               "flow": {"from": "layers", "sigma": 0.12, "kappa": 0.02, "mix_window": [0.25, 0.75],
+                        "stagger": {"amount": 0.35, "scale_px": 320, "seed": 23}}}
+        unmixed = (["light"] if lum else []) + [f"cloud{k}" for k in range(len(cl))]
+        if unmixed:
+            sky["minus"] = [{"layer": nm_, "full": True, "dilate": 0, "soft": 2, "settle": False} for nm_ in unmixed]
+            sky["exclude"] = [{"layer": nm_ + "_b", "full": True, "dilate": 0, "soft": 2, "settle": False} for nm_ in unmixed]
+        for k, e in enumerate(orphans):
+            sky["exclude_res"].append({"layer": f"new{k}_{e['label'].replace(' ', '_')}", "full": True, "dilate": 4, "soft": 2})
+        if sun_rule:
+            layers.append({"name": "sun_b", "from": "B", "mask": {"rule": "sun", "within": "sky_b", "thr": 92, "grow": 6}, "render": False})
+            sky["minus"] = sky.get("minus", []) + ["sun"]
+            sky["exclude"] = sky.get("exclude", []) + ["sun_b"]
+        base = {"name": "ground", "from": "A", "mask": {"rule": "element", "not_groups": list(sky_g), "soft": 2}, "depth": 1, "to": "ground_b"}
+        if melt:
+            # the ground has no counterpart: it transforms into parts of the second photo's sky, where it stands
+            layers.append({"name": "sky_parts_b", "from": "B", "render": False,
+                           "mask": {"rule": "parts", "within": "sky_b", "lo_px": 20, "hi_px": 120, "share": 0.5, "soft": 0.5, "extend": True}})
+            base.update({"to": "sky_parts_b", "to_backdrop": "sky", "colour_rel": True, "colour_curve": "smootherstep",
+                         "colour_window": [0.0, 0.7], "gain_clip": [0.4, 1.0], "ot_local": 0.06, "ot_floor": 0.3})
+    else:
+        layers.append({"name": "all_b", "from": "B", "render": False, "mask": {"rule": "all"}})
+        sky = None
+        # no sky: the rest of the frame gathers into the second photo's own lighter parts, place by place
+        base = {"name": "rest", "from": "A", "mask": {"rule": "all"}, "depth": 0, "to": "all_b",
+                "ot_mass": "bright", "ot_local": 0.06, "ot_floor": 0.3}
+    base = {**{"action": "morph_to", "window": [0.08, 0.92], "curve": "smootherstep", "mix_window": [0.3, 0.7],
+               "ot_grid": 64, "ot_eps": 0.04, "ot_mass": "alpha", "ot_border": 0.2,
+               "field": {"from": "layers", "fallback": "ot", "sigma": 0.10, "kappa": 0.02},
+               "stagger": {"amount": 0.4, "scale_px": 360, "seed": 29}}, **base}
+    layers.append(base)       # the ground's mask exists before the sky's (an `invert` of it)
+    if sky is not None:
+        layers.append(sky)
+    if sun_rule:
+        layers.append({"name": "sun", "from": "A", "mask": {"rule": "sun", "within": "sky", "thr": 92, "grow": 6}, "depth": 0.5,
+                       "action": "move_to", "to": "sun_b", "window": [0.15, 0.7], "curve": "smootherstep", "recolor_to": "sun_b",
+                       "shutter": 0.5})
+        layers.append({"name": "sun_b_layer", "from": "B", "mask": {"rule": "sun", "within": "sky_b", "thr": 92, "grow": 6}, "depth": 0.55,
+                       "action": "materialise", "order": "luma", "noise_gain": 0.0, "feather": 0.3, "window": [0.68, 0.8], "curve": "ease"})
+    for k, g in enumerate(cl):
+        layers.append({"name": f"cloud{k}", "from": "A", "mask": {"rule": "element", "ids": sorted(e["id"] for e in g["a"]), "soft": 16},
+                       "unmix": "sky", "depth": 0.6 + 0.01 * k, "action": "morph_to", "to": f"cloud{k}_b",
+                       "window": [round(0.1 + 0.05 * k, 3), round(0.84 + 0.05 * k, 3)], "curve": "smootherstep", "mix_window": [0.3, 0.7],
+                       "ot_grid": 64, "ot_eps": 0.04, "ot_mass": "alpha", "ot_border": 0.2,
+                       "stagger": {"amount": 0.3, "scale_px": 300, "seed": 35 + k}})
+    if lum:
+        layers.append({"name": "light", "from": "A", "mask": {"rule": "element", "ids": sorted(e["id"] for e in lum[0]["a"]), "soft": 12},
+                       "unmix": "sky", "depth": 0.5, "action": "morph_to", "to": "light_b", "window": [0.12, 0.8], "curve": "smootherstep",
+                       "mix_window": [0.3, 0.7], "ot_grid": 64, "ot_eps": 0.04, "ot_mass": "alpha",
+                       "stagger": {"amount": 0.25, "scale_px": 200, "seed": 31}})
+    for rank, gi in enumerate(order):
+        g = kept[gi]
+        r = 1.0 - rank / max(n - 1, 1) if n > 1 else 0.0       # the nearest starts first
+        t0 = round(0.10 + 0.14 * (1.0 - r), 3)
+        lay = {"name": names_el[rank], "from": "A",
+               "mask": {"rule": "element", "ids": sorted(e["id"] for e in g["a"]), "soft": 2},
+               "depth": 2 + rank, "action": "morph_to", "to": names_el[rank] + "_b",
+               "window": [t0, round(t0 + 0.72, 3)], "curve": "smootherstep", "mix_window": [0.3, 0.7],
+               "ot_grid": 64, "ot_eps": 0.04, "ot_mass": "alpha"}
+        if g["a"][0]["group"] in cfg["rigid_groups"]:
+            lay["ot_rigid"] = cfg["rigid"]
+        else:
+            lay["stagger"] = {"amount": 0.3, "scale_px": 260, "seed": 41 + rank}
+        layers.append(lay)
+    for k, e in enumerate(orphans):
+        layers.append({"name": f"new{k}_{e['label'].replace(' ', '_')}", "from": "B",
+                       "mask": {"rule": "element", "ids": [e["id"]], "soft": 3}, "depth": 20 + k, "action": "materialise",
+                       "window": [0.55, 0.95], "curve": "smootherstep", "order": "edge", "edge_norm": "px", "edge_thr": 0.0,
+                       "speed_density": 0.0, "front_soft_px": 30, "front_wide_px": 90, "wide_gain": 0.5, "turb_px_amp": 12, "turb_px": 16})
+    facts["rest"] = [f"{e['label']}#{e['id']}" for g in rest for e in g["a"]]
+    return {"pair": pair, "tag": "auto_r5", "seconds": seconds, "fps": fps, "max_long": max_long, "layers_dir": layers_dir,
+            "owner": "Automatic per-element score (fixed rules, no per-pair parameter; layered_probe.py --auto2): edit this file to tune the scene.",
+            "auto_facts": facts, "layers": layers}
+
+
+# ---------------------------------------------------------------------------
 # Measurements on the composite (round 3, 2026-09-27): the numbers behind the
 # owner's three faults, so a fix is judged against a figure, not by eye
 # ---------------------------------------------------------------------------
@@ -1602,6 +2373,7 @@ def measure_layers(layers, n):
                     "peak_ratio": round(mx / max(float(mv.mean()), 1e-6), 2),
                     "plateau_share": round(float((mv >= 0.9 * mx).sum() / len(mv)), 2)}
         if lay.action == "morph_to":
+            lay.fields()
             mag = np.sqrt((lay.F ** 2).sum(-1))
             sel = lay.alpha0 > 0.5
             us = [lay.linear(t) for t in ts]
@@ -1612,7 +2384,8 @@ def measure_layers(layers, n):
                 "field_mean_px": round(float(mag[sel].mean()), 1) if sel.any() else 0.0,
                 "field_p95_px": round(float(np.percentile(mag[sel], 95)), 1) if sel.any() else 0.0,
                 "peak_px_per_frame_p95": round(float(np.percentile(mag[sel], 95)) * dp, 2) if sel.any() else 0.0,
-                "mix_window": lay.mix_window}
+                "mix_window": lay.mix_window,
+                "rigid": lay.ot_info.get("rigid"), "nonrigid_rms_px": lay.ot_info.get("nonrigid_rms_px")}
         if getattr(lay, "flow", None) is not None:
             if lay.flow[0] == "layers":
                 F, _ = lay.scene.layer_flow(lay.flow[1], lay.flow[2], lay.flow[5])
@@ -1894,6 +2667,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--score", action="append", default=[], help="a score JSON (repeatable)")
     ap.add_argument("--auto", action="append", default=[], help="a pair id: write scores/auto/<pair>.json by the fixed rules and render it (repeatable)")
+    ap.add_argument("--auto2", action="append", default=[], help="a pair id: write scores/auto/<pair>_v2.json by the per-element rules (needs the layer source's output) and render it (repeatable)")
+    ap.add_argument("--layers-dir", default=LAYERS_DIR, help="the layer source's output folder, relative to the repo")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ref", action="append", default=[], help="tag=DIR: copy a reference clip's outputs beside the probe (pair from the first --score)")
     ap.add_argument("--pair", default="", help="pair for --ref when no --score is given")
@@ -1914,6 +2689,13 @@ def main():
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(json.dumps(auto, indent=1) + "\n")
             print(f"  auto {pair_id}: {auto['auto_facts']}", flush=True)
+            a.score.append(str(dst))
+        for pair_id in a.auto2:
+            auto = auto_score2(pair_id, a.layers_dir)
+            dst = ROOT / "scripts" / "research" / "scores" / "auto" / f"{pair_id}_v2.json"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(json.dumps(auto, indent=1) + "\n")
+            print(f"  auto2 {pair_id}: {json.dumps(auto['auto_facts'])}", flush=True)
             a.score.append(str(dst))
         for sc in a.score:
             score = json.loads(Path(sc).read_text())

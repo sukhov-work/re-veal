@@ -1,0 +1,290 @@
+{
+ "pair": "mismatch_1",
+ "tag": "auto_r5",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "layers_dir": "benchmarks/runs/2026-09-28/layers",
+ "owner": "Automatic per-element score (fixed rules, no per-pair parameter; layered_probe.py --auto2): edit this file to tune the scene.",
+ "auto_facts": {
+  "sky_share": [
+   0.809,
+   0.598
+  ],
+  "route": "sky + elements",
+  "elements": [
+   15,
+   10
+  ],
+  "considered": [
+   2,
+   4
+  ],
+  "matched_groups": 1,
+  "layers": 1,
+  "matches": [
+   {
+    "layer": "e0_building",
+    "a": [
+     "building#6"
+    ],
+    "b": [
+     "building#4",
+     "tree#5",
+     "plant#8",
+     "wall#10"
+    ],
+    "cost": 0.329961,
+    "mean_disparity": 0.711
+   }
+  ],
+  "clouds": [
+   {
+    "a": [
+     "cloud#2"
+    ],
+    "b": [
+     "cloud#2"
+    ],
+    "cost": 0.354585
+   }
+  ],
+  "ground_share": [
+   0.191,
+   0.402
+  ],
+  "ground": "transforms into the ground",
+  "rest": []
+ },
+ "layers": [
+  {
+   "name": "e0_building_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     4,
+     5,
+     8,
+     10
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "cloud0_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2
+    ],
+    "soft": 16
+   },
+   "unmix": "sky"
+  },
+  {
+   "name": "ground_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "not_groups": [
+     "sky",
+     "cloud",
+     "luminary",
+     "star"
+    ],
+    "soft": 2
+   }
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "invert",
+    "of": "ground_b"
+   }
+  },
+  {
+   "action": "morph_to",
+   "window": [
+    0.08,
+    0.92
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_border": 0.2,
+   "field": {
+    "from": "layers",
+    "fallback": "ot",
+    "sigma": 0.1,
+    "kappa": 0.02
+   },
+   "stagger": {
+    "amount": 0.4,
+    "scale_px": 360,
+    "seed": 29
+   },
+   "name": "ground",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "not_groups": [
+     "sky",
+     "cloud",
+     "luminary",
+     "star"
+    ],
+    "soft": 2
+   },
+   "depth": 1,
+   "to": "ground_b"
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "invert",
+    "of": "ground"
+   },
+   "depth": 0,
+   "action": "backdrop",
+   "to": "sky_b",
+   "opaque": true,
+   "fit2d": true,
+   "fill_sigma": 60,
+   "fill_scales": [
+    6,
+    18,
+    54,
+    162
+   ],
+   "settle": {
+    "px": 3.0
+   },
+   "window": [
+    0.0,
+    0.85
+   ],
+   "curve": "smootherstep",
+   "minus_res": [
+    {
+     "layer": "ground",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "exclude_res": [
+    {
+     "layer": "ground_b",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "flow": {
+    "from": "layers",
+    "sigma": 0.12,
+    "kappa": 0.02,
+    "mix_window": [
+     0.25,
+     0.75
+    ],
+    "stagger": {
+     "amount": 0.35,
+     "scale_px": 320,
+     "seed": 23
+    }
+   },
+   "minus": [
+    {
+     "layer": "cloud0",
+     "full": true,
+     "dilate": 0,
+     "soft": 2,
+     "settle": false
+    }
+   ],
+   "exclude": [
+    {
+     "layer": "cloud0_b",
+     "full": true,
+     "dilate": 0,
+     "soft": 2,
+     "settle": false
+    }
+   ]
+  },
+  {
+   "name": "cloud0",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2
+    ],
+    "soft": 16
+   },
+   "unmix": "sky",
+   "depth": 0.6,
+   "action": "morph_to",
+   "to": "cloud0_b",
+   "window": [
+    0.1,
+    0.84
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_border": 0.2,
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 300,
+    "seed": 35
+   }
+  },
+  {
+   "name": "e0_building",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     6
+    ],
+    "soft": 2
+   },
+   "depth": 2,
+   "action": "morph_to",
+   "to": "e0_building_b",
+   "window": [
+    0.24,
+    0.96
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6
+  }
+ ]
+}
