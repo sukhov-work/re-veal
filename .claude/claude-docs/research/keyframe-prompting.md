@@ -146,6 +146,23 @@ bright blob). Next: clean-ups at three clip times (0.25, 0.5, 0.75) of one round
 and with Qwen, then the deterministic engine between consecutive keyframes; the owner's boxes
 decide. Not graded as of 2026-09-27.
 
+### 5.3 FLUX.2 klein 9B at 8-bit (2026-09-27 night; DECISIONS 2026-09-27 night, Track B3)
+
+The owner withdrew FLUX.2 [dev] ("both becauase of size and quants, i don't want degraded Q 4bit
+anyways"), asked for klein 9B, and set 8-bit files as the standing precision. The same three clean-up
+tasks as kf_11–kf_13, same references, prompts and seed:
+
+| run | reference | generate s (4B) | MAD to the composite (4B) | MAD to its 4B twin |
+|---|---|---|---|---|
+| kf_14 | the round-3 composite of mismatch_4 | 68.12 (38.56) | 25.07 (32.85) | 17.44 |
+| kf_15 | the round-4 composite of mismatch_4 | 67.49 (38.83) | 22.00 (39.22) | 20.37 |
+| kf_16, kf_16b | the round-4 composite of mismatch_6 at 0.62 | 49.54 (28.97) | 11.97 (12.11) | 6.06; two runs byte-identical |
+
+Read: 9B costs 1.7 × the time and twice the memory of 4B (−18 GiB against −9 GiB of MemAvailable) and
+changes the composite less on the sunset pair; on the night pair the two are 6 levels apart. Qwen
+(kf_07: 14.87 from the composite, 969 s) still changes it least. Which one looks best is the owner's
+call; none is graded as of 2026-09-27.
+
 ## 6. Gaps
 
 - No source states what Qwen-Image-Edit-2511 does with an instruction it cannot satisfy from the

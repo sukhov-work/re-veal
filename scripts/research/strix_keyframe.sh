@@ -24,6 +24,8 @@
 #   PROMPT="..." SEED=20260926 ./strix_keyframe.sh before.png after.png kf_01
 #   ... ./strix_keyframe.sh before.png - kf_02        # single reference (the base picture only; 2026-09-27)
 #   MODEL=klein MODELS=~/keyframes/models_klein ... ./strix_keyframe.sh before.png - kf_10   # FLUX.2 klein 4B (2026-09-27 evening)
+#   MODEL=klein MODELS=~/keyframes/models_klein9 KLEIN_DIFFUSION=flux-2-klein-9b-Q8_0.gguf KLEIN_LLM=Qwen3-8B-Q8_0.gguf \
+#     NEED_GB=23 ... ./strix_keyframe.sh before.png - kf_14   # FLUX.2 klein 9B (2026-09-27 night; 18.86 GB of weights + 4 GB)
 # MODEL=qwen (default) runs the Qwen-Image-Edit-2511 command unchanged. MODEL=klein runs FLUX.2 [klein] 4B
 # with the flags of stable-diffusion.cpp docs/flux2.md at the image's commit 2f886889 (--cfg-scale 1.0
 # --steps 4 --sampling-method euler --diffusion-fa; --llm = Qwen3-4B; no --llm_vision, --flow-shift or
@@ -41,8 +43,19 @@ PROMPT="${PROMPT:?prompt}"; SEED="${SEED:-20260926}"
 MODEL="${MODEL:-qwen}"   # qwen | klein (2026-09-27 evening)
 case "$MODEL" in qwen|klein) ;; *) echo "MODEL must be qwen or klein, got '$MODEL'" >&2; exit 2;; esac
 KLEIN_VAE="${KLEIN_VAE:-flux-2-klein-4b-vae.safetensors}"
+# the klein transformer and text encoder files (2026-09-27 night); the defaults are the klein 4B pair. klein 9B needs
+# Qwen3-8B as its --llm (docs/flux2.md) and more memory: NEED_GB is computed from the files below unless it is given
+KLEIN_DIFFUSION="${KLEIN_DIFFUSION:-flux-2-klein-4b-Q8_0.gguf}"; KLEIN_LLM="${KLEIN_LLM:-Qwen3-4B-Q8_0.gguf}"
+# NEED_GB: qwen 26. klein: the three files' bytes in whole GB plus 6 (4 GB of buffers and the rounding), so the 4B
+# pair gives 14 as before and the 9B pair 24; a fixed 14 would let a 9B run pass the pre-flight (2026-09-27 night)
+if [ "$MODEL" = klein ]; then
+  if [ -z "${NEED_GB:-}" ]; then
+    kb=0; for f in "$MODELS/$KLEIN_DIFFUSION" "$MODELS/$KLEIN_LLM" "$MODELS/$KLEIN_VAE"; do
+      [ -f "$f" ] && kb=$(( kb + $(stat -c %s "$f" 2>/dev/null || stat -f %z "$f") )); done
+    NEED_GB=$(( kb / 1000000000 + 6 ))
+  fi
+else NEED_GB="${NEED_GB:-26}"; fi
 # klein weights: 4.30 GB diffusion Q8_0 + 4.28 GB Qwen3-4B Q8_0 + 0.17 GB VAE = 8.75 GB, + 4 GB buffers < 14 GB
-if [ "$MODEL" = klein ]; then NEED_GB="${NEED_GB:-14}"; else NEED_GB="${NEED_GB:-26}"; fi
 W="${W:-1024}"; H="${H:-1024}"          # output size; the canvas of mismatch_4 is 1920x1092, so W=1344 H=768 keeps its ratio (2026-09-26)
 MAX_VRAM="${MAX_VRAM:-20}"; MEM_CAP="${MEM_CAP:-12g}"   # the GPU budget (GiB) and the CPU-side cgroup cap; raise only after a measured failure
 DOCKER="${DOCKER:-sudo docker}"   # the user is not in the docker group on this box (2026-09-26)
@@ -88,8 +101,8 @@ $INHIBIT timeout 45m $DOCKER run --rm --init \
   --device /dev/dri --network none --read-only --tmpfs /tmp \
   --memory "$MEM_CAP" --memory-swap "$MEM_CAP" --pids-limit 256 --cpus 8 --oom-score-adj 1000 \
   -v "$MODELS":/models:ro -v "$IN":/in:ro -v "$OUT":/output "$IMG" \
-  --diffusion-model /models/flux-2-klein-4b-Q8_0.gguf \
-  --llm /models/Qwen3-4B-Q8_0.gguf \
+  --diffusion-model "/models/$KLEIN_DIFFUSION" \
+  --llm "/models/$KLEIN_LLM" \
   --vae "/models/$KLEIN_VAE" \
   "${REFS[@]}" -p "$PROMPT" \
   --cfg-scale 1.0 --steps 4 --sampling-method euler --diffusion-fa --vae-tiling \
@@ -100,7 +113,7 @@ fi
 cat > "$OUT/${NAME}.manifest.json" <<EOF
 {"image": "$IMG", "models": $(ls -1 "$MODELS" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().split()))'),
  "before": "$A", "after": "$B", "prompt": $(printf '%s' "$PROMPT" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))'),
- "model": "$MODEL", "seed": $SEED, "cfg": $([ "$MODEL" = klein ] && echo 1.0 || echo 2.5), "steps": $([ "$MODEL" = klein ] && echo 4 || echo 20), "sampler": "euler", "flow_shift": $([ "$MODEL" = klein ] && echo null || echo 3), "vae": "$([ "$MODEL" = klein ] && echo "$KLEIN_VAE" || echo qwen_image_vae.safetensors)", "size": [$W, $H], "max_vram": $MAX_VRAM, "mem_cap": "$MEM_CAP",
+ "model": "$MODEL", "seed": $SEED, "cfg": $([ "$MODEL" = klein ] && echo 1.0 || echo 2.5), "steps": $([ "$MODEL" = klein ] && echo 4 || echo 20), "sampler": "euler", "flow_shift": $([ "$MODEL" = klein ] && echo null || echo 3), "vae": "$([ "$MODEL" = klein ] && echo "$KLEIN_VAE" || echo qwen_image_vae.safetensors)", "diffusion_model": "$([ "$MODEL" = klein ] && echo "$KLEIN_DIFFUSION" || echo qwen-image-edit-2511-Q4_K_M.gguf)", "llm": "$([ "$MODEL" = klein ] && echo "$KLEIN_LLM" || echo Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf)", "size": [$W, $H], "max_vram": $MAX_VRAM, "mem_cap": "$MEM_CAP",
  "sha256": "$(sha256sum "$OUT/${NAME}.png" | cut -d' ' -f1)", "date": "$(date -Is)"}
 EOF
 echo "wrote $OUT/${NAME}.png and its manifest"
