@@ -1579,8 +1579,11 @@ building boders overlap".
 - The layer source: "i really like aggreagted  accuracy for all examples in etween `Grounding DINO B
   + SAM 2.1 L` + `layer source (layers.npz elements)` and of course depth and normals , so lets
   utilize all we can". SAM 2.1's processor needs torchvision (in the scratch environment only).
-- "sam3 is authorized": the owner's account has access; this laptop holds no Hugging Face token as of
-  2026-09-28 15:57 EEST, the box holds the owner's.
+- "sam3 is authorized": the owner's account has access; this laptop held no Hugging Face token at
+  2026-09-28 15:57 EEST. Amended 16:10 EEST the same day: the owner logged in ("hf auth was granted"),
+  and the access check on `facebook/sam3` passes from this laptop; nothing is downloaded yet (12
+  files, 6.90 GB, of which one 3.44 GB weights file is needed). `layer_source.py` sets `HF_HOME` to
+  the research weights folder, so the fetch names the token's path (`HF_TOKEN_PATH`).
 - "round 6 next".
 - Two questions of the owner, answered in the session's last message: the question on the clouds
   named no clips (it meant `layered_r5` against `layered_r5_flow` on mismatch_6, and the pick
