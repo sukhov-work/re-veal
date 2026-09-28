@@ -341,8 +341,10 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    Laplacian variance at the keyframe frames falls by 20 to 66 %, because matching a keyframe's
    contrast to its composite scales its detail down. None of the six clips is a candidate. Untested:
    a colour match at low frequency that keeps the keyframe's detail. Graded 2026-09-29: on
-   mismatch_6 "All keylayers in this example are inventing too much stuff"; on mismatch_4 both
-   keep "one picture" and "transforms" and lose "nothing invented".
+   mismatch_6 "All keylayers in this example are inventing too much stuff" and their "transitions
+   between states are just too discreet and dirty" (the owner confirmed on 2026-09-29 that this
+   names the keyframe clips); on mismatch_4 both keep "one picture" and "transforms" and lose
+   "nothing invented".
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.

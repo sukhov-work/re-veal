@@ -1972,8 +1972,9 @@ The owner's notes, verbatim:
    same buldings ) and morphed stuff around them even clouds", with "huge number of visual
    artifacts, noise , borders". The layered probe matches elements by label, position, size and
    depth and never by what the pixels show (§12.17.9 item 2).
-3. mismatch_6 and mismatch_4: "transitions between states are just too discreet and dirty";
-   `auto_r6` is "a bit messy in some boudaries" at the tree and the air-conditioning unit.
+3. mismatch_6 and mismatch_4: `auto_r6` is "a bit messy in some boudaries" at the tree and the
+   air-conditioning unit. "transitions between states are just too discreet and dirty" names the
+   keyframe clips and not the round-6 clips (amended 2026-09-29, 12.20.6).
 4. mismatch_5: "still looks more like simple crossfade / luma transtions".
 5. mismatch_3 and mismatch_2: the objects are "very crudely cut out of background with rough
    edges"; the shuffling of people and objects is "promising".
@@ -2001,6 +2002,14 @@ calls it "marginally better" and ticks the same three boxes for both.
 
 12.20.5 Round-7 targets, in the owner's words: "nothing is transforming there" and "reveal
 with solid margin" (mismatch_1, mismatch_7); buildings that are "really same buldings" keep
-their shapes while the rest morphs around them (mismatch_7), "improve and generalize"; "too
-discreet and dirty" (mismatch_6, mismatch_4); "crudely cut out of background with rough edges"
-(mismatch_3, mismatch_2); "simple crossfade / luma transtions" (mismatch_5).
+their shapes while the rest morphs around them (mismatch_7), "improve and generalize"; "a bit
+messy in some boudaries" (`auto_r6` on mismatch_6, the same on mismatch_4); "crudely cut out of
+background with rough edges" (mismatch_3, mismatch_2); "simple crossfade / luma transtions"
+(mismatch_5).
+
+12.20.6 Amendment, 2026-09-29. I asked which clips "transitions between states are just too
+discreet and dirty" names on mismatch_6. The owner (verbatim): "this was meant for keylayers samples, not for r6s".
+The sentence is a verdict on `keylayer_b` and `keylayer_c`, where a state is one of the three
+generated keyframes. It is not a target for `auto_r6` or `layered_r6`. mismatch_4's "many critiques
+apply same as in mismatch_6" then carries the boundaries of `auto_r6` and the keyframe clips. The
+first version of 12.20.2 item 3 and of 12.20.5 listed it as a round-7 target for both pairs.
