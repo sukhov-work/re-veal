@@ -1930,3 +1930,77 @@ Limits and what was not tried:
 3. Whether the redrawn clouds of kf_23 and kf_25 read as invented content rests on structure
    correlation (0.52, 0.40) and the subagent's eye only.
 4. `layered_diag.py` (seam, outline, rest) was not run: it imports the working-tree probe.
+
+### 12.20 Owner picks on round 6 and the directions that follow (2026-09-28, 22:43 UTC; `benchmarks/runs/2026-09-28/layered_r6/layered_picks.json`; verbatim in DECISIONS 2026-09-29)
+
+Result: `auto_r6` is picked as closer on mismatch_6, mismatch_5 and mismatch_3; no clip is picked on
+mismatch_4, mismatch_1, mismatch_7 and mismatch_2. The duplicate is gone by the owner's eye ("R6
+doens't have double building anymore"), and what replaced it on the two skyline pairs is rejected:
+"some form of reveal with solid margin , it looks pretty 2d and fake, nothing is transforming
+there". The keyframe clips invent too much on mismatch_6. Generated content is allowed as a helper,
+the layer source goes to the merged source with SAM 3, and the five automatic pairs stay automatic.
+
+| pair | closer | boxes (one picture / transforms / nothing invented) |
+|---|---|---|
+| mismatch_6 | `auto_r6` | `layered_r5_flow` yes/yes/yes; `layered_r6` yes/yes/no; `auto_r6` yes/yes/no; `keylayer_b` no/yes/no; `keylayer_c` yes/yes/no |
+| mismatch_4 | no pick | `layered_r5_stagger` yes/yes/yes; `layered_r6` yes/yes/yes; `auto_r6` yes/yes/yes; `keylayer_b` yes/yes/no; `keylayer_c` yes/yes/no |
+| mismatch_1 | `none` | `auto_r5` no/yes/yes; `auto_r6` no/yes/yes |
+| mismatch_7 | `none` | `auto_r5` no/yes/no; `auto_r6` no/yes/yes |
+| mismatch_5 | `auto_r6` | `auto_r5` no/yes/yes; `auto_r6` no/yes/yes |
+| mismatch_3 | `auto_r6` | `auto_r5` yes/yes/yes; `auto_r6` yes/yes/yes |
+| mismatch_2 | `none` | `auto_r5` yes/yes/yes; `auto_r6` yes/yes/yes |
+
+The owner's notes, verbatim:
+- mismatch_6: "auto_r6 looks interesting but a bit messy in some boudaries ( e.g tree in B and air conditioner on top closer to finish) compared to layered . All keylayers in this example are inventing too much stuff , but the main problem , transitions between states are just too discreet and dirty."
+- mismatch_4: "auto_r6 here looks marginally better they layered_r6 and  layered_r5_stagger but still many critiques apply same as in mismatch_6"
+- mismatch_1: "here auto_r6 looks better then auto_r5 but r5 simply looked horrible, so not much of an achievement. R6 doens't have double building anymore but instead you just do some form of reveal with solid margin , it looks pretty 2d and fake, nothing is transforming there, you simply replace buidling in A with cityscape from B via gradual reveal from the bottom"
+- mismatch_7: "here auto_r6 looks better then auto_r5 but r5 simply looked horrible, so not much of an achievement. R6 doens't have double building anymore but instead you just do some form of reveal with solid margin , it looks pretty 2d and fake, nothing is transforming there, you simply replace buildings in A with cityscape from B via gradual reveal from the bottom. But in this case it is even worse than in mismatch_1, because as i said before, in earlier responses. You really got it somewhat right in benchmarks/runs/2026-09-23 (morph_2s) that zoom preserved buidlings shapes acrooss transitions ( because those are really same buldings ) and morphed stuff around them even clouds. Problem was that it had huge number of visual artifacts, noise , borders etc , but idea was cool. Check if you can iprove and generalize than using all our recent reserches and tests."
+- mismatch_5: "i see very marginal improvement compared to r5, still very abstract transition , in parts of image still looks more like simple crossfade / luma transtions than anything else to me  "
+- mismatch_3: "r6 marginally better but what i don't like is an effect for some objects to be very crudely cut out of background with rough edges , looks like cheap 2d animated photoshop work , conceptually though - looks promising with all this objects and people shuffling. Duplicating objects in start - finish are gone too so some improvement."
+- mismatch_2: "r6 marginally better but what i don't like is an effect for some objects to be very crudely cut out of background with rough edges , looks like cheap 2d animated photoshop work , conceptually though - looks promising with all this objects and people shuffling. Duplicating objects in start - finish are gone too so some improvement."
+
+12.20.1 The owner's message of 2026-09-29 (verbatim): "answered in `benchmarks/runs/2026-09-28/layered_r6/layered_picks (1).json` . ( for you first 4 Questions) ; 5) -  keep them automatic , but answer what is the difference for edited score? ; 6) Yes , i am up to any realistic ( for a given context ) generated content as long as it serves as a helper to fill stuff, to facilite with interesting transitions , keeping 50+% of objects original and consitnet between frames and not inventing completely new objects, but anything that helps with all kinds of tranformations are welcome, again remember our main goal,  surprise me, we must be able to achieve consitency with transtion from anything to anything , so feel free to try all approaches. 7 - all layer examples from `merged v3 (+ SAM 3)` look really cool and accurate to me, lets go this way.  Record everything and prepare for next session , we are out of context almost"
+
+12.20.2 Reading, pair by pair and not generalised.
+1. mismatch_1 and mismatch_7: the measures of §12.17.5 read the duplicate as gone and the owner
+   confirms it, but one solid shape that grows from the bottom (`mix: "shape"`, §12.17.3) with a
+   ground that travels 36 and 14 px (the gain of backlog T23) reads as a reveal. No measure of
+   round 6 saw that: the share of a frame's change that a moving outline explains is not measured.
+2. mismatch_7: the owner names the clip `benchmarks/runs/2026-09-23/mismatch_7/morph_2s`
+   (`transitions.py`, class A, `homography+dis`, 70 sparse inliers, mean certainty 0.053, 2 s) as
+   the right idea: "zoom preserved buidlings shapes acrooss transitions ( because those are really
+   same buldings ) and morphed stuff around them even clouds", with "huge number of visual
+   artifacts, noise , borders". The layered probe matches elements by label, position, size and
+   depth and never by what the pixels show (§12.17.9 item 2).
+3. mismatch_6 and mismatch_4: "transitions between states are just too discreet and dirty";
+   `auto_r6` is "a bit messy in some boudaries" at the tree and the air-conditioning unit.
+4. mismatch_5: "still looks more like simple crossfade / luma transtions".
+5. mismatch_3 and mismatch_2: the objects are "very crudely cut out of background with rough
+   edges"; the shuffling of people and objects is "promising".
+
+12.20.3 Rulings of the message.
+1. Generated content is allowed as a helper (question 6): "any realistic ( for a given context )
+   generated content as long as it serves as a helper to fill stuff", "keeping 50+% of objects
+   original and consitnet between frames and not inventing completely new objects". This opens
+   the generated background behind an object (backlog T22). The owner's rule of 2026-09-26
+   against full video generation stands.
+2. The layer source is the merged source with SAM 3 (question 7, `layers_v3`, §12.18): "lets go
+   this way". `--auto3` reads `layers_v2` as of 2026-09-29; the change is round 7's first step.
+3. The five pairs with automatic clips only stay automatic (question 5).
+4. "surprise me"; "transtion from anything to anything"; "feel free to try all approaches".
+
+12.20.4 My answer to "what is the difference for edited score?". An automatic score is written
+by fixed rules that are the same for every pair: which elements become layers, how they are
+matched, every window and every threshold. An edited score is that file changed by hand for one
+pair: on mismatch_6 the clouds are a layer of their own that turns into parts of the night sky,
+the tree crown's matte has depth thresholds chosen for that photo, and the windows are set by
+hand. An edited score shows what the mechanisms reach on a pair; an automatic one shows what they
+reach on a pair nobody tuned. On mismatch_6 the owner picked the automatic clip over the edited
+ones, though it lacks the "nothing invented" tick that `layered_r5_flow` has; on mismatch_4 he
+calls it "marginally better" and ticks the same three boxes for both.
+
+12.20.5 Round-7 targets, in the owner's words: "nothing is transforming there" and "reveal
+with solid margin" (mismatch_1, mismatch_7); buildings that are "really same buldings" keep
+their shapes while the rest morphs around them (mismatch_7), "improve and generalize"; "too
+discreet and dirty" (mismatch_6, mismatch_4); "crudely cut out of background with rough edges"
+(mismatch_3, mismatch_2); "simple crossfade / luma transtions" (mismatch_5).

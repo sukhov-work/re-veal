@@ -256,7 +256,17 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    `scripts/research/layer_merge.py` adds Grounding DINO + SAM 2.1 instances to the layer source's
    elements (mismatch_1_S 15 → 34 elements, 2 → 9 buildings) and SAM 3 behind a flag (25–35 s per
    photo on the CPU, 12.7 GB peak; IoU 0.690 alone against 0.614 for Grounding DINO + SAM 2.1); both
-   need torchvision, which stays in the scratch environment. Ungraded.
+   need torchvision, which stays in the scratch environment. Graded 2026-09-29 (next paragraph).
+   **Owner picks on round 6 (2026-09-29; verbatim in DECISIONS 2026-09-29; `TRANSITIONS.md §12.20`)**:
+   `auto_r6` closer on mismatch_6, 5 and 3; no pick on mismatch_4, 1, 7 and 2. The duplicate is gone
+   ("R6 doens't have double building anymore"), and the skyline pairs now read as "some form of
+   reveal with solid margin , it looks pretty 2d and fake, nothing is transforming there". On
+   mismatch_7 the owner wants the buildings that are the same in both photos to keep their shapes
+   while the rest morphs around them, as in the class A clip of 2026-09-23, without its artifacts.
+   Objects are "very crudely cut out of background with rough edges" (mismatch_3, mismatch_2).
+   Rulings: generated content is allowed as a helper (at least half of the objects original and
+   consistent, no new objects); the layer source is the merged source with SAM 3; the five
+   automatic pairs stay automatic. Round 7 is next.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -330,7 +340,9 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    each, the correction moving with the clip. Mean L, the motion and the endpoints hold; the
    Laplacian variance at the keyframe frames falls by 20 to 66 %, because matching a keyframe's
    contrast to its composite scales its detail down. None of the six clips is a candidate. Untested:
-   a colour match at low frequency that keeps the keyframe's detail. Ungraded.
+   a colour match at low frequency that keeps the keyframe's detail. Graded 2026-09-29: on
+   mismatch_6 "All keylayers in this example are inventing too much stuff"; on mismatch_4 both
+   keep "one picture" and "transforms" and lose "nothing invented".
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -431,3 +443,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-28 | Owner picks on round 5 ingested (hand-written scores closer on both tuned pairs; the automatic score closer on three pairs and a regression on two, the duplicate measured); the keyframe-cleaned clips rejected as rendered; the layer source uses every route; SAM 3 authorized; round 6 next | round-5 session, 2026-09-28 afternoon |
 | 2026-09-28 | Round 6 rendered: the automatic score draws every pixel in one layer (`--auto3`: surfaces as one layer steered by the matched elements, objects over a fill, a bend cap of 0.75, local balance for clouds, the sky shows a fill last, mattes on the photo's edge); `mix: "shape"` on the two hand-written picks; nine clips byte-identical on two runs; three new measures (`fields`, `rim`, `holes`) | round-6 session, 2026-09-28 evening |
 | 2026-09-28 | Track E3: the merged layer source (`layer_merge.py`, Grounding DINO + SAM 2.1 instances; SAM 3 fetched and run on the CPU as a third route, default off); Track B2: generated keyframes used inside the layered probe (six clips, detail falls 20–66 %, none a candidate); the decision log compacted (round 4, md5 `e822c56b…`) and its two oldest digests folded (106 KB → 49 KB) | round-6 session, 2026-09-28 evening |
+| 2026-09-29 | Owner picks on round 6 ingested (`auto_r6` closer on mismatch_6, 5 and 3; none on four pairs; the duplicate gone, the skyline pairs read as a reveal; objects crudely cut out) and three rulings recorded: generated content allowed as a helper, the layer source is the merged source with SAM 3, the five automatic pairs stay automatic; round 7 next | round-6 session, 2026-09-29 |
