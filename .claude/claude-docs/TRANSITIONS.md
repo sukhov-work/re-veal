@@ -1505,3 +1505,84 @@ each, 18–19 GiB of memory, every run exit 0, the box clean after). The engine 
 The page shows each clip beside `layered_r4` with the three boxes, a second render with class A
 forced, and on mismatch_6 a render with the dissolve preset.
 
+
+### 12.16 Owner picks on round 5 and the directions that follow (2026-09-28, 12:44 UTC; `benchmarks/runs/2026-09-28/layered_r5/layered_picks.json`; verbatim in DECISIONS 2026-09-28 afternoon)
+
+Result: the two hand-written round-5 scores are picked as closer, `layered_r5_flow` on mismatch_6 and
+`layered_r5_stagger` on mismatch_4, and mismatch_4 gets its first "one picture" ticks. The automatic
+score is picked on mismatch_5, mismatch_3 and mismatch_2 and called a regression on mismatch_1 and
+mismatch_7, where the second photo's content shows twice. The keyframe-cleaned clips (§12.15) are
+"not usable" as rendered. Round 6 is next.
+
+| pair | closer | boxes (one picture / transforms / nothing invented) |
+|---|---|---|
+| mismatch_6 | `layered_r5_flow` | `layered_r4` no box ticked; `layered_r5` no box ticked; `layered_r5_flow` yes/yes/yes; `auto_r5` no box ticked |
+| mismatch_4 | `layered_r5_stagger` | `layered_r4` no/yes/yes; `layered_r5` yes/yes/yes; `layered_r5_stagger` yes/yes/yes; `auto_r5` no/yes/no |
+| mismatch_1 | `none` | `auto_r4` no/yes/no; `auto_r5` no/yes/no |
+| mismatch_5 | `auto_r5` | `auto_r4` no/yes/no; `auto_r5` yes/yes/no |
+| mismatch_3 | `auto_r5` | `auto_r4` yes/yes/no; `auto_r5` no box ticked |
+| mismatch_2 | `auto_r5` | `flat` no/no/yes; `auto_r5` no box ticked |
+| mismatch_7 | `none` | `flat` no/yes/no; `auto_r5` no/yes/no |
+
+The owner's notes, verbatim:
+- mismatch_6: "layered_r5_flow ( and layered_r5 ) look now closer to. what i expected , much more direction and stability present and transition is more seamless"
+- mismatch_4: "layered_r5_stagger ( and layered_r5 ) look now closer to. what i expected , much more direction and stability present and transition is more seamless , still small crossfading and minor building boders overlap ,but better than all previous results "
+- mismatch_1: "In this case auto_r5 looks like overfit and regression , what you did - you have target B image and you very forcefully morph A to B but at some point both final image and itermediate morph are stacked (composited ) in very ugly manner so picture morphs into some duplicate final picture that is already there, i would expect natural  flow from one building ( or building group to another in this case, also clouds skewed alot ( will attach screenshots) "
+- mismatch_5: "In this case auto_r5 looks like promising but still transition has some borders and edges visible in intermediate frames, also components transition ( especially bridge ) no definitive enough  but this looks a bit more gradual and promising than before"
+- mismatch_3: "In this case auto_r5 looks like promising but still transition has some borders and edges visible in intermediate frames, components and people transition look interesting here, definitely improvement"
+- mismatch_2: "In this case auto_r5 looks like promising but still transition has some borders and edges visible in intermediate frames,    but this looks a bit more gradual and promising than before , fun transition from person to persons in B frame"
+- mismatch_7: "Here is only. case where it looks worse in R5 and more even like regression. Similar case as in mismatch_1 but worse as here buidlings do match a bit and in flat you corectly transitioned between some of them ( although sky is broken) , in R5 both sky and buidlings transition is broken and also they suffer from the same duplicated composite as mismatch_1 ( and this seems like some general issue for such cases) , will attach screen as well"
+
+12.16.1 The duplicate, measured the same afternoon (`scripts/research/layered_diag.py layers`). In the
+automatic score the layer under the elements (`ground`, or `rest` on a pair without a sky) holds the
+whole ground of both photos, the matched elements included, and each element layer holds its element
+again. The two move along different fields and mix at different times.
+
+| pair, clip time | `ground`: mix, canvas share, px to go | element layer: mix, canvas share, px to go | canvas share where both show the second photo |
+|---|---|---|---|
+| mismatch_1, 0.539 | 0.957, 38 %, 257 | `e0_building` 0.203, 27 %, 232 | 0 % |
+| mismatch_1, 0.629 | 0.999, 40 %, 183 | 0.65, 32 %, 150 | 32 % |
+| mismatch_1, 0.719 | 1.0, 40 %, 90 | 0.979, 35 %, 75 | 35 % |
+| mismatch_1, 0.809 | 1.0, 40 %, 21 | 1.0, 38 %, 23 | 38 % |
+| mismatch_7, 0.629 | 1.0, 17 %, 125 | `e1_building` 0.65, 12 %, 189 | 11 % |
+| mismatch_7, 0.719 | 1.0, 17 %, 61 | 0.979, 14 %, 94 | 13 % |
+
+Mix 0 is the first photo's content and 1 the second's. From t = 0.63 the second photo's buildings
+stand in the frame twice, 30 to 60 px apart, until both arrive. My design note of the night, that the
+lower layer's copy moves with the element and stays hidden under it, was wrong: the element layers
+start later (each has its own window), move with `ot_rigid`, and the lower layer mixes place by place.
+Backlog T21.
+
+12.16.2 Second finding of the same measure: the automatic score's layers with `ot_rigid` and no
+`stagger` render through the round-4 warp, because only `stagger`, `field`, `exact` and the keys of
+§12.13.2 item 3 select the round-5 path. That is six layers on mismatch_3, two on mismatch_7 and one
+each on mismatch_1, mismatch_4 and mismatch_6; on mismatch_6's 1146-px canvas the rows are stretched
+(backlog T19).
+
+12.16.3 Not measured: the pale outlines along the building mattes and the smooth dome in mismatch_7's
+lower sky (the owner's screenshots, `benchmarks/runs/2026-09-28/layered_r5/owner_screens/`).
+[INFERRED] Both are the sky backdrop's hole fill: the fill shows beside a matte that was cut from a
+label map (a 640-px model output, upsampled) and then warped, and it shows as a dome where the ground
+layer's matte has moved off a large hole.
+
+12.16.4 Round-6 targets, in the owner's words: the duplicate ("picture morphs into some duplicate
+final picture that is already there"; "some general issue for such cases"); "natural  flow from one
+building ( or building group to another"; "clouds skewed alot"; on mismatch_7 "both sky and buidlings
+transition is broken"; "borders and edges visible in intermediate frames" (mismatch_5, 3 and 2); the
+bridge of mismatch_5 "no definitive enough"; on mismatch_4 "still small crossfading and minor
+building boders overlap".
+
+12.16.5 The owner's other answers (the message is verbatim in DECISIONS 2026-09-28 afternoon).
+- The keyframe-cleaned clips: "mostly just sequences of crossfades betweeen interrmediate generated
+  frames"; "not usable , if you plan to utilize those intermediate keyframes , lets see". The chain
+  of the tool's morphs is out; a clip that uses the keyframes inside the layered probe is open.
+- The layer source: "i really like aggreagted  accuracy for all examples in etween `Grounding DINO B
+  + SAM 2.1 L` + `layer source (layers.npz elements)` and of course depth and normals , so lets
+  utilize all we can". SAM 2.1's processor needs torchvision (in the scratch environment only).
+- "sam3 is authorized": the owner's account has access; this laptop holds no Hugging Face token as of
+  2026-09-28 15:57 EEST, the box holds the owner's.
+- "round 6 next".
+- Two questions of the owner, answered in the session's last message: the question on the clouds
+  named no clips (it meant `layered_r5` against `layered_r5_flow` on mismatch_6, and the pick
+  answers it); five pairs carry only automatic clips because hand-written scores exist for
+  mismatch_6 and mismatch_4 only, and a mechanism is judged on pairs it was not tuned on (§11).

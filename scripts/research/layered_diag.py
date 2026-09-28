@@ -22,6 +22,8 @@ with --frames, PNG frames under --out. Changes nothing in either tool or in a sc
           the canvas more than 4 levels off).
   contrast  per frame the signed contrast of a layer against what lies under it.
   step    frame-to-frame steps between two clip times (a warp switched off at a window's end).
+  layers  per frame and per `morph_to` layer its matte, its mix, the px it has moved and has to go,
+          and where two layers both show the second photo's content (a duplicate).
   seam    per frame the L step across a line (the running top edge of a `slide_between` backdrop, or
           the alpha 0.5 contour of a layer): a 12-px band above against a 12-px band below, beside
           the same number on A and on B at their own lines.
@@ -299,6 +301,49 @@ def cmd_step(a):
     (out / "step.json").write_text(json.dumps({"score": a.score, "rows": rows}, indent=1))
 
 
+def cmd_layers(a):
+    """Per frame and per `morph_to` layer: the share of the canvas its matte covers, the mean of its
+    mix inside the matte (0 = the first photo's content, 1 = the second's), the px it has moved and
+    the px it still has to go (95th percentile of its field x the progress). Two layers that both
+    show the second photo's content over the same place, one at rest and one still on its way, are
+    the owner's "duplicate final picture that is already there" (round-5 picks, 2026-09-28).
+    `overlap`: the share of the canvas where this layer and a layer under it both hold alpha above
+    0.5 and a mix above 0.5."""
+    score, scene, layers, A, B, n = build(a.score)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    morphs = [l for l in layers if l.action == "morph_to"]
+    rows = []
+    for i in range(a.every, n - 1, a.every):
+        t = i / (n - 1)
+        seen = []
+        row = {"i": i, "t": round(t, 4), "layers": {}}
+        for l in morphs:
+            _, al = l.render(t)
+            u = l.linear(t)
+            m0, m1 = l.mix_window
+            if u >= 1:
+                qm = np.ones(al.shape, np.float32)
+            elif u <= 0:
+                qm = np.zeros(al.shape, np.float32)
+            elif getattr(l, "stag", None) is not None:
+                qm = np.asarray(l.last_q, np.float32)          # a map, set by the render above
+            else:
+                qm = np.full(al.shape, float(P.smoothstep((u - m0) / max(m1 - m0, 1e-6))), np.float32)
+            m = al > 0.5
+            mv = l.away(t)
+            b_here = m & (qm > 0.5)
+            ov = 0.0
+            for other in seen:
+                ov = max(ov, float((b_here & other).mean()))
+            seen.append(b_here)
+            row["layers"][l.name] = {"alpha_share": round(float(m.mean()), 3), "mix_mean": round(float(qm[m].mean()), 3) if m.any() else None,
+                                     "moved_px": round(float(mv[0]), 1), "to_go_px": round(float(mv[1]), 1), "overlap": round(ov, 3)}
+        rows.append(row)
+        print(f"{t:.3f} " + " | ".join(f"{k}: a {v['alpha_share']:.2f} mix {v['mix_mean']} to go {v['to_go_px']:.0f} px overlap {v['overlap']:.2f}" for k, v in row["layers"].items()))
+    (out / "layers.json").write_text(json.dumps({"score": a.score, "rows": rows}, indent=1))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -339,6 +384,11 @@ def main():
     st.add_argument("--rows", type=float, nargs=2, default=None, help="two row fractions")
     st.add_argument("--out", required=True)
     st.set_defaults(fn=cmd_step)
+    ly = sub.add_parser("layers")
+    ly.add_argument("--score", required=True)
+    ly.add_argument("--every", type=int, default=8)
+    ly.add_argument("--out", required=True)
+    ly.set_defaults(fn=cmd_layers)
     a = ap.parse_args()
     a.fn(a)
 

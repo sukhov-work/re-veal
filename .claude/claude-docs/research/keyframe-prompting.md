@@ -208,6 +208,14 @@ Lab statistics to its composite's before the clip is built), one timing curve ac
 segments, and the layered probe's own fields between the keyframes instead of the tool's class
 decision.
 
+Owner's verdict on the clips of §5.4 (2026-09-28, verbatim): "I have checked all keyclips , but as you
+presented them they are mostly just sequences of crossfades betweeen interrmediate generated frames,
+i cant see how final result will look like . If `benchmarks/runs/2026-09-28/keyclip` meant to be
+final results, those transitions are just serieses of crossfades , not usable , if you plan to
+utilize those intermediate keyframes , lets see." The chain of the tool's morphs between keyframes
+is out. The page did not say whether its clips were candidates for a final result or a test of one
+step; a review page states that at its head from now on.
+
 ## 6. Gaps
 
 - No source states what Qwen-Image-Edit-2511 does with an instruction it cannot satisfy from the

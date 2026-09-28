@@ -236,6 +236,13 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    8.8–22.5 s per photo, byte-identical, offline; mean IoU 0.788 against the tuned mattes (the Swin-T
    baseline 0.746; the reference is 4 photos and cannot rank the large models); no model finds a star
    or the air-conditioning unit; SAM 3 is gated and was not run.
+   **Owner picks on round 5 (2026-09-28; verbatim in DECISIONS 2026-09-28 afternoon; `TRANSITIONS.md §12.16`)**:
+   `layered_r5_flow` closer on mismatch_6 and `layered_r5_stagger` on mismatch_4 (the first "one
+   picture" ticks on mismatch_4); `auto_r5` closer on mismatch_5, 3 and 2 ("promising", "borders and
+   edges visible in intermediate frames"); a regression on mismatch_1 and mismatch_7, where the second
+   photo's content shows twice (measured: two layers hold it over 32–38 % of the canvas of mismatch_1
+   from t = 0.63). The layer source uses every route (Grounding DINO + SAM 2.1, the OneFormer and
+   CLIPSeg elements, depth, normals); SAM 3 is authorized. Round 6 is next.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -299,6 +306,10 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    (mean L 18.8, 36.7, 33.2, 46.5, 26.2 along the clip); the motion stalls at every keyframe. Next:
    hold the exposure, one timing curve across the segments, the layered probe's fields between the
    keyframes. Ungraded.
+   **Owner on the keyframe-cleaned clips (2026-09-28, verbatim)**: "mostly just sequences of crossfades
+   betweeen interrmediate generated frames"; "not usable , if you plan to utilize those intermediate
+   keyframes , lets see". The chain of the tool's morphs between keyframes is out. Open: a clip in
+   which the layered probe uses the keyframes.
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -396,3 +407,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-27 | Night, Track B3: FLUX.2 klein 9B at 8-bit measured on the box (68 s per keyframe, deterministic, closer to the composite than 4B; 18 GiB of memory); the recipe computes its memory floor from the files | round-4 session, 2026-09-27 night |
 | 2026-09-28 | Round 5 rendered: three faults of round 4 measured and removed (`settle`, `unmix`, the exact warp), the clouds transform into parts of the night sky, the automatic score matches labelled elements (`--auto2`) on seven pairs; twelve clips byte-identical on three runs | round-5 session, 2026-09-28 |
 | 2026-09-28 | Track E2: the layer source measured and written (`layer_source.py`: OneFormer Swin-L ADE20K + CLIPSeg, elements with label, group and depth; ten routes compared on 18 photos); Track B: the keyframe-cleaned clip built from kf_17–kf_22 with three measured faults; the decision log compacted (round 3, md5 `332c6824…`) | round-5 session, 2026-09-28 |
+| 2026-09-28 | Owner picks on round 5 ingested (hand-written scores closer on both tuned pairs; the automatic score closer on three pairs and a regression on two, the duplicate measured); the keyframe-cleaned clips rejected as rendered; the layer source uses every route; SAM 3 authorized; round 6 next | round-5 session, 2026-09-28 afternoon |
