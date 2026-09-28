@@ -268,6 +268,9 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Layered probe round 5, 2026-09-28 (§12.13; page `benchmarks/runs/2026-09-28/layered_r5/`; scores `mismatch_{4,6}_r5*.json`, `scores/auto/*_v2.json`; M3 Pro, CPU) | 3 s, 90 frames, twelve clips byte-identical on three runs. mismatch_6 (1146×1524): prep 17.5–18.2 s, render 15.3 s; automatic 2.4 / 17.1 s. mismatch_4 (1920×1092): prep 4.2–5.6 s, render 14.0–18.7 s; automatic 6.0 / 33.1 s. Automatic on untuned pairs: mismatch_1 5.0 / 29.5 s, mismatch_5 8.6 / 18.5 s, mismatch_3 (1920×1440, 11 layers) 20.9 / 77.1 s, mismatch_2 (602×800) 23.8 / 9.7 s, mismatch_7 (1920×1488) 7.9 / 35.7 s. Frames beside the endpoints against the photos: mismatch_4 0.000 / 0.004 levels (round 4: 0.183 / 0.151) |
 | Layer source on the 24 fixture photos, 2026-09-28 (§12.14; `scripts/research/layer_source.py`; page `benchmarks/runs/2026-09-28/layers/`; M3 Pro, CPU, 4 torch threads, beside render jobs) | OneFormer Swin-L ADE20K 880 MB (semantic 3.09 s, panoptic 2.58 s per photo, medians over 18 photos) + CLIPSeg rd64-refined 605 MB (1.99 s); the whole script 8.8–22.5 s per photo, 15.2 s for mismatch_4_S on the main thread; `layers.npz` and `layers.json` byte-identical on repeated runs; offline re-runs identical, no socket attempt |
 | Keyframe-cleaned clip, 2026-09-28 (§12.15; `scripts/research/keyframe_clip.py`; page `benchmarks/runs/2026-09-28/keyclip/`) | FLUX.2 klein 9B Q8_0 on the second machine: 68–69 s per keyframe at 1344×768, 50–51 s at 768×1024, MemAvailable 37.0 → 18.2–19.3 GiB. Clips of 90 frames at the keyframe size, byte-identical on two renders; four segments per clip through `transitions.py pair --preset morph` |
+| Layered probe round 6, 2026-09-28 evening (§12.17; page `benchmarks/runs/2026-09-28/layered_r6/`; scores `mismatch_{4,6}_r6.json`, `scores/auto/*_v3.json`; M3 Pro, CPU, beside two other jobs) | 3 s, 90 frames, nine clips byte-identical on two runs. Hand-written: mismatch_6 (1146×1524) prep 35.6 s, render 32.4 s, steps 0.04 / 0.01, md5 `fc42da91…`; mismatch_4 (1920×1092) 10.9 / 41.0 s, steps 0.0 / 0.0, `531895da…`. Automatic (`--auto3`, elements from `layers_v2`): mismatch_1 (1444×1920) 17.5 / 64.2 s, `fcbc8f44…`; mismatch_7 (1920×1488) 28.4 / 89.7 s, `a11cc816…`; mismatch_4 15.2 / 44.6 s, `caa9f3e1…`; mismatch_6 5.0 / 37.5 s, `348da836…`; mismatch_5 (1920×1080) 13.2 / 48.8 s, `4f8a73aa…`; mismatch_3 (1920×1440, ten layers) 49.8 / 182.0 s, `02400e79…`; mismatch_2 (602×800) 42.3 / 9.3 s, `151a5224…`. Probe md5 `2ac27ee6…`; the 25 md5s of rounds 1–5 unchanged; `transitions.py` untouched |
+| Merged layer source on the 24 fixture photos, 2026-09-28 evening (§12.18; `scripts/research/layer_merge.py`; page `benchmarks/runs/2026-09-28/layers_v2/`; scratch environment with torchvision 0.28.0; CPU, 4 torch threads, beside render jobs) | Grounding DINO base + SAM 2.1 Hiera-L 12.2 s per photo (median; 10.2–15.1), SAM 3 28.6 s (25.2–35.0), the whole v2 run 23.4–39.8 s per photo; peak RSS 6.5–6.9 GB (v2), 12.7 GB (v3); SAM 3 weights 3,439,938,512 B; 14 of 14 mismatch photos byte-identical on two runs, 0 socket attempts; on the main thread mismatch_4_S gives md5 `fa677ab4…` / `3a782a94…` |
+| Keyframes inside the layered probe, 2026-09-28 evening (§12.19; `scripts/research/keyframe_layer.py`; clips `benchmarks/runs/2026-09-28/keylayer/`) | FLUX.2 klein 9B Q8_0 on the second machine: seven runs of 50–95 s, MemAvailable 36.2–36.8 → 17.57–18.96 GiB; six clips of 90 frames at the canvas size, byte-identical on two renders; Laplacian variance of L at the keyframe frames 20–66 % under the source clip's |
 
 Goal numbers on the real surface (2026-09-26, `benchmarks/runs/2026-09-26/surface/` and `bench/`, morph 2 s, canvas ≤ 1920 px, 480-px proxy; run 1 through the CLI and run 2 through the bench script give identical numbers):
 
@@ -1589,3 +1592,341 @@ building boders overlap".
   named no clips (it meant `layered_r5` against `layered_r5_flow` on mismatch_6, and the pick
   answers it); five pairs carry only automatic clips because hand-written scores exist for
   mismatch_6 and mismatch_4 only, and a mechanism is judged on pairs it was not tuned on (§11).
+
+### 12.17 Round 6: every pixel in one layer, fields that do not bend their layer, a sky that shows a fill last (2026-09-28 evening; page `benchmarks/runs/2026-09-28/layered_r6/index.html`; scores `mismatch_4_r6.json`, `mismatch_6_r6.json`, `scores/auto/<pair>_v3.json`)
+
+Result: the automatic score of round 6 draws no pixel of a photo in two layers (round 5: two drawn
+layers held the same pixels over 17.3 % and 39.7 % of the canvas on mismatch_1's two photos; round
+6: 0.000 %), its clouds travel 9–38 px on average (round 5: 252–366 px) and bend 0.24–0.49 (2.81–
+2.98), and the frames beside the endpoints stand at most 8 levels from the photos on the two pairs
+the owner called a regression. Three faults stand, measured: an object that moves away leaves a
+smooth fill (seen on up to 13.7 % of the canvas on mismatch_3, 5.0 % on mismatch_2); the ground
+travels less than half as far as its field asks on mismatch_1, mismatch_7 and mismatch_2; mismatch_5's
+bridge has no rule of its own. Nine clips are byte-identical on two runs; the 25 md5s of rounds 1–5
+are unchanged on the final probe (md5 `2ac27ee6…`, 3,269 lines); nothing in `transitions.py`
+changed. Ungraded as of 2026-09-28: the owner's boxes on the page are the next input.
+
+12.17.1 Measures added to `scripts/research/layered_diag.py`, each run on round 5 before any change.
+
+| measure | what it reads | control or calibration |
+|---|---|---|
+| `fields` | per `morph_to` layer and direction: travel (mean, 95th percentile of the field's length), strain (the singular values of I + grad field), `bend` (95th percentile of the strain of what the field's affine part leaves out), the share that folds | the clips the owner picked in round 5 bend 0.23–0.75 (`mismatch_4_r5_stagger` 0.23, `mismatch_6_r5_flow` 0.57–0.75); the clouds he called "skewed alot" 2.81–2.98, 4.0 % of mismatch_1's cloud folded |
+| `rim` | the share of a matte's 4-px inner rim whose Lab colour is nearer to the local colour outside the matte than to the matte's core (means at 12 px; counted where the two means stand more than 10 apart) | eroding mismatch_1's building mattes by 12 px lowers it from 74.3 to 38.5 % and from 85.6 to 22.6 %: the measure responds to a tighter matte; on those photos it does not fall under 18–44 % |
+| `holes` | per frame the share of the canvas where a backdrop's hole fill, or a fill under an object, is what the viewer sees (fill weight over 0.5, no layer above with alpha over 0.5) | at rest it reads the fill kept by design under a thin cloud (3.3 % on mismatch_1, 9.2 % on mismatch_7); read the largest value beside the value at rest |
+| `layers`: `semi` | the share of the canvas where a layer's alpha lies between 0.05 and 0.95 | `mismatch_4_r5_stagger` 2.8 % at t 0.47 against 0.9–1.1 % at rest |
+| `layers`: `overlap` | unchanged, with two refinements: two layers both at rest do not count; a layer that holds a fill under an object counts only where it holds the photo's own pixels | the round-5 score of mismatch_1 still reads 0.32 at t 0.629 and 0.35 at 0.719 |
+
+12.17.2 What the owner's faults were, by these measures on the round-5 automatic clips.
+1. The duplicate between layers (§12.16.1, backlog T21): two drawn layers hold the same pixels of a
+   photo over 17.3 / 39.7 % of the canvas (first / second photo) on mismatch_1, 6.2 / 16.6 % on
+   mismatch_7, 68.7 / 43.5 % on mismatch_4, 21.4 / 21.5 % on mismatch_6, 83.0 / 43.8 % on mismatch_3
+   and 93.3 / 96.4 % on mismatch_2.
+2. The duplicate inside one layer: a `morph_to` layer's matte is the union of its two warped mattes,
+   and the part only the second photo covers stands at alpha 0.71 when the mix is 0.2. The owner:
+   "both final image and itermediate morph are stacked (composited ) in very ugly manner".
+3. The dome of mismatch_7: the cloud layer travels 252 px and leaves the lower sky; the backdrop
+   shows its fill there. Fill seen: 5.5 % of the canvas at rest, 14.5 % at the largest.
+4. The pale outline: 46–87 % of the rim pixels of the building and ground mattes of mismatch_1 and
+   mismatch_7 hold the outside colour. The mattes come from a 640-px label map.
+5. "clouds skewed alot": travel 366 px (mismatch_1) and 252 px (mismatch_7), bend 2.98 and 2.81.
+
+12.17.3 Keys added to `scripts/research/layered_probe.py`, all default-off. `Backdrop.render` is
+split into `_lab` and `_alpha`, and `fill_holes` calls `fill_field`; the 25 md5s prove both.
+
+| key | on | what it does |
+|---|---|---|
+| `plate: {holes, dilate, sigma, scales, settle_px}` | a layer | inside the zones of the layers drawn over it the layer holds a fill made from its own pixels around them, and the photo's own pixels while the zone's layer rests within `settle_px` |
+| `mix: "shape"` | `morph_to` | the matte is one shape, the level set of the two warped mattes' signed distances mixed by the mix; a place both cover mixes by the plain share, a place one covers is that one's |
+| `ot_bend: cap` | `morph_to` | the field is its affine part plus a rest; the rest is blurred at the first of 12, 24, 48, 96, 192 px at which its bend is under the cap, then scaled; after the border pin (`ot_border`, §12.13: the field falls to zero at the canvas border) one gain on both directions brings the bend back under the cap |
+| `ot_balance: s` | `morph_to` | the two masses are balanced place by place at s × the long side before the transport: a part with no counterpart near it stays and changes by the mix |
+| `prefer_known`, `prefer_px` | a backdrop | the two residuals mix place by place: both known or both filled, the mix; only one known, that one; the change runs over `prefer_px` |
+| `snap: {r, eps, iters}` | any mask rule | a guided filter of the hard matte by the photo's L moves the matte's edge to the photo's edge; a matte that loses over half its area keeps its own edge |
+| `times_not: [names]` | any mask rule | the matte holds no pixel of an earlier mask; `{"layer", "thr"}` leaves out that mask's whole support |
+
+Also new: `--auto3 PAIR` (writes `scores/auto/<pair>_v3.json`, tag `auto_r6`), `--write-only`,
+`--looks FILE` (per pair, what to look at and the order of its clips, shown on the page).
+
+12.17.4 The automatic score of round 6 (`auto_score2(..., r6=AUTO3)`). Matching is round 5's; the
+elements come from the merged layer source (§12.18, `benchmarks/runs/2026-09-28/layers_v2`).
+1. Surfaces (building, structure, tree, vegetation, water, mountain, ground, floor, wall, ceiling,
+   opening) move as one layer, `ground` or `rest`. A matched surface is not drawn: its transport
+   steers that layer where it stands (interpolated at 0.04 × the long side, the layer's own
+   transport far from every match).
+2. Objects (person, animal, vehicle, light, furniture, appliance, picture, object) are drawn by
+   their own layers over it, and it holds a `plate` under them.
+3. Every `morph_to` takes `exact` (backlog T19), `mix: "shape"` and `ot_bend` 0.75, the largest bend
+   of the clips the owner picked.
+4. The sky: a cloud pair takes `ot_balance` 0.1; a cloud's or a light's matte ends 8 px short of the
+   ground and shares no pixel with another; the hole kept under it is its support and no wider;
+   the backdrop takes `prefer_known` with `prefer_px` 0.03 × the long side.
+5. The ground's and the objects' mattes take `snap` (r 20 px, eps 4, 2 passes).
+
+12.17.5 Results, round-6 automatic clips (`layered_diag.py`, final probe). Pixels in two layers:
+first / second photo. Fill seen: at rest / the largest / of it where a layer has moved off. Rest:
+the largest difference from the photo in the two frames beside each endpoint, and the share of the
+canvas over 4 levels.
+
+| pair | pixels in two layers, round 5 → 6 (%) | ground or rest: travel px, bend, gain | clouds or light: travel px, bend | rim of the ground, first / second photo (%) | fill seen (%) | rest: max levels, share over 4 |
+|---|---|---|---|---|---|---|
+| mismatch_1 | 17.3 / 39.7 → 0.000 / 0.000 | 36, 0.28, 0.492 | 32, 0.43 | 29 / 28 (round 5: 78 / 87) | 3.3 / 5.9 / 2.84 | 3, 0.000 % |
+| mismatch_7 | 6.2 / 16.6 → 0.000 / 0.000 | 14, 0.24, 0.431 | 38, 0.49 and 9, 0.24 | 7 / 12 (round 5: 53 / 70) | 9.2 / 13.0 / 2.09 | 8, 0.006 % |
+| mismatch_4 | 68.7 / 43.5 → 0.000 / 0.000 | 117, 0.74, 0.924 | sun by the round-5 rule | 10 / 12 | 0.0 / 3.9 / 3.85 | 42, 0.118 % |
+| mismatch_6 | 21.4 / 21.5 → 0.000 / 0.000 | 40, 0.56, 0.952 | none matched | 48 / 38 | 0.0 / 3.4 / 3.42 | 2, 0.000 % |
+| mismatch_5 | 0.3 / 0.0 → 0.000 / 0.000 | 74, 0.56, 0.924 | light 412, 0.37 | 19 / – | 0.6 / 4.7 / 0.29 | 13, 0.062 % |
+| mismatch_3 | 83.0 / 43.8 → 0.002 / 0.012 | 70, 0.75, 0.643 | nine objects 210–623, 0.11–0.73 | objects 8–32 | 0.0 / 13.7 / 13.72 | 0, 0.000 % |
+| mismatch_2 | 93.3 / 96.4 → 0.000 / 0.000 | 20, 0.69, 0.314 | one object 147, 0.37 | object 25 / 24 | 0.0 / 5.0 / 5.04 | 0, 0.000 % |
+
+Round 5 on the two regression pairs, the same measures: `overlap` 0.38 and 0.15 at the largest
+(round 6: 0.01 and 0.01, a cloud layer passing over the ground layer; the two hold different
+pixels); fill seen 3.2 / 6.3 / 1.87 % and 5.5 / 14.5 / 3.02 %; rest 35 levels at most (0.011 %) and
+141 (0.075 %). The fill seen did not fall on mismatch_7 (14.5 → 13.0 % at the largest): 9.2 % is
+the fill kept under thin cloud at rest, and the share under moved layers fell from 3.02 to 2.09 %.
+Timings (M3 Pro, CPU, beside two other jobs): prep 5.0–49.8 s, render 9.3–182.0 s (mismatch_3, ten
+layers); md5s of the nine clips in the sheet.
+
+12.17.6 The hand-written scores of round 6 (`mismatch_4_r6.json`, `mismatch_6_r6.json`) are the
+owner's round-5 picks with `mix: "shape"` on one layer each. The half-transparent share of that
+layer falls from 2.8 to 0.7 % of the canvas on mismatch_4 (the band, t 0.47) and from 2.9–7.3 to
+0.3–0.4 % on mismatch_6 (the buildings, t 0.61–0.67). The frames beside the endpoints are unchanged
+(mismatch_4: 2 and 9 levels at most; mismatch_6: 34 and 1). The texture mix inside the band is
+unchanged, so the owner's "small crossfading" on mismatch_4 is not addressed.
+
+12.17.7 Tried and dropped.
+1. Every matched element drawn by its own layer with no layer under them, the elements holding the
+   ground between them: gaps open between neighbouring buildings and show the sky's fill (seen on
+   the frames `layered_r6/diag/seq_mismatch_1_try4_v2.jpg`, not measured). Replaced by item 1 of
+   12.17.4.
+2. The cloud keys of the hand-written scores (`ot_local` 0.1, `ot_floor` 0.1) on a cloud pair:
+   travel 63–124 px, bend 0.60–0.73, and the dome stayed (fill seen 15.1 % on mismatch_7). Replaced by
+   `ot_balance`.
+3. A flow between the signed distances of the pushed matte and its target, to register the two
+   shapes: the overlap (IoU) went from 0.641 to 0.723 on mismatch_1 and from 0.387 to 0.158 on
+   mismatch_7, and the bend rose to 3.75 and 16.21.
+4. The border pin before the bend cap: bend at most 0.74, and the ground's layer pulled away from
+   three sides of mismatch_2's canvas (black wedges, seen on the frames).
+5. The border pin after the cap with no gain, and objects pinned too: bend 0.81–1.38 on the
+   ground's field and 1.01–2.67 on nine of the ten objects of mismatch_3 and mismatch_2.
+
+12.17.8 Limits of the result.
+1. Neither photo shows what is behind an object. The fill under it is a normalized convolution of
+   its surroundings and is seen as a blurred patch once the object has moved: 13.7 % of the canvas
+   on mismatch_3 at t 0.55, 5.0 % on mismatch_2 (backlog T22).
+2. The border pin bends a field, and the gain that restores the cap cuts the travel: 0.492 on
+   mismatch_1, 0.431 on mismatch_7, 0.314 on mismatch_2, 0.643 on mismatch_3 (backlog T23).
+3. The transport does not register two shapes: the pushed ground matte overlaps its target at IoU
+   0.568 on mismatch_1 and 0.376 on mismatch_7, against 0.82–0.89 for the two picked hand-written
+   clips. `mix: "shape"` then draws one shape whose outline is a level set of two distances, not an
+   outline of either photo (backlog T24).
+4. The mattes of clouds and lights are unchanged (blurred 16 and 12 px): their rim reads 28–64 %.
+5. The ground's mix runs from t 0.27 to 0.58 on mismatch_1 (mix 0.01 → 0.99); after 0.6 the
+   second photo's ground settles into place. The pace is round 5's and was not tuned.
+
+12.17.9 Not done in this round.
+1. mismatch_5's bridge ("no definitive enough"): an element of the first photo with no counterpart
+   still has no layer and no window of its own.
+2. mismatch_7 shows the same towers in both photos at different sizes (by my eye on the two
+   photos); the matching by label, position, size and depth does not use it.
+3. The elements with SAM 3 (`layers_v3`, §12.18) are read by no score.
+4. The last interior frames of mismatch_4 stand 42 levels off the second photo at most (0.118 % of
+   the canvas); the cause is not traced.
+
+### 12.18 The merged layer source and SAM 3 (2026-09-28; `scripts/research/layer_merge.py`; outputs `benchmarks/runs/2026-09-28/layers_v2` and `layers_v3`; page `benchmarks/runs/2026-09-28/layers_v2/index.html`; an Opus 5.5 subagent, re-checked on the main thread)
+
+Result: the merged layer source adds instance masks to the §12.14 layer source on all 24 fixture
+photos, byte-identical on repeated runs, 0 socket attempts. `layers_v2` uses Grounding DINO base +
+SAM 2.1 Hiera-L; `layers_v3` adds SAM 3 as a third route (`--routes gdino_sam2,sam3`, default off).
+The round-6 automatic score (`layered_probe.py --auto3`) reads `layers_v2` by default and matches 5
+groups on mismatch_1 (§12.14 source: 1) and 4 on mismatch_7 (2), re-checked on the main thread; no
+score reads `layers_v3`. SAM 3 alone beats Grounding DINO + SAM 2.1 alone (IoU 0.690 against 0.614)
+and is the only route to overlap mismatch_6_F's air-conditioning unit (IoU 0.26). Ungraded as of 2026-09-28.
+
+The §12.14 source is reproduced inside the merge: on all 24 photos the base element map equals
+`layers/<photo>/layers.npz` (`base check True`). Re-checked on the main thread, offline: mismatch_4_S
+gives 13 → 14 elements, md5 `fa677ab4060b3264f592c4d714ae60b5` / `3a782a94c1a5e85c999140ef58139326`, 0
+socket attempts; `layers_v2/_det_run2` is byte-identical on 14 of 14; the §12.14 source still gives 13
+elements, `932199b5…`, `5515747c…`. v3: mismatch_1_S and mismatch_7_F re-run identical (2 of 2).
+
+The merge rule (the script's docstring; no constant names a photo):
+1. A SAM candidate is dropped below `MIN_SAM_IOU` 0.70 (SAM's predicted IoU), below `MIN_SHARE`
+   0.0005 of the canvas, or in the group "opening" (`PART_GROUPS`: windows would cut a facade into
+   pieces). Of two masks with IoU ≥ `DEDUP_IOU` 0.85 the higher score stays; masks are painted largest
+   first, and one with less than `MIN_VISIBLE` 0.50 of itself visible is dropped.
+2. Host share hs = the share of the visible mask on old pixels of the same group. With hs ≥
+   `CONTAIN_MIN` 0.50 the mask is an instance of the old element it overlaps most and may reach
+   `EDGE_BAND_PX` 8 px outward. With hs < `NEW_MAX_NAMED` 0.20, score ≥ `NEW_MIN_SCORE` 0.35, area ≤
+   `NEW_MAX_SHARE` 0.20 and a group outside `STUFF_GROUPS` (sky, water, wall, ceiling, mountain) it is
+   a new object. Every other mask is dropped with its reason in `merge.candidates`.
+3. One hosted mask with IoU ≥ `EDGE_IOU` 0.80 against its element gives that element the SAM region
+   and edge; otherwise the element splits into instances. Stuff groups never split.
+4. Slivers (removed by an opening of radius `SLIVER_PX` 3) go to the nearest other element within
+   `REASSIGN_MAX_PX` 16 px; residual bodies stay as elements with `instance_of` set. A smaller old
+   element of another group keeps its pixels against a larger claim.
+5. One uint16 id map holds all elements; two asserts check ids against records. New fields: `instance_of`,
+   `base_id`, `edge_route`, `edge_sam_share`, `box`, `box_score`, `sam_iou`, `median_normal`.
+
+Counts, 14 mismatch photos (the 10 match rows: `agents/E3_report.md`). Elements and building: §12.14
+source / v2 / v3. SAM bld: building elements whose region a SAM mask drew. v2 s: the whole merged run.
+SAM 3 s: vision pass plus 28 prompts. md5: first 8 hex of `layers.npz`, `layers.json`.
+
+| photo | elements | building | SAM bld v2 / v3 | v2 s | SAM 3 s | md5 v2 | md5 v3 |
+|---|---|---|---|---|---|---|---|
+| mismatch_1_S | 15 / 34 / 59 | 2 / 9 / 12 | 4 / 8 | 35.5 | 25.6 | 41471115 28b267b7 | 0f44bba7 1e2c5b05 |
+| mismatch_1_F | 10 / 16 / 63 | 1 / 3 / 34 | 1 / 26 | 38.4 | 26.3 | 4903670e c43d5443 | d7a3c9a7 f19bcca6 |
+| mismatch_2_S | 5 / 5 / 7 | 0 / 0 / 0 | 0 / 0 | 29.6 | 28.5 | 158ccd82 74970284 | 34291fb4 d69cb008 |
+| mismatch_2_F | 17 / 17 / 22 | 4 / 4 / 4 | 0 / 0 | 24.6 | 28.2 | 2cc4d509 f4339678 | 391be4b6 9f0efe01 |
+| mismatch_3_S | 53 / 59 / 75 | 5 / 1 / 5 | 1 / 0 | 33.8 | 31.6 | f251706d f49bc4bd | 4ed1f258 53817439 |
+| mismatch_3_F | 44 / 48 / 56 | 0 / 0 / 1 | 0 / 1 | 33.3 | 29.2 | a184be7f eef7d84a | 24a8c22b 48930a13 |
+| mismatch_4_S | 13 / 14 / 22 | 3 / 3 / 12 | 0 / 8 | 27.5 | 26.6 | fa677ab4 3a782a94 | 49802f5c a38417f8 |
+| mismatch_4_F | 8 / 10 / 28 | 1 / 1 / 7 | 0 / 5 | 29.0 | 28.6 | 35bc08ac ca307f38 | 41e851be ddb27b4a |
+| mismatch_5_S | 24 / 23 / 38 | 0 / 0 / 1 | 0 / 1 | 28.1 | 28.6 | 0faf6cb3 10332f18 | 80c29aad b2c1f388 |
+| mismatch_5_F | 5 / 7 / 9 | 0 / 0 / 0 | 0 / 0 | 32.2 | 35.0 | 710429cc 11a81304 | e4ce8d92 ebde3052 |
+| mismatch_6_S | 11 / 22 / 38 | 1 / 6 / 16 | 1 / 10 | 23.4 | 26.0 | c4c571d9 48ccede8 | 25cca3b8 cad93ac6 |
+| mismatch_6_F | 5 / 6 / 9 | 1 / 1 / 1 | 0 / 0 | 24.1 | 25.2 | 6c7dd3be e91c2332 | 63c01a12 4ba32332 |
+| mismatch_7_S | 9 / 17 / 37 | 4 / 6 / 9 | 4 / 9 | 24.8 | 25.4 | 6244ef77 c9099928 | 16fc962b 58fb775a |
+| mismatch_7_F | 10 / 18 / 35 | 2 / 9 / 21 | 6 / 16 | 26.3 | 30.4 | da3c4b60 bc4e4cbd | 389a21cb 52c9eeae |
+
+Time and memory (4 torch threads; the main thread rendered on the same CPU): v2 419 s wall for the 14
+mismatch photos (second run 524 s), v3 1061 s for 24 photos. Median s per photo: Grounding DINO + SAM
+2.1 12.2 (10.2–15.1), SAM 3 28.6 (25.2–35.0; the report's summary says 26–35), §12.14 source 12–23.
+Peak RSS: v2 6.5 GB (mismatch) and 6.9 GB (match), SAM 3 alone on 4 photos 7.6 GB, v3 12.7 GB.
+
+Measurements (`layers_v2/measure_v2.py`, `numbers_v2.json`). IoU = |P ∩ R| / |P ∪ R| against 7
+hand-tuned sky, building, tree and water mattes of 2026-09-27 (§12.14). BF2 = boundary F-score at 2
+px against them. ES2 = share of element-border pixels within 2 px of a Canny edge minus that share 5–7
+px from the borders (chance level).
+
+| source | mean IoU | mean BF2 | sun mismatch_4_S / _F | AC unit mismatch_6_F | clouds mismatch_6_S | median ES2 margin, 24 photos |
+|---|---|---|---|---|---|---|
+| §12.14 source | 0.788 | 0.215 | 0.40 / 0.05 | 0.00 | 0.77 | 0.039 |
+| Grounding DINO B + SAM 2.1 L alone | 0.614 | 0.072 (n 5) | 0.56 / 0.50 | 0.00 | 0.79 | – |
+| SAM 3 alone | 0.690 | 0.149 | 0.57 / 0.51 | 0.26 | 0.56 | – |
+| merged v2 | 0.785 | 0.140 | 0.39 / 0.05 | 0.00 | 0.77 | 0.111 |
+| merged v3 (+ SAM 3) | 0.781 | 0.192 | 0.39 / 0.05 | 0.27 | 0.77 | 0.136 |
+
+ES2: v2 beats the §12.14 source on 18 of 24 photos, v3 beats v2 on 18, v3 beats the source on 20.
+Where borders moved (23 photos, `moved_borders`) v2's stretch has the higher ES2 on 15 and the lower
+on 8, e.g. mismatch_4_S (0.23 against 0.72) and match_4_S (0.20 against 0.71).
+
+SAM 3 setup: `facebook/sam3` at revision `3c879f39826c281e95690f02c7821c4de09afae7`, fetched into
+`layers/hf_home/hub` in 98 s, 3,445,029,864 B in 10 files; `model.safetensors` 3,439,938,512 B, no
+`sam3.pt` (both re-checked on the main thread). The hub-byte log moved by 3,445,029,958 B across the
+mismatch run beside the fetch; the report does not reconcile the two. Token via `HF_TOKEN_PATH`, never
+printed; licence "SAM License" of 2025-11-19, recorded only. transformers 5.17.0 has `Sam3Model`,
+which requires torchvision (`modeling_sam3.py:814`), so SAM 3 runs only in the scratch environment
+`layers/venv` (`.venv` + scipy 1.18.1 + torchvision 0.28.0 via a `.pth` file; torch 2.13.0; nothing
+new installed). Hub config `sam3_video`, of which `Sam3Model` loads the detector. CPU only. Prompts,
+one pass each, verbatim: sun, cloud, star, moon, galaxy core, meteor streak, air conditioning unit,
+building, tree, person, water, sky, mountain, wall, ceiling, window, car, street lamp, bridge, boat,
+house, skyscraper, tower, palm, bus, truck, bicycle, animal (Grounding DINO gets the first 20). Score
+threshold 0.40, mask threshold 0.50. Verdict: more instances than Grounding DINO + SAM 2.1 (977 masks
+against 214) and higher IoU and BF2 as one route, so it is the third route, default off; worse on
+clouds (0.56 against 0.79).
+
+Limits, none cut:
+1. No reference exists for instances: whether v3's 34 building elements on mismatch_1_F are buildings
+   or facade pieces is UNVERIFIED. In the subagent's `--auto2` run on mismatch_1, 2 of 5 matched groups
+   send a building of mismatch_1_S to trees (building#21 → tree#9, cost 0.777; building#23 → tree#11
+   + tree#6 + plant#14, 0.773): v2 has 9 building elements on mismatch_1_S against 3 on mismatch_1_F.
+2. The edge claim is split: BF2 falls (0.215, 0.140, 0.192) while ES2 rises, and the ES2 gain mixes
+   moved borders with new borders between instances. The tuned mattes come from photometric rules with
+   grow and feather steps, a weak border reference. SAM 2.1 masks come from 256-px logits and SAM 3's
+   from 288-px, against about 212 × 160 for OneFormer at 850 × 640, so the SAM edge is not much finer.
+3. The sun stays at 0.39 / 0.05 in the merge though SAM 3 alone scores 0.57 / 0.51: its mask becomes
+   an instance of the sky or splits from it (UNVERIFIED which; `layers_v3/mismatch_4_F/layers.json`
+   holds the verdicts). mismatch_3_S's wall stays "building" (§12.14 limit 5). No route found a star.
+4. Not done: `--auto2` on v3 or on pairs other than mismatch_1; a score reading `layers_v3`; a judged
+   clip; v3 determinism beyond 2 of 24 photos; MPS for SAM 3. The constants are first values, untuned;
+   the SAM 3 score threshold 0.40 is above the processor's default 0.30.
+5. With torchvision present AutoProcessor picks other processors, so the §12.14 source runs as a `.venv`
+   subprocess. The mismatch run's offline proof is the socket count only; the match and v3 runs show
+   12,310,035,528 hub bytes before and after. `layers_v2/_smoke/` is left over (`rm -rf` was denied).
+
+### 12.19 Generated keyframes used inside the layered probe (2026-09-28; `scripts/research/keyframe_layer.py`; clips `benchmarks/runs/2026-09-28/keylayer/`; an Opus 5.5 subagent, re-measured on the main thread)
+
+Result: the layered probe now takes three FLUX.2 klein 9B keyframes per pair, and on both pairs the
+keyframes lower the detail instead of adding it; none of the six clips is a candidate for a final
+result. At the keyframe times the Laplacian variance of L falls by 20 to 66 % against the source clip
+(re-measured on the main thread); mean L, the motion and the endpoints hold. The clips test whether a
+cleaned keyframe improves a layered composite once its colour is held. Ungraded as of 2026-09-28. This
+answers the owner's verdict on §12.15, verbatim: "mostly just sequences of crossfades betweeen
+interrmediate generated frames" and "if you plan to utilize those intermediate keyframes , lets see".
+Keyframes kf_23–kf_28 and their prompts: `research/keyframe-prompting.md §5.5`.
+
+Formula (`keyframe_layer.py clip`), in Lab, on the variant's channels, rounded to 8 bits:
+frame(t) = C(t) + g · Σ_k w_k(t) · carry_{t_k→t}(band_σ(K'_k − C(t_k))). C: the source clip
+`mismatch_6_r5_flow` or `mismatch_4_r5_stagger` from the frozen probe (`HEAD`, md5 `7544463a…`).
+1. K'_k: keyframe k resized to the canvas (INTER_CUBIC) and registered onto C(t_k) on locally
+   normalised L: an ECC affine, refused if a corner moves more than 24 px, plus a DIS residual
+   (smoothed at 16 px, capped at 8 px) kept only when it raises the structure correlation.
+2. Lab match: per-channel mean and standard deviation matched to C(t_k) per layer matte, weighted by
+   each layer's visible share at t_k; gain clipped to (0.4, 2.5), the probe's `gain_clip`.
+3. band_σ = identity − GaussianBlur(σ). carry: OpenCV DIS (PRESET_MEDIUM) between consecutive
+   composite frames on L at half resolution, smoothed at 4 px, composed outward from t_k (a fallback:
+   the frozen probe has no per-pixel motion of the composite). w_k: raised cosines forming a
+   partition of unity over the knots [1, t_1, t_2, t_3, n−2], so w = 0 at frames 0, 1, 88 and 89.
+4. Variants, g = 1.0 in all three: `keylayer_a` σ 4 px on L; `keylayer_b` σ 24 px on L, a, b;
+   `keylayer_c` σ 0 (the whole correction) on L, a, b, so at t_k its frame is the Lab-matched keyframe.
+
+Keyframe times: d_i = the mean over pixels of min(|C_i − A|, |C_i − B|); frames are taken greedily
+by d_i from 3..86, at least 15 apart, three at most. Each profile has one peak, so the rule gives the
+peak and ±15: mismatch_6 frames 15 / 30 / 45 (d 16.55 / 60.16 / 16.55), mismatch_4 27 / 42 / 57 (d
+5.99 / 12.58 / 5.89). A rule on frame means (14 / 29 / 44, 25 / 40 / 55) was tried first and dropped.
+
+Measures (`cv2.VideoCapture`, the same code on every clip; `keylayer/<pair>/measure_table.md`). Stall:
+a step under half the mean of the steps within ±3 frames. Fade R²: R² of the step in L against L(next
+state) − L(previous state), the states being frames 0, t_1, t_2, t_3 and 89.
+| pair | clip | mean L range | step median | stalls (frames) | Laplacian var median | fade R² | DIS px per step | mp4 md5 |
+|---|---|---|---|---|---|---|---|---|
+| mismatch_6 | source | 5.87–59.58 | 1.474 | 0,1,79,80,81,84,85 | 53.2 | 0.360 | 2.53 | `fceb36e8…` |
+| mismatch_6 | a | 5.86–59.58 | 1.658 | 0,1,86,87 | 43.3 | 0.358 | 2.20 | `9f0b3cd2…` |
+| mismatch_6 | b | 5.87–59.58 | 1.780 | 0,1,85 | 45.0 | 0.351 | 2.18 | `0e6c57c0…` |
+| mismatch_6 | c | 5.85–59.58 | 2.027 | 0,1,86,87 | 42.7 | 0.361 | 2.49 | `8f16fe73…` |
+| mismatch_4 | source | 18.19–25.45 | 1.426 | 1,2,3,10,11,74,75,83,85,86,87 | 34.8 | 0.052 | 1.47 | `af95007c…` |
+| mismatch_4 | a | 18.18–25.43 | 1.582 | 1,2,84,85,86 | 28.7 | 0.056 | 1.47 | `a46553fd…` |
+| mismatch_4 | b | 18.17–25.44 | 1.616 | 1,2,3,84,85,86 | 28.4 | 0.056 | 1.48 | `cce0d6b5…` |
+| mismatch_4 | c | 18.15–25.45 | 1.648 | 1,2,3,86 | 27.3 | 0.088 | 1.57 | `928dc3e6…` |
+
+Laplacian variance of L at the keyframe frames, source → a / b / c. The subagent's figures and the
+main thread's (its own decode of the same mp4s) differ by up to 1.7; the cause is not measured.
+
+| pair, frame | subagent | main thread |
+|---|---|---|
+| mismatch_6, 15 | 125.0 → 43.1 / 46.8 / 50.2 | 123.9 → 42.1 / 45.9 / 50.0 |
+| mismatch_6, 30 | 38.1 → 15.5 / 17.1 / 17.3 | 36.8 → 14.6 / 16.1 / 16.4 |
+| mismatch_6, 45 | 18.6 → 12.9 / 12.7 / 12.8 | 17.6 → 11.9 / 12.0 / 12.2 |
+| mismatch_4, 27 | 33.9 → 16.9 / 17.0 / 15.5 | 32.3 → 15.4 / 15.5 / 14.2 |
+| mismatch_4, 42 | 21.8 → 10.8 / 10.3 / 9.5 | 20.5 → 9.6 / 9.3 / 8.6 |
+| mismatch_4, 57 | 31.1 → 24.9 / 24.6 / 23.9 | 29.6 → 23.2 / 22.9 / 22.6 |
+
+Cause, traced on kf_26 (Laplacian variance of 8-bit L at 1344×768): raw keyframe 202.4, after the
+upscale and INTER_AREA round trip 85.9, after the Lab match 21.3, composite 49.2. Matching the
+standard deviation scales the keyframe's fine detail by the same gain (0.43–0.72 on the skyline band
+and the water of mismatch_4). On kf_23 the match raises 18.8 to 48.7, but the composite has 185.7.
+
+What holds:
+1. Mean L stays within 0.4 L of the source clip at every keyframe time; each matched keyframe is
+   within 0.11 L of its composite (10.7–35.6 L apart before matching, §5.5 exposure table).
+2. No stall at a keyframe: the smallest step near each t_k is 0.84–1.03 of its neighbours' mean. The
+   listed stalls are the probe's held end frames; the variants remove some (mismatch_4: 11 → 4–6).
+3. Fade R² stays at the source's level (0.351–0.361 against 0.360; 0.056–0.088 against 0.052), except
+   `keylayer_c` on mismatch_4's frames 0–27: 0.038 → 0.117 as the correction ramps in, at 0.56–0.74 px
+   per step, under the 1 px below which R² cannot tell a fade from a decaying motion (§12.13.1).
+4. Endpoints: every `report.json` holds `frame0_equals_A`, `last_equals_B` and `untouched_equal_source`
+   true (re-checked on the main thread); frames 0, 1, 88, 89 equal the source byte for byte only
+   because w is zero there; frames 2 and 87 carry 0.001–0.284 levels of correction.
+5. Each clip is byte-identical on two renders; the main thread re-checked the six md5s above.
+
+The first render was wrong and was overwritten (six mp4s, md5s in `agents/B2_report.md`): DIS on
+raw L fitted the exposure difference and moved kf_25 by 217.5 px on average (p95 398 px) and kf_23 by
+85.0 px. The locally normalised registration moves the mismatch_4 keyframes by 4.49 / 8.79 / 5.94 px
+at a corner and raises structure correlation from 0.676 / 0.671 / 0.822 to 0.808 / 0.859 / 0.870. On
+mismatch_6 it reaches only 0.522 / 0.611 / 0.403; the DIS residual was dropped on kf_25 and kf_28.
+
+Limits and what was not tried:
+1. A colour rule that matches Lab at low frequency and keeps the keyframe's own detail amplitude was
+   not rendered; whether a keyframe can add detail under it is open.
+2. The chained DIS carry reaches up to 43 frames; its error is not measured beyond the absence of a
+   stall or a mean-L jump.
+3. Whether the redrawn clouds of kf_23 and kf_25 read as invented content rests on structure
+   correlation (0.52, 0.40) and the subagent's eye only.
+4. `layered_diag.py` (seam, outline, rest) was not run: it imports the working-tree probe.

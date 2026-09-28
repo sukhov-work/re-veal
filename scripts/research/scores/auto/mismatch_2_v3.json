@@ -1,0 +1,330 @@
+{
+ "pair": "mismatch_2",
+ "tag": "auto_r6",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "layers_dir": "benchmarks/runs/2026-09-28/layers_v2",
+ "owner": "Automatic per-element score, round 6 (fixed rules, no per-pair parameter; layered_probe.py --auto3): edit this file to tune the scene.",
+ "auto_facts": {
+  "sky_share": [
+   0,
+   0.001
+  ],
+  "route": "elements",
+  "elements": [
+   5,
+   17
+  ],
+  "considered": [
+   5,
+   12
+  ],
+  "matched_groups": 3,
+  "layers": 3,
+  "matches": [
+   {
+    "layer": "e0_tree",
+    "a": [
+     "tree#3"
+    ],
+    "b": [
+     "building#2",
+     "plant#8"
+    ],
+    "cost": 0.826484,
+    "mean_disparity": 0.015
+   },
+   {
+    "layer": "e1_person",
+    "a": [
+     "person#2"
+    ],
+    "b": [
+     "person#6",
+     "person#7",
+     "person#11",
+     "person#13",
+     "person#15"
+    ],
+    "cost": 0.421854,
+    "mean_disparity": 0.237
+   },
+   {
+    "layer": "e2_tree",
+    "a": [
+     "tree#1"
+    ],
+    "b": [
+     "plant#3",
+     "plant#12"
+    ],
+    "cost": 1.012346,
+    "mean_disparity": 0.403
+   }
+  ],
+  "ground_share": [
+   1.0,
+   0.999
+  ],
+  "ground": "none: the rest follows the elements",
+  "drawn_over_the_sheet": [
+   "e1_person"
+  ],
+  "steer_the_sheet": [
+   "e0_tree",
+   "e2_tree"
+  ],
+  "rest": []
+ },
+ "layers": [
+  {
+   "name": "e0_tree_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2,
+     8
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e1_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     6,
+     7,
+     11,
+     13,
+     15
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e2_tree_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     3,
+     12
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "all_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "all"
+   },
+   "plate": {
+    "dilate": 2,
+    "sigma": 40,
+    "scales": [
+     6,
+     18,
+     54,
+     162
+    ],
+    "settle_px": 3.0,
+    "holes": [
+     "e1_person_b"
+    ]
+   }
+  },
+  {
+   "action": "morph_to",
+   "window": [
+    0.08,
+    0.92
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "bright",
+   "ot_border": 0.2,
+   "field": {
+    "from": "layers",
+    "layers": [
+     "e0_tree",
+     "e2_tree"
+    ],
+    "fallback": "ot",
+    "sigma": 0.04,
+    "kappa": 0.02
+   },
+   "stagger": {
+    "amount": 0.4,
+    "scale_px": 360,
+    "seed": 29
+   },
+   "name": "rest",
+   "from": "A",
+   "mask": {
+    "rule": "all"
+   },
+   "depth": 0,
+   "to": "all_b",
+   "ot_local": 0.06,
+   "ot_floor": 0.3,
+   "ot_bend": 0.75,
+   "mix": "shape",
+   "plate": {
+    "dilate": 2,
+    "sigma": 40,
+    "scales": [
+     6,
+     18,
+     54,
+     162
+    ],
+    "settle_px": 3.0,
+    "holes": [
+     "e1_person"
+    ]
+   }
+  },
+  {
+   "name": "e0_tree",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     3
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 2,
+   "action": "morph_to",
+   "to": "e0_tree_b",
+   "window": [
+    0.1,
+    0.82
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 41
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  },
+  {
+   "name": "e1_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 3,
+   "action": "morph_to",
+   "to": "e1_person_b",
+   "window": [
+    0.17,
+    0.89
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 42
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape"
+  },
+  {
+   "name": "e2_tree",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     1
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 4,
+   "action": "morph_to",
+   "to": "e2_tree_b",
+   "window": [
+    0.24,
+    0.96
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 43
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  }
+ ]
+}

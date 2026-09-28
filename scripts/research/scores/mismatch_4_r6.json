@@ -1,0 +1,360 @@
+{
+ "pair": "mismatch_4",
+ "tag": "layered_r6",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "owner": "Round 5 pick (2026-09-28): 'layered_r5_stagger ( and layered_r5 ) look now closer to. what i expected , much more direction and stability present and transition is more seamless , still small crossfading and minor building boders overlap ,but better than all previous results '. Round 6: the skyline band is ONE shape while it changes (`mix: shape`): the part only the first skyline covers shrinks from its outer edge and the part only the second covers grows out of the shared part, so neither stands beside the other as a half-transparent outline; a place both cover mixes by the plain share. Everything else as `layered_r5_stagger`.",
+ "layers": [
+  {
+   "name": "band_core_b",
+   "from": "B",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 9,
+    "gap": 20,
+    "median": 31,
+    "max_bottom": 0.75,
+    "bottom_fit": 1
+   },
+   "render": false
+  },
+  {
+   "name": "sky_core_b",
+   "from": "B",
+   "mask": {
+    "rule": "above_band",
+    "of": "band_core_b"
+   },
+   "render": false
+  },
+  {
+   "name": "silh_b",
+   "from": "B",
+   "mask": {
+    "rule": "dark_in",
+    "relative": "local",
+    "local_px": 120,
+    "dark_lo": 0.35,
+    "dark_hi": 0.6,
+    "within": "sky_core_b",
+    "min_blob": 40,
+    "dilate": 2
+   },
+   "render": false
+  },
+  {
+   "name": "band_b",
+   "from": "B",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 9,
+    "gap": 20,
+    "median": 31,
+    "max_bottom": 0.75,
+    "or": [
+     "silh_b"
+    ],
+    "grow": 2,
+    "extend_bottom_px": 200,
+    "bottom_fit": 1
+   },
+   "prompt": {
+    "b": "the low industrial skyline with cranes, pylons and a tall chimney",
+    "where": "across the middle of the frame"
+   },
+   "render": false
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "mask": {
+    "rule": "above_band",
+    "of": "band_b"
+   },
+   "render": false
+  },
+  {
+   "name": "water_b",
+   "from": "B",
+   "mask": {
+    "rule": "below_band",
+    "of": "band_b"
+   },
+   "render": false
+  },
+  {
+   "name": "sun_b",
+   "from": "B",
+   "mask": {
+    "rule": "sun",
+    "within": "sky_b",
+    "thr": 92,
+    "grow": 6
+   },
+   "render": false
+  },
+  {
+   "name": "band_core",
+   "from": "A",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 6,
+    "gap": 20,
+    "median": 31,
+    "max_bottom": 0.56,
+    "bottom_fit": 1
+   },
+   "render": false
+  },
+  {
+   "name": "sky_core",
+   "from": "A",
+   "mask": {
+    "rule": "above_band",
+    "of": "band_core"
+   },
+   "render": false
+  },
+  {
+   "name": "silh_a",
+   "from": "A",
+   "mask": {
+    "rule": "dark_in",
+    "relative": "local",
+    "local_px": 120,
+    "dark_lo": 0.35,
+    "dark_hi": 0.6,
+    "within": "sky_core",
+    "min_blob": 40,
+    "dilate": 2
+   },
+   "render": false
+  },
+  {
+   "name": "band",
+   "from": "A",
+   "mask": {
+    "rule": "band_dark",
+    "sky_d": 0.02,
+    "dark_L": 6,
+    "gap": 20,
+    "median": 31,
+    "max_bottom": 0.56,
+    "or": [
+     "silh_a"
+    ],
+    "grow": 2,
+    "extend_bottom_px": 200,
+    "bottom_fit": 1
+   },
+   "depth": 2,
+   "action": "morph_to",
+   "window": [
+    0.15,
+    0.85
+   ],
+   "curve": "smootherstep",
+   "prompt": {
+    "a": "the dark city skyline with the tall buildings on the left and its masts",
+    "where": "across the middle of the frame"
+   },
+   "to": "band_b",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.35,
+    "scale_px": 400,
+    "seed": 21
+   },
+   "exact": true,
+   "mix": "shape"
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "above_band",
+    "of": "band"
+   },
+   "depth": 0,
+   "action": "backdrop",
+   "opaque": true,
+   "to": "sky_b",
+   "exclude": [
+    "sun_b"
+   ],
+   "exclude_res": [
+    {
+     "layer": "band_b",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "minus_res": [
+    {
+     "layer": "band",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "fill_sigma": 60,
+   "fit2d": true,
+   "window": [
+    0.0,
+    0.85
+   ],
+   "curve": "smootherstep",
+   "minus": [
+    "sun"
+   ],
+   "prompt": {
+    "a": "the deep orange sunset sky",
+    "b": "the golden sunset sky with a band of thin bright clouds",
+    "where": "the top half of the frame"
+   },
+   "flow": {
+    "from": "layers",
+    "layers": [
+     "sun"
+    ],
+    "sigma": 0.12,
+    "kappa": 0.02,
+    "mix_window": [
+     0.25,
+     0.75
+    ],
+    "stagger": {
+     "amount": 0.35,
+     "scale_px": 360,
+     "seed": 23
+    }
+   },
+   "settle": {
+    "px": 3.0
+   },
+   "fill_scales": [
+    6,
+    18,
+    54,
+    162
+   ]
+  },
+  {
+   "name": "sun",
+   "from": "A",
+   "mask": {
+    "rule": "sun",
+    "within": "sky",
+    "thr": 92,
+    "grow": 6
+   },
+   "depth": 1.5,
+   "action": "move_to",
+   "to": "sun_b",
+   "window": [
+    0.15,
+    0.7
+   ],
+   "curve": "smootherstep",
+   "recolor_to": "sun_b",
+   "recolor_strength": 1.0,
+   "prompt": {
+    "a": "the sun disc",
+    "b": "the sun disc sitting on the tip of the tall chimney"
+   },
+   "shutter": 0.5
+  },
+  {
+   "name": "sun_b_layer",
+   "from": "B",
+   "mask": {
+    "rule": "sun",
+    "within": "sky_b",
+    "thr": 92,
+    "grow": 6
+   },
+   "depth": 1.6,
+   "action": "materialise",
+   "order": "luma",
+   "noise_gain": 0.0,
+   "feather": 0.3,
+   "window": [
+    0.68,
+    0.8
+   ],
+   "curve": "ease",
+   "prompt": {
+    "b": "the sun disc on the tip of the tall chimney"
+   }
+  },
+  {
+   "name": "water",
+   "from": "A",
+   "mask": {
+    "rule": "below_band",
+    "of": "band"
+   },
+   "depth": 4,
+   "action": "backdrop",
+   "opaque": false,
+   "to": "water_b",
+   "mask_to": "water_b",
+   "slide_between": [
+    "band",
+    "band_b"
+   ],
+   "fill_sigma": 60,
+   "fit2d": true,
+   "window": [
+    0.1,
+    0.85
+   ],
+   "curve": "smootherstep",
+   "prompt": {
+    "a": "the water with the sun's bright reflection road",
+    "where": "the bottom half of the frame",
+    "b": "the water reflecting the golden sky, with a fainter reflection road"
+   },
+   "flow": {
+    "from": "layers",
+    "layers": [
+     "sun",
+     "band"
+    ],
+    "gain": 0.5,
+    "sigma": 0.12,
+    "kappa": 0.02,
+    "mix_window": [
+     0.25,
+     0.75
+    ],
+    "stagger": {
+     "amount": 0.35,
+     "scale_px": 360,
+     "seed": 23
+    }
+   },
+   "settle": {
+    "px": 3.0
+   },
+   "fill_scales": [
+    6,
+    18,
+    54,
+    162
+   ]
+  }
+ ],
+ "scene_a": "a sunset over a wide river: a dark city skyline with tall buildings on the left, the sun above the buildings, its reflection as a bright road on the water"
+}

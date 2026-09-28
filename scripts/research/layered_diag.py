@@ -27,6 +27,11 @@ with --frames, PNG frames under --out. Changes nothing in either tool or in a sc
   seam    per frame the L step across a line (the running top edge of a `slide_between` backdrop, or
           the alpha 0.5 contour of a layer): a 12-px band above against a 12-px band below, beside
           the same number on A and on B at their own lines.
+  fields  (round 6) per `morph_to` layer the travel and the strain of its field ("clouds skewed").
+  rim     (round 6) per matte the share of its inner rim that holds the outside colour (a pale
+          outline once the layer lies over another).
+  holes   (round 6) per frame the share of the canvas where a backdrop's hole fill is seen (a
+          smooth dome in the sky, a pale band beside a matte).
 
   .venv/bin/python scripts/research/layered_diag.py end --score scripts/research/scores/mismatch_4_r4.json \
       --regions sky_b band_core_b water_b --from 0.5 --out DIR [--frames]
@@ -308,7 +313,9 @@ def cmd_layers(a):
     show the second photo's content over the same place, one at rest and one still on its way, are
     the owner's "duplicate final picture that is already there" (round-5 picks, 2026-09-28).
     `overlap`: the share of the canvas where this layer and a layer under it both hold alpha above
-    0.5 and a mix above 0.5."""
+    0.5 and a mix above 0.5. `semi` (round 6): the share of the canvas where the layer's alpha lies
+    between 0.05 and 0.95 (a part shown half transparent: the owner's "minor building boders
+    overlap" on mismatch_4 round 5)."""
     score, scene, layers, A, B, n = build(a.score)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -333,20 +340,214 @@ def cmd_layers(a):
             m = al > 0.5
             mv = l.away(t)
             b_here = m & (qm > 0.5)
+            if getattr(l, "last_vb", None) is not None:
+                # round 6: a plate shows the second photo's content only where it holds that
+                # photo's own pixels; under an object it holds a fill
+                b_here &= np.asarray(l.last_vb) > 0.5
+            semi = float(((al > 0.05) & (al < 0.95)).mean())
             ov = 0.0
-            for other in seen:
-                ov = max(ov, float((b_here & other).mean()))
-            seen.append(b_here)
+            for other, other_to_go in seen:
+                # two layers at rest hold the same pixels at the same place (a plate under an
+                # object that has arrived): a duplicate is one of them still on its way
+                if max(float(mv[1]), other_to_go) > 3.0:
+                    ov = max(ov, float((b_here & other).mean()))
+            seen.append((b_here, float(mv[1])))
             row["layers"][l.name] = {"alpha_share": round(float(m.mean()), 3), "mix_mean": round(float(qm[m].mean()), 3) if m.any() else None,
-                                     "moved_px": round(float(mv[0]), 1), "to_go_px": round(float(mv[1]), 1), "overlap": round(ov, 3)}
+                                     "moved_px": round(float(mv[0]), 1), "to_go_px": round(float(mv[1]), 1), "overlap": round(ov, 3),
+                                     "semi_share": round(semi, 4)}
         rows.append(row)
-        print(f"{t:.3f} " + " | ".join(f"{k}: a {v['alpha_share']:.2f} mix {v['mix_mean']} to go {v['to_go_px']:.0f} px overlap {v['overlap']:.2f}" for k, v in row["layers"].items()))
+        print(f"{t:.3f} " + " | ".join(f"{k}: a {v['alpha_share']:.2f} mix {v['mix_mean']} to go {v['to_go_px']:.0f} px overlap {v['overlap']:.2f} semi {100 * v['semi_share']:.1f} %" for k, v in row["layers"].items()))
     (out / "layers.json").write_text(json.dumps({"score": a.score, "rows": rows}, indent=1))
+
+
+def cmd_fields(a):
+    """Per `morph_to` layer and per direction (A -> B inside the layer's matte, B -> A inside its
+    target's): the travel (mean and 95th percentile of the field's length, px) and the strain (see
+    layered_probe.strain_of: median, 95th percentile, the share of the matte over 0.5 and the
+    share that folds), then the strain of the field's affine part (the layer grows, turns or
+    shears as a whole) and the 95th percentile of the strain of what the affine part leaves out
+    (`bend`: a straight line becomes a curve).
+    The owner on round 5: "clouds skewed alot"; a cloud stretched into a peak is a place whose
+    strain is near 1."""
+    score, scene, layers, A, B, n = build(a.score)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = {}
+    for l in layers:
+        if l.action != "morph_to":
+            continue
+        F, G = l.fields()
+        row = {}
+        for nm, fld, al in (("a_to_b", F, l.alpha0), ("b_to_a", G, l.tgt.alpha0)):
+            sel = al > 0.5
+            if sel.sum() < 100:
+                row[nm] = None
+                continue
+            mag = np.sqrt((fld ** 2).sum(-1))[sel]
+            st, fold = P.strain_of(fld)
+            aff, _ = P.affine_part(fld, al)
+            st_aff, _ = P.strain_of(aff)
+            st_bend, _ = P.strain_of(fld - aff)
+            row[nm] = {"matte_share": round(float(sel.mean()), 3), "travel_mean_px": round(float(mag.mean()), 1),
+                       "travel_p95_px": round(float(np.percentile(mag, 95)), 1),
+                       "strain_median": round(float(np.median(st[sel])), 3), "strain_p95": round(float(np.percentile(st[sel], 95)), 3),
+                       "share_strain_over_0.5": round(float((st[sel] > 0.5).mean()), 4), "share_fold": round(float(fold[sel].mean()), 4),
+                       "affine_strain": round(float(np.median(st_aff[sel])), 3),
+                       "bend_p95": round(float(np.percentile(st_bend[sel], 95)), 3)}
+        rows[l.name] = row
+        for nm, r in row.items():
+            if r:
+                print(f"{l.name:>16} {nm}: matte {100 * r['matte_share']:.1f} %  travel mean {r['travel_mean_px']:.1f} px, p95 {r['travel_p95_px']:.1f} px  "
+                      f"strain median {r['strain_median']:.3f}, p95 {r['strain_p95']:.3f}, over 0.5 on {100 * r['share_strain_over_0.5']:.2f} %, folds on {100 * r['share_fold']:.2f} %  "
+                      f"affine part {r['affine_strain']:.3f}, bend p95 {r['bend_p95']:.3f}")
+    (out / "fields.json").write_text(json.dumps({"score": a.score, "layers": rows}, indent=1))
+
+
+def rim_of(lab, alpha, ring=4, core=(10, 24), outside=(4, 16), sigma=12.0, contrast=10.0):
+    """How much of a matte's inner rim holds the colour of what lies outside the matte. For every
+    pixel within `ring` px inside the alpha 0.5 contour: its Lab distance to the local mean colour
+    of the matte's core (`core` px inside) against its distance to the local mean colour outside
+    (`outside` px out); both means are normalized convolutions at `sigma` px. Counted where the two
+    means stand more than `contrast` apart (Lab distance), so a rim between two like colours does
+    not count. Returns (the share of those rim pixels nearer to the outside colour, the rim pixels
+    counted, the mean Lab distance between the two means there)."""
+    hard = (alpha > 0.5).astype(np.uint8)
+    if hard.sum() < 200 or (1 - hard).sum() < 200:
+        return None, 0, None
+    d_in = cv2.distanceTransform(hard, cv2.DIST_L2, 5)
+    d_out = cv2.distanceTransform(1 - hard, cv2.DIST_L2, 5)
+    m_core = ((d_in > core[0]) & (d_in <= core[1])).astype(np.float32)
+    m_out = ((d_out > outside[0]) & (d_out <= outside[1])).astype(np.float32)
+    rim = (d_in > 0) & (d_in <= ring)
+
+    def local(m):
+        den = cv2.GaussianBlur(m, (0, 0), sigma)
+        num = cv2.GaussianBlur(lab * m[..., None], (0, 0), sigma)
+        return num / np.maximum(den, 1e-6)[..., None], den
+    c_core, w_core = local(m_core)
+    c_out, w_out = local(m_out)
+    apart = np.sqrt(((c_core - c_out) ** 2).sum(-1))
+    use = rim & (w_core > 0.02) & (w_out > 0.02) & (apart > contrast)
+    if use.sum() < 50:
+        return None, int(use.sum()), None
+    to_core = np.sqrt(((lab - c_core) ** 2).sum(-1))[use]
+    to_out = np.sqrt(((lab - c_out) ** 2).sum(-1))[use]
+    return float((to_out < to_core).mean()), int(use.sum()), float(apart[use].mean())
+
+
+def cmd_rim(a):
+    """Per layer with a matte of its own (every rendered layer but the backdrops, and the target of
+    every `morph_to`): the share of the matte's inner rim that holds the outside colour (see
+    rim_of), on the layer's own photo at rest. A matte cut from an upsampled label map sits a few
+    px outside the object; the rim then carries sky, and over another layer it shows as a pale
+    outline (the owner's screenshots of round 5)."""
+    score, scene, layers, A, B, n = build(a.score)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = {}
+    seen = set()
+    for l in layers:
+        if isinstance(l, P.Backdrop):
+            continue
+        for lay in (l, getattr(l, "tgt", None)):
+            if lay is None or lay.name in seen or float(lay.alpha0.mean()) > 0.97:
+                continue
+            seen.add(lay.name)
+            share, npx, apart = rim_of(scene.lab[lay.src], lay.alpha0)
+            rows[lay.name] = {"photo": lay.src, "matte_share": round(float((lay.alpha0 > 0.5).mean()), 3), "rim_px": npx,
+                              "outside_colour_share": None if share is None else round(share, 3),
+                              "apart_lab": None if apart is None else round(apart, 1)}
+            r = rows[lay.name]
+            print(f"{lay.name:>16} ({lay.src}): matte {100 * r['matte_share']:.1f} %  rim px counted {npx}  "
+                  f"rim nearer to the outside colour {'n/a' if share is None else f'{100 * share:.1f} %'}  means apart {r['apart_lab']}")
+    (out / "rim.json").write_text(json.dumps({"score": a.score, "layers": rows}, indent=1))
+
+
+def cmd_holes(a):
+    """Per frame: the share of the canvas where a backdrop's hole fill is what the viewer sees. A
+    backdrop's residual is the photo's own where the sky is known and a fill (a normalized
+    convolution of the surroundings) in its holes, under the layers drawn over it. `fill`: the
+    weight of the fill in the backdrop's picture at that pixel (both photos' holes, carried by the
+    backdrop's flow and mixed as its textures are; under `settle` a hole whose layer rests counts
+    as the photo's own). `cover`: 1 - the product of (1 - alpha) of the layers above the backdrop.
+    Counted: fill > 0.5 and cover < 0.5. The owner's screenshots of round 5 show it as a smooth
+    dome in the lower sky and as pale outlines along the mattes. A plate (round 6: a layer that
+    holds a fill under the objects drawn over it) counts the same way: its fill where the plate is
+    drawn and no layer above covers it."""
+    score, scene, layers, A, B, n = build(a.score)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    bds = [l for l in layers if isinstance(l, P.Backdrop)]
+    plates = [l for l in layers if getattr(l, "valid", None) is not None or getattr(getattr(l, "tgt", None), "valid", None) is not None]
+    if not bds and not plates:
+        print("no backdrop and no plate in this score: every layer holds pixels of a photo")
+        (out / "holes.json").write_text(json.dumps({"score": a.score, "rows": []}, indent=1))
+        return
+    bd = bds[0] if bds else None
+    rows = []
+    for i in range(1, n - 1, a.every):
+        t = i / (n - 1)
+        rend = {l.name: l.render(t)[1] for l in layers if l is not bd}
+
+        def cover_above(lay):
+            c = np.zeros((scene.h, scene.w), np.float32)
+            for l in layers:
+                if l is not bd and l.depth > lay.depth:
+                    c = 1.0 - (1.0 - c) * (1.0 - rend[l.name])
+            return c
+        seen = np.zeros((scene.h, scene.w), bool)
+        seen_mv = np.zeros((scene.h, scene.w), bool)
+        fill = np.zeros((scene.h, scene.w), np.float32)
+        cover = np.ones((scene.h, scene.w), np.float32)
+        if bd is not None:
+            fill = bd.fill_weight(t)
+            fill_mv = bd.fill_weight(t, moving_only=True)
+            cover = cover_above(bd)
+            seen = (fill > 0.5) & (cover < 0.5)
+            seen_mv = (fill_mv > 0.5) & (cover < 0.5)
+        for pl in plates:
+            # round 6: a plate's fill, where the plate is drawn and nothing above covers it
+            if getattr(pl, "last_fill", None) is None:
+                continue
+            pf = (np.asarray(pl.last_fill) > 0.5) & (rend[pl.name] > 0.5) & (cover_above(pl) < 0.5)
+            fill = np.maximum(fill, np.asarray(pl.last_fill, np.float32) * (rend[pl.name] > 0.5))
+            cover = np.minimum(cover, cover_above(pl))
+            seen |= pf
+            seen_mv |= pf
+        rows.append({"i": i, "t": round(t, 4), "fill_share": round(float((fill > 0.5).mean()), 4),
+                     "uncovered_share": round(float((cover < 0.5).mean()), 4), "fill_seen_share": round(float(seen.mean()), 4),
+                     "fill_seen_under_moved_layers": round(float(seen_mv.mean()), 4)})
+        r = rows[-1]
+        print(f"{r['t']:.3f} fill over {100 * r['fill_share']:.1f} % of the canvas, uncovered {100 * r['uncovered_share']:.1f} %, fill seen {100 * r['fill_seen_share']:.2f} %"
+              f" (of it where a layer has moved off: {100 * r['fill_seen_under_moved_layers']:.2f} %)")
+        if a.frames:
+            fr = frame_at(layers, A, B, i, n).copy()
+            fr[seen] = (0.5 * fr[seen] + 0.5 * np.array([255, 0, 255])).astype(np.uint8)
+            cv2.imwrite(str(out / f"holes_{i:03d}.jpg"), cv2.cvtColor(fr, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 85])
+    worst = max(rows, key=lambda r: r["fill_seen_share"]) if rows else None
+    if worst:
+        print(f"largest: {100 * worst['fill_seen_share']:.2f} % at t {worst['t']:.3f}; mean over the frames {100 * float(np.mean([r['fill_seen_share'] for r in rows])):.2f} %")
+    (out / "holes.json").write_text(json.dumps({"score": a.score, "backdrop": bd.name if bd is not None else None,
+                                               "plates": [l.name for l in plates], "rows": rows}, indent=1))
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    fl = sub.add_parser("fields")
+    fl.add_argument("--score", required=True)
+    fl.add_argument("--out", required=True)
+    fl.set_defaults(fn=cmd_fields)
+    rm = sub.add_parser("rim")
+    rm.add_argument("--score", required=True)
+    rm.add_argument("--out", required=True)
+    rm.set_defaults(fn=cmd_rim)
+    ho = sub.add_parser("holes")
+    ho.add_argument("--score", required=True)
+    ho.add_argument("--every", type=int, default=4)
+    ho.add_argument("--frames", action="store_true", help="write the frames with the seen fill tinted magenta")
+    ho.add_argument("--out", required=True)
+    ho.set_defaults(fn=cmd_holes)
     e = sub.add_parser("end")
     e.add_argument("--score", required=True)
     e.add_argument("--regions", nargs="*", default=[])

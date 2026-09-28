@@ -216,6 +216,97 @@ utilize those intermediate keyframes , lets see." The chain of the tool's morphs
 is out. The page did not say whether its clips were candidates for a final result or a test of one
 step; a review page states that at its head from now on.
 
+### 5.5 Keyframes for the layered probe (2026-09-28; DECISIONS 2026-09-28 evening, Track B2; clips `benchmarks/runs/2026-09-28/keylayer/`)
+
+Result: six klein 9B keyframes, kf_23–kf_28, clean up the round-5 composites at three frames of
+each clip around its frame farthest from both photos; every run exited 0 and kf_23b is byte-identical
+to kf_23. Inside the layered probe they lower the clip's detail (`TRANSITIONS.md §12.19`). An Opus
+5.5 subagent ran them; the prompt bytes were re-checked with `cmp` while this section was drafted.
+Ungraded as of 2026-09-28.
+
+Recipe: FLUX.2 klein 9B Q8_0 through `~/keyframes/kf_run4.sh` (unchanged) with `MODEL=klein
+MODELS=~/keyframes/models_klein9 KLEIN_DIFFUSION=flux-2-klein-9b-Q8_0.gguf KLEIN_LLM=Qwen3-8B-Q8_0.gguf
+NEED_GB=23`, seed 20260926, 4 steps, cfg 1.0, one reference: the round-5 composite frame at canvas
+size (1146×1524 for mismatch_6 from `mismatch_6_r5_flow`, 1920×1092 for mismatch_4 from
+`mismatch_4_r5_stagger`). Queue `~/keyframes/kf_queue6.sh`, 14:46–14:57 BST on 2026-09-28. The
+frames are 15 / 30 / 45 (mismatch_6) and 27 / 42 / 57 (mismatch_4), chosen by the rule in §12.19.
+
+Wall s is `run_begin` → `run_end`, model load included. MemAvailable was 36.2–36.8 GiB before each
+run; GTT used rose from 55.2 GB.
+
+| run | reference | size | wall s | sampling s | MemAvailable min GiB | GTT max GB | sha256 |
+|---|---|---|---|---|---|---|---|
+| kf_23 | `kl_m6_f015.png` | 768×1024 | 77 | 59.99 | 18.61 | 73.55 | `2ae497e010d96ccee851bd3dd91e7982926b8a054e9180835f12bea21915336f` |
+| kf_24 | `kl_m6_f030.png` | 768×1024 | 72 | 57.10 | 18.64 | 73.55 | `77b99770ee2b7a3558303b30b65ce5387715e25c5d2f4740f05665c2a4afc54f` |
+| kf_25 | `kl_m6_f045.png` | 768×1024 | 74 | 56.36 | 17.90 | 73.55 | `31646c3a57a01de452a61b2af37645eb266672fe0ae986258f2b65e12ee6a6e0` |
+| kf_26 | `kl_m4_f027.png` | 1344×768 | 95 | 78.83 | 17.60 | 74.59 | `c1cbf8b986e336fdc2754276bf840d350eeb0d48f0a02c4170fafe02734a0090` |
+| kf_27 | `kl_m4_f042.png` | 1344×768 | 90 | 74.92 | 17.57 | 74.59 | `13e7526965426068e89c1b5ffc9c3c8632d9d76ebf2595d3b2600d8bc6c782f4` |
+| kf_28 | `kl_m4_f057.png` | 1344×768 | 69 | 56.83 | 17.59 | 74.59 | `d887d1e08ac4c1dd196645392325bc6a949136f5bc821daa677c17abf1890481` |
+| kf_23b | `kl_m6_f015.png` | 768×1024 | 50 | 40.72 | 18.96 | 73.55 | `2ae497e0…` (byte-identical to kf_23, `cmp`) |
+
+kf_23b took 50 s against kf_23's 77 s for byte-identical output (median step 9.8 s against 14.2 s);
+the cause is not measured. §5.4's 9B runs took 68–69 s at 1344×768 and 50–51 s at 768×1024.
+
+Prompts, verbatim (`keylayer/box/prompts/`). kf_23 and kf_23b use the bytes of kf_20's prompt, kf_26
+the bytes of kf_17's (`cmp` equal, checked by the subagent and again while drafting); the others differ
+only in the stage words before the first semicolon or full stop. kf_23, kf_23b:
+
+> image 1 is a rough composite of a view seen from a window, caught early in a change from day to night: the sky is darkening and the clouds are fading into it; the row of buildings along the bottom is still a row of buildings. Turn it into one coherent, natural photograph. Keep the shapes along the bottom, the sky and the clouds exactly where they are in image 1. Remove the double exposure, the outlines and the patches. Make the light consistent: dusk turning into night, the shapes along the bottom dimmed against the sky. Photorealistic, one continuous photograph, the same framing as image 1, no split screen, no border, no text.
+
+kf_24:
+
+> image 1 is a rough composite of a view seen from a window, caught midway through a change from day to night: the sky is darkening and the clouds are fading into it; the row of buildings along the bottom is still a row of buildings. Turn it into one coherent, natural photograph. Keep the shapes along the bottom, the sky and the clouds exactly where they are in image 1. Remove the double exposure, the outlines and the patches. Make the light consistent: dusk turning into night, the shapes along the bottom dimmed against the sky. Photorealistic, one continuous photograph, the same framing as image 1, no split screen, no border, no text.
+
+kf_25:
+
+> image 1 is a rough composite of a view seen from a window, caught late in a change from day to night: the sky is almost night and the last of the clouds are fading into it; the row of buildings along the bottom is still a row of buildings. Turn it into one coherent, natural photograph. Keep the shapes along the bottom, the sky and the clouds exactly where they are in image 1. Remove the double exposure, the outlines and the patches. Make the light consistent: dusk turning into night, the shapes along the bottom dimmed against the sky. Photorealistic, one continuous photograph, the same framing as image 1, no split screen, no border, no text.
+
+kf_26:
+
+> image 1 is a rough composite of a sunset over a wide river, caught early in a change from one skyline to another. Turn it into one coherent, natural photograph. Keep the sun, the horizon, the skyline silhouettes and the reflection on the water exactly where they are in image 1. Remove the seams, ghost outlines, double edges, dark discs and patches in the sky and on the water. Make the light and the colour consistent across the sky, the skyline and the water, as one sunset seen by one camera. Photorealistic, one continuous photograph, the same framing as image 1, no split screen, no border, no text.
+
+kf_27:
+
+> image 1 is a rough composite of a sunset over a wide river, caught midway through a change from one skyline to another. Turn it into one coherent, natural photograph. Keep the sun, the horizon, the skyline silhouettes and the reflection on the water exactly where they are in image 1. Remove the seams, ghost outlines, double edges, dark discs and patches in the sky and on the water. Make the light and the colour consistent across the sky, the skyline and the water, as one sunset seen by one camera. Photorealistic, one continuous photograph, the same framing as image 1, no split screen, no border, no text.
+
+kf_28:
+
+> image 1 is a rough composite of a sunset over a wide river, caught late in a change from one skyline to another. Turn it into one coherent, natural photograph. Keep the sun, the horizon, the skyline silhouettes and the reflection on the water exactly where they are in image 1. Remove the seams, ghost outlines, double edges, dark discs and patches in the sky and on the water. Make the light and the colour consistent across the sky, the skyline and the water, as one sunset seen by one camera. Photorealistic, one continuous photograph, the same framing as image 1, no split screen, no border, no text.
+
+Screening (`keyframe_screen.py`, `keylayer/screen/kf_*.json`): MAD in levels, Laplacian variance on
+the 480-px proxy.
+
+| keyframe | MAD to A | MAD to B | MAD to reference | Laplacian var (A / B) | sun |
+|---|---|---|---|---|---|
+| kf_23 | 103.31 | 33.44 | 86.76 | 31.1 (727.6 / 107.6) | – |
+| kf_24 | 98.69 | 38.82 | 30.38 | 24.1 | – |
+| kf_25 | 74.80 | 64.52 | 53.28 | 165.4 | – |
+| kf_26 | 44.00 | 55.70 | 42.41 | 223.0 (118.4 / 151.2) | 23.0 px from A's |
+| kf_27 | 36.96 | 28.48 | 24.84 | 152.1 | 25.6 px from the midpoint of A's and B's |
+| kf_28 | 58.41 | 41.04 | 40.76 | 249.8 | 13.5 px from B's |
+
+Exposure: mean L of each keyframe against its composite frame, before the Lab match of §12.19. After
+the match every keyframe is within 0.11 L of its composite; MAD to the composite falls from
+24.5–86.8 levels to 6.9–22.1.
+
+| keyframe | composite frame | composite mean L | keyframe mean L |
+|---|---|---|---|
+| kf_23 | mismatch_6, 15 | 53.8 | 18.2 |
+| kf_24 | mismatch_6, 30 | 32.8 | 20.4 |
+| kf_25 | mismatch_6, 45 | 12.2 | 31.3 |
+| kf_26 | mismatch_4, 27 | 19.1 | 37.7 |
+| kf_27 | mismatch_4, 42 | 23.3 | 34.0 |
+| kf_28 | mismatch_4, 57 | 25.9 | 44.7 |
+
+Two prompt findings:
+1. The stage words of the kf_20 prompt ("dusk turning into night") do not fit mismatch_6's round-5
+   composite at t = 0.17 (frame 15), which is still daylight: kf_23 came out at mean L 18.2 against
+   the composite's 53.8. The prompt names a light state; the stage word should follow the composite
+   at that frame [INFERRED].
+2. The keyframes are made at 0.67–0.70 of the canvas, and the upscale and INTER_AREA round trip alone
+   takes kf_26's Laplacian variance from 202.4 to 85.9 at 1344×768. A keyframe made at canvas size is
+   not tried; its memory and time on the box are UNVERIFIED.
+
 ## 6. Gaps
 
 - No source states what Qwen-Image-Edit-2511 does with an instruction it cannot satisfy from the

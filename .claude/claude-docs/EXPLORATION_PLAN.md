@@ -243,6 +243,20 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    photo's content shows twice (measured: two layers hold it over 32–38 % of the canvas of mismatch_1
    from t = 0.63). The layer source uses every route (Grounding DINO + SAM 2.1, the OneFormer and
    CLIPSeg elements, depth, normals); SAM 3 is authorized. Round 6 is next.
+   **Round 6 rendered (2026-09-28 evening; `TRANSITIONS.md §12.17`; page `benchmarks/runs/2026-09-28/layered_r6/`)**:
+   the faults the owner named were measured on round 5 first (`layered_diag.py fields`, `rim`,
+   `holes`). The automatic score of round 6 (`--auto3`) draws no pixel in two layers (17.3 / 39.7 %
+   of the canvas on mismatch_1 in round 5, 0.000 % now), its clouds travel 9–38 px against 252–366 px
+   and bend 0.24–0.49 against 2.81–2.98, and the surfaces move as one layer steered by the matched
+   elements of the merged layer source. Faults that stand: a smooth fill where an object stood
+   (13.7 % of the canvas on mismatch_3), a ground that travels under half of its field on three
+   pairs, no rule for mismatch_5's bridge. Nine clips byte-identical on two runs; the 25 earlier md5s
+   unchanged; no tool change. Ungraded.
+   **The merged layer source and SAM 3 (2026-09-28 evening; `TRANSITIONS.md §12.18`; page `benchmarks/runs/2026-09-28/layers_v2/`)**:
+   `scripts/research/layer_merge.py` adds Grounding DINO + SAM 2.1 instances to the layer source's
+   elements (mismatch_1_S 15 → 34 elements, 2 → 9 buildings) and SAM 3 behind a flag (25–35 s per
+   photo on the CPU, 12.7 GB peak; IoU 0.690 alone against 0.614 for Grounding DINO + SAM 2.1); both
+   need torchvision, which stays in the scratch environment. Ungraded.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -310,6 +324,13 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    betweeen interrmediate generated frames"; "not usable , if you plan to utilize those intermediate
    keyframes , lets see". The chain of the tool's morphs between keyframes is out. Open: a clip in
    which the layered probe uses the keyframes.
+   **Keyframes used inside the layered probe (2026-09-28 evening; `TRANSITIONS.md §12.19`;
+   `research/keyframe-prompting.md §5.5`; clips `benchmarks/runs/2026-09-28/keylayer/`)**: kf_23–kf_28
+   (FLUX.2 klein 9B Q8_0, 50–95 s each) corrected the owner's two round-5 picks around three frames
+   each, the correction moving with the clip. Mean L, the motion and the endpoints hold; the
+   Laplacian variance at the keyframe frames falls by 20 to 66 %, because matching a keyframe's
+   contrast to its composite scales its detail down. None of the six clips is a candidate. Untested:
+   a colour match at low frequency that keeps the keyframe's detail. Ungraded.
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -408,3 +429,5 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-28 | Round 5 rendered: three faults of round 4 measured and removed (`settle`, `unmix`, the exact warp), the clouds transform into parts of the night sky, the automatic score matches labelled elements (`--auto2`) on seven pairs; twelve clips byte-identical on three runs | round-5 session, 2026-09-28 |
 | 2026-09-28 | Track E2: the layer source measured and written (`layer_source.py`: OneFormer Swin-L ADE20K + CLIPSeg, elements with label, group and depth; ten routes compared on 18 photos); Track B: the keyframe-cleaned clip built from kf_17–kf_22 with three measured faults; the decision log compacted (round 3, md5 `332c6824…`) | round-5 session, 2026-09-28 |
 | 2026-09-28 | Owner picks on round 5 ingested (hand-written scores closer on both tuned pairs; the automatic score closer on three pairs and a regression on two, the duplicate measured); the keyframe-cleaned clips rejected as rendered; the layer source uses every route; SAM 3 authorized; round 6 next | round-5 session, 2026-09-28 afternoon |
+| 2026-09-28 | Round 6 rendered: the automatic score draws every pixel in one layer (`--auto3`: surfaces as one layer steered by the matched elements, objects over a fill, a bend cap of 0.75, local balance for clouds, the sky shows a fill last, mattes on the photo's edge); `mix: "shape"` on the two hand-written picks; nine clips byte-identical on two runs; three new measures (`fields`, `rim`, `holes`) | round-6 session, 2026-09-28 evening |
+| 2026-09-28 | Track E3: the merged layer source (`layer_merge.py`, Grounding DINO + SAM 2.1 instances; SAM 3 fetched and run on the CPU as a third route, default off); Track B2: generated keyframes used inside the layered probe (six clips, detail falls 20–66 %, none a candidate); the decision log compacted (round 4, md5 `e822c56b…`) and its two oldest digests folded (106 KB → 49 KB) | round-6 session, 2026-09-28 evening |

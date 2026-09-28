@@ -1,0 +1,620 @@
+{
+ "pair": "mismatch_1",
+ "tag": "auto_r6",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "layers_dir": "benchmarks/runs/2026-09-28/layers_v2",
+ "owner": "Automatic per-element score, round 6 (fixed rules, no per-pair parameter; layered_probe.py --auto3): edit this file to tune the scene.",
+ "auto_facts": {
+  "sky_share": [
+   0.811,
+   0.598
+  ],
+  "route": "sky + elements",
+  "elements": [
+   34,
+   16
+  ],
+  "considered": [
+   5,
+   9
+  ],
+  "matched_groups": 5,
+  "layers": 5,
+  "matches": [
+   {
+    "layer": "e0_building",
+    "a": [
+     "building#17"
+    ],
+    "b": [
+     "building#5",
+     "building#3"
+    ],
+    "cost": 0.244124,
+    "mean_disparity": 0.449
+   },
+   {
+    "layer": "e1_building",
+    "a": [
+     "building#21"
+    ],
+    "b": [
+     "tree#9"
+    ],
+    "cost": 0.777283,
+    "mean_disparity": 0.559
+   },
+   {
+    "layer": "e2_tree",
+    "a": [
+     "tree#24"
+    ],
+    "b": [
+     "tree#13"
+    ],
+    "cost": 0.679973,
+    "mean_disparity": 0.713
+   },
+   {
+    "layer": "e3_building",
+    "a": [
+     "building#26"
+    ],
+    "b": [
+     "building#10",
+     "wall#16"
+    ],
+    "cost": 0.556518,
+    "mean_disparity": 0.717
+   },
+   {
+    "layer": "e4_building",
+    "a": [
+     "building#23"
+    ],
+    "b": [
+     "tree#11",
+     "tree#6",
+     "plant#14"
+    ],
+    "cost": 0.772746,
+    "mean_disparity": 0.909
+   }
+  ],
+  "clouds": [
+   {
+    "a": [
+     "cloud#3",
+     "cloud#8",
+     "cloud#9",
+     "cloud#13"
+    ],
+    "b": [
+     "cloud#2"
+    ],
+    "cost": 0.216294
+   }
+  ],
+  "ground_share": [
+   0.189,
+   0.402
+  ],
+  "ground": "transforms into the ground",
+  "drawn_over_the_sheet": [],
+  "steer_the_sheet": [
+   "e0_building",
+   "e1_building",
+   "e2_tree",
+   "e3_building",
+   "e4_building"
+  ],
+  "rest": []
+ },
+ "layers": [
+  {
+   "name": "ground_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "not_groups": [
+     "sky",
+     "cloud",
+     "luminary",
+     "star"
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "ground_wide_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "region_of",
+    "of": "ground_b",
+    "dilate": 8,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e0_building_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     3,
+     5
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e1_building_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     9
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e2_tree_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     13
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e3_building_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     10,
+     16
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e4_building_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     6,
+     11,
+     14
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "cloud0_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2
+    ],
+    "soft": 16,
+    "times_not": [
+     "ground_wide_b"
+    ]
+   },
+   "unmix": "sky"
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "invert",
+    "of": "ground_b"
+   }
+  },
+  {
+   "action": "morph_to",
+   "window": [
+    0.08,
+    0.92
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_border": 0.2,
+   "field": {
+    "from": "layers",
+    "layers": [
+     "e0_building",
+     "e1_building",
+     "e2_tree",
+     "e3_building",
+     "e4_building"
+    ],
+    "fallback": "ot",
+    "sigma": 0.04,
+    "kappa": 0.02
+   },
+   "stagger": {
+    "amount": 0.4,
+    "scale_px": 360,
+    "seed": 29
+   },
+   "name": "ground",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "not_groups": [
+     "sky",
+     "cloud",
+     "luminary",
+     "star"
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 1,
+   "to": "ground_b",
+   "ot_bend": 0.75,
+   "mix": "shape"
+  },
+  {
+   "name": "ground_wide",
+   "from": "A",
+   "render": false,
+   "mask": {
+    "rule": "region_of",
+    "of": "ground",
+    "dilate": 8,
+    "soft": 2
+   }
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "invert",
+    "of": "ground"
+   },
+   "depth": 0,
+   "action": "backdrop",
+   "to": "sky_b",
+   "opaque": true,
+   "fit2d": true,
+   "fill_sigma": 60,
+   "fill_scales": [
+    6,
+    18,
+    54,
+    162
+   ],
+   "settle": {
+    "px": 3.0
+   },
+   "window": [
+    0.0,
+    0.85
+   ],
+   "curve": "smootherstep",
+   "minus_res": [
+    {
+     "layer": "ground",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "exclude_res": [
+    {
+     "layer": "ground_b",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "flow": {
+    "from": "layers",
+    "sigma": 0.12,
+    "kappa": 0.02,
+    "mix_window": [
+     0.25,
+     0.75
+    ],
+    "stagger": {
+     "amount": 0.35,
+     "scale_px": 320,
+     "seed": 23
+    }
+   },
+   "minus": [
+    {
+     "layer": "cloud0",
+     "full": true,
+     "dilate": 0,
+     "soft": 0,
+     "settle": false
+    }
+   ],
+   "exclude": [
+    {
+     "layer": "cloud0_b",
+     "full": true,
+     "dilate": 0,
+     "soft": 0,
+     "settle": false
+    }
+   ],
+   "prefer_known": true,
+   "prefer_px": 57.6
+  },
+  {
+   "name": "cloud0",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     3,
+     8,
+     9,
+     13
+    ],
+    "soft": 16,
+    "times_not": [
+     "ground_wide"
+    ]
+   },
+   "unmix": "sky",
+   "depth": 0.6,
+   "action": "morph_to",
+   "to": "cloud0_b",
+   "window": [
+    0.1,
+    0.84
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_border": 0.25,
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 300,
+    "seed": 35
+   },
+   "ot_balance": 0.1,
+   "ot_bend": 0.75,
+   "exact": true
+  },
+  {
+   "name": "e0_building",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     17
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 2,
+   "action": "morph_to",
+   "to": "e0_building_b",
+   "window": [
+    0.1,
+    0.82
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  },
+  {
+   "name": "e1_building",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     21
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 3,
+   "action": "morph_to",
+   "to": "e1_building_b",
+   "window": [
+    0.135,
+    0.855
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  },
+  {
+   "name": "e2_tree",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     24
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 4,
+   "action": "morph_to",
+   "to": "e2_tree_b",
+   "window": [
+    0.17,
+    0.89
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 43
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  },
+  {
+   "name": "e3_building",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     26
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 5,
+   "action": "morph_to",
+   "to": "e3_building_b",
+   "window": [
+    0.205,
+    0.925
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  },
+  {
+   "name": "e4_building",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     23
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 6,
+   "action": "morph_to",
+   "to": "e4_building_b",
+   "window": [
+    0.24,
+    0.96
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  }
+ ]
+}
