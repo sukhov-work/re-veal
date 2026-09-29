@@ -1,0 +1,55 @@
+{
+ "pair": "mismatch_7",
+ "tag": "auto_r7w",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "layers_dir": "benchmarks/runs/2026-09-28/layers_v3",
+ "owner": "Automatic score, round 7, the whole-frame rule (the two frames share keypoints: one layer; layered_probe.py --auto4 --r7 whole): edit this file to tune the scene.",
+ "auto_facts": {
+  "route": "one layer: the frames share keypoints",
+  "whole": {
+   "matches": 151,
+   "inliers": 75
+  }
+ },
+ "layers": [
+  {
+   "name": "all_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "all"
+   }
+  },
+  {
+   "name": "frame",
+   "from": "A",
+   "mask": {
+    "rule": "all"
+   },
+   "depth": 0,
+   "action": "morph_to",
+   "to": "all_b",
+   "window": [
+    0.08,
+    0.92
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "exact": true,
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   },
+   "known_frame": true,
+   "known_px": 57.6
+  }
+ ]
+}

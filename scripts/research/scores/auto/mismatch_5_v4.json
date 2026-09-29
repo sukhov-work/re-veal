@@ -1,0 +1,302 @@
+{
+ "pair": "mismatch_5",
+ "tag": "auto_r7",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "layers_dir": "benchmarks/runs/2026-09-28/layers_v3",
+ "owner": "Automatic per-element score, round 7 (fixed rules, no per-pair parameter; layered_probe.py --auto4): edit this file to tune the scene.",
+ "auto_facts": {
+  "sky_share": [
+   0.257,
+   0.999
+  ],
+  "route": "sky + elements",
+  "elements": [
+   38,
+   9
+  ],
+  "considered": [
+   11,
+   0
+  ],
+  "matched_groups": 0,
+  "layers": 0,
+  "matches": [],
+  "light": {
+   "a": [
+    "sun#4"
+   ],
+   "b": [
+    "sun#3",
+    "sun#4"
+   ]
+  },
+  "ground_share": [
+   0.743,
+   0.001
+  ],
+  "ground": "melts into the sky's parts",
+  "drawn_over_the_sheet": [],
+  "steer_the_sheet": [],
+  "rest": [],
+  "plates": []
+ },
+ "layers": [
+  {
+   "name": "ground_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "not_groups": [
+     "sky",
+     "cloud",
+     "luminary",
+     "star"
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "ground_wide_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "region_of",
+    "of": "ground_b",
+    "dilate": 8,
+    "soft": 2
+   }
+  },
+  {
+   "name": "light_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     3,
+     4
+    ],
+    "soft": 12,
+    "times_not": [
+     "ground_wide_b"
+    ]
+   },
+   "unmix": "sky"
+  },
+  {
+   "name": "sky_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "invert",
+    "of": "ground_b"
+   }
+  },
+  {
+   "name": "sky_parts_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "parts",
+    "within": "sky_b",
+    "lo_px": 20,
+    "hi_px": 120,
+    "share": 0.5,
+    "soft": 0.5,
+    "extend": true
+   }
+  },
+  {
+   "action": "morph_to",
+   "window": [
+    0.08,
+    0.92
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_border": 0.2,
+   "field": {
+    "from": "layers",
+    "fallback": "ot",
+    "sigma": 0.1,
+    "kappa": 0.02
+   },
+   "stagger": {
+    "amount": 0.4,
+    "scale_px": 360,
+    "seed": 29
+   },
+   "name": "ground",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "not_groups": [
+     "sky",
+     "cloud",
+     "luminary",
+     "star"
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 1,
+   "to": "sky_parts_b",
+   "to_backdrop": "sky",
+   "colour_rel": true,
+   "colour_curve": "smootherstep",
+   "colour_window": [
+    0.0,
+    0.7
+   ],
+   "gain_clip": [
+    0.4,
+    1.0
+   ],
+   "ot_local": 0.06,
+   "ot_floor": 0.3,
+   "ot_bend": 0.75
+  },
+  {
+   "name": "ground_wide",
+   "from": "A",
+   "render": false,
+   "mask": {
+    "rule": "region_of",
+    "of": "ground",
+    "dilate": 8,
+    "soft": 2
+   }
+  },
+  {
+   "name": "sky",
+   "from": "A",
+   "mask": {
+    "rule": "invert",
+    "of": "ground"
+   },
+   "depth": 0,
+   "action": "backdrop",
+   "to": "sky_b",
+   "opaque": true,
+   "fit2d": true,
+   "fill_sigma": 60,
+   "fill_scales": [
+    6,
+    18,
+    54,
+    162
+   ],
+   "settle": {
+    "px": 3.0
+   },
+   "window": [
+    0.0,
+    0.85
+   ],
+   "curve": "smootherstep",
+   "minus_res": [
+    {
+     "layer": "ground",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "exclude_res": [
+    {
+     "layer": "ground_b",
+     "full": true,
+     "dilate": 4,
+     "soft": 2
+    }
+   ],
+   "flow": {
+    "from": "layers",
+    "sigma": 0.12,
+    "kappa": 0.02,
+    "mix_window": [
+     0.25,
+     0.75
+    ],
+    "stagger": {
+     "amount": 0.35,
+     "scale_px": 320,
+     "seed": 23
+    }
+   },
+   "minus": [
+    {
+     "layer": "light",
+     "full": true,
+     "dilate": 0,
+     "soft": 0,
+     "settle": false
+    }
+   ],
+   "exclude": [
+    {
+     "layer": "light_b",
+     "full": true,
+     "dilate": 0,
+     "soft": 0,
+     "settle": false
+    }
+   ],
+   "prefer_known": true,
+   "prefer_px": 57.6
+  },
+  {
+   "name": "light",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     4
+    ],
+    "soft": 12,
+    "times_not": [
+     "ground_wide"
+    ]
+   },
+   "unmix": "sky",
+   "depth": 0.5,
+   "action": "morph_to",
+   "to": "light_b",
+   "window": [
+    0.12,
+    0.8
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.25,
+    "scale_px": 200,
+    "seed": 31
+   },
+   "ot_bend": 0.75,
+   "exact": true
+  }
+ ]
+}

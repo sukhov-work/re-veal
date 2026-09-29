@@ -267,6 +267,18 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    Rulings: generated content is allowed as a helper (at least half of the objects original and
    consistent, no new objects); the layer source is the merged source with SAM 3; the five
    automatic pairs stay automatic. Round 7 is next.
+   **Round 7 rendered (2026-09-29; `TRANSITIONS.md §12.21–12.23`; page `benchmarks/runs/2026-09-29/layered_r7/`)**:
+   a measure of what explains a frame's change (`layered_diag.py change`: motion, reveal, mix; its
+   three controls pass) orders five graded clips as the owner did: the ground's reveal share is
+   6.1–7.7 % on the three accepted clips and 34.3 and 48.3 % on the two he called a reveal. The
+   automatic score of round 7 (`--auto4`, elements from `layers_v3`) lowers it to 21.2 %
+   (mismatch_1, the ground scales as one piece) and 13.4 % (mismatch_7, the ground follows a map
+   fitted to 74 shared keypoints, so the towers keep their shapes), and keeps round 6's field on
+   mismatch_6 and mismatch_4, where that field registers the two outlines (IoU 0.842, 0.829). On
+   mismatch_3 and mismatch_2 the place an object leaves shows a generated background (item 4) and
+   the object mattes are smoother (outline over smoothed outline 1.01–1.33, round 6 1.08–2.14).
+   Not done: mismatch_5's crossfade, the boundaries on mismatch_6 and mismatch_4. Ungraded as of
+   2026-09-29; the owner's boxes on the page are the next input.
 4. **Generated keyframes as helper elements** (Research on the Strix Halo box; Track D): one or
    several intermediate keyframes from a multi-reference image model (FLUX.2-class), fixed seed,
    both photos as references, screened by `feat_floor` against both endpoints, then the
@@ -345,6 +357,12 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    between states are just too discreet and dirty" (the owner confirmed on 2026-09-29 that this
    names the keyframe clips); on mismatch_4 both keep "one picture" and "transforms" and lose
    "nothing invented".
+   **Generated backgrounds (2026-09-29; `TRANSITIONS.md §12.23`; `research/keyframe-prompting.md §5.6`)**:
+   the first use of a generated picture as a helper under the owner's ruling of 2026-09-29. klein 9B
+   at Q8_0 made one background per photo of mismatch_3 and mismatch_2 with the named objects removed
+   (objects counted in the zone 28 → 1, 17 → 2, 1 → 0, 7 → 5); the probe shows it where an object
+   has left, on at most 12.4 and 3.6 % of the canvas. Three of the four zones cover over half of
+   their photo; the owner judges the ruling's first condition. Ungraded.
 5. **The combination where nothing aligns** (Design): Track A's candidates (Regenerative Morphing as
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
@@ -446,3 +464,4 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 | 2026-09-28 | Round 6 rendered: the automatic score draws every pixel in one layer (`--auto3`: surfaces as one layer steered by the matched elements, objects over a fill, a bend cap of 0.75, local balance for clouds, the sky shows a fill last, mattes on the photo's edge); `mix: "shape"` on the two hand-written picks; nine clips byte-identical on two runs; three new measures (`fields`, `rim`, `holes`) | round-6 session, 2026-09-28 evening |
 | 2026-09-28 | Track E3: the merged layer source (`layer_merge.py`, Grounding DINO + SAM 2.1 instances; SAM 3 fetched and run on the CPU as a third route, default off); Track B2: generated keyframes used inside the layered probe (six clips, detail falls 20–66 %, none a candidate); the decision log compacted (round 4, md5 `e822c56b…`) and its two oldest digests folded (106 KB → 49 KB) | round-6 session, 2026-09-28 evening |
 | 2026-09-29 | Owner picks on round 6 ingested (`auto_r6` closer on mismatch_6, 5 and 3; none on four pairs; the duplicate gone, the skyline pairs read as a reveal; objects crudely cut out) and three rulings recorded: generated content allowed as a helper, the layer source is the merged source with SAM 3, the five automatic pairs stay automatic; round 7 next | round-6 session, 2026-09-29 |
+| 2026-09-29 | Round 7 rendered: a measure of what explains a frame's change (`change`: motion, reveal, mix) and one of an object's outline (`edge`); the automatic score of round 7 (`--auto4`: elements with SAM 3, a ground that follows shared keypoints or scales as one piece where round 6's field does not register the outlines, one cloud layer, generated backgrounds, smoother object mattes); seven clips byte-identical on two runs; the layer source with SAM 3 reproduced on 24 of 24 photos; the decision log compacted (round 6, md5 `c32f74e8…`, one digest folded, 79 KB → 57 KB) | round-7 session, 2026-09-29 |

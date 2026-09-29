@@ -32,6 +32,19 @@ with --frames, PNG frames under --out. Changes nothing in either tool or in a sc
           outline once the layer lies over another).
   holes   (round 6) per frame the share of the canvas where a backdrop's hole fill is seen (a
           smooth dome in the sky, a pale band beside a matte).
+  change  (round 7) what explains a frame's change, the owner on round 6's skyline clips: "some
+          form of reveal with solid margin ... nothing is transforming there". Per step and per
+          region three shares of the change of the luminance: `motion` (a dense flow between the
+          two frames explains it: content travels), `reveal` (no flow explains it and it comes
+          from a matte that moves over content that stays: an outline sweeps) and `mix` (no flow
+          explains it and it comes from a layer's content changing where it stands: a crossfade).
+          With --clip FILE.mp4 (a clip from outside the probe, no mattes) `motion` and the rest.
+  edge    (round 7) per drawn object layer, on its matte at rest, the owner on round 6: "very
+          crudely cut out of background with rough edges". `rough`: the length of the matte's
+          outline over the length of the same outline smoothed at 6 px (1 = a smooth outline);
+          `soft_px`: the width of the matte's ramp (the area with alpha between 0.05 and 0.95
+          over the outline's length); `fringe`: the share of the inner rim whose colour, as the
+          layer carries it, is nearer to the colour outside the matte than to the matte's core.
 
   .venv/bin/python scripts/research/layered_diag.py end --score scripts/research/scores/mismatch_4_r4.json \
       --regions sky_b band_core_b water_b --from 0.5 --out DIR [--frames]
@@ -531,9 +544,319 @@ def cmd_holes(a):
                                                "plates": [l.name for l in plates], "rows": rows}, indent=1))
 
 
+def outline_len(hard):
+    cs, _ = cv2.findContours(hard.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    return float(sum(cv2.arcLength(c, True) for c in cs if len(c) >= 8))
+
+
+def cmd_edge(a):
+    """Round 7 (backlog T28). Per drawn layer that is not a backdrop and does not cover the canvas,
+    and per target of a `morph_to`, on the matte at rest and the colour the layer carries (after
+    `unmix`, the un-premultiplied colour): rough, soft_px, fringe (see the module docstring).
+    Controls, printed first: a disc of radius 120 px (rough near 1), the same disc with its
+    outline displaced by up to 12 px by noise at a 2-px scale (rough over 1.3), and the disc
+    blurred at 4 px (soft_px 12.6)."""
+    score, scene, layers, A, B, n = build(a.score)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    def rough_of(al):
+        hard = al > 0.5
+        L0 = outline_len(hard)
+        sm = cv2.GaussianBlur(hard.astype(np.float32), (0, 0), 6.0) > 0.5
+        L1 = outline_len(sm)
+        ramp = float(((al > 0.05) & (al < 0.95)).sum())
+        return (L0 / max(L1, 1.0), ramp / max(L0, 1.0), L0)
+    yy, xx = np.mgrid[0:600, 0:600].astype(np.float32)
+    r = np.sqrt((xx - 300) ** 2 + (yy - 300) ** 2)
+    disc = (r < 120).astype(np.float32)
+    nz = np.random.default_rng(7).random((600, 600), dtype=np.float32)
+    nz = cv2.GaussianBlur(nz, (0, 0), 2.0)
+    nz = (nz - nz.min()) / max(float(nz.max() - nz.min()), 1e-6)
+    jag = (r + 24.0 * (nz - 0.5) < 120).astype(np.float32)
+    ctl = {"disc": rough_of(disc), "jagged disc": rough_of(jag), "disc blurred 4 px": rough_of(cv2.GaussianBlur(disc, (0, 0), 4.0))}
+    for k, v in ctl.items():
+        print(f"control {k}: rough {v[0]:.3f}, soft {v[1]:.1f} px")
+    rows, seen = {}, set()
+    for l in scene.layers_all:
+        if isinstance(l, P.Backdrop):
+            continue
+        for lay in (l, getattr(l, "tgt", None)):
+            if lay is None or lay.name in seen or not (l.render_it or lay is not l and l.render_it):
+                continue
+            if float((lay.alpha0 > 0.5).mean()) > 0.9 or float((lay.alpha0 > 0.5).sum()) < 400:
+                continue
+            seen.add(lay.name)
+            rg, soft, L0 = rough_of(lay.alpha0)
+            share, npx, apart = rim_of(np.asarray(lay.lab, np.float32), lay.alpha0)
+            rows[lay.name] = {"photo": lay.src, "matte_share": round(float((lay.alpha0 > 0.5).mean()), 4), "outline_px": round(L0),
+                              "rough": round(rg, 3), "soft_px": round(soft, 2), "fringe": None if share is None else round(share, 3),
+                              "unmixed": bool(lay.spec.get("unmix"))}
+            r_ = rows[lay.name]
+            print(f"{lay.name:>16} ({lay.src}): matte {100 * r_['matte_share']:.1f} %  outline {r_['outline_px']} px  rough {r_['rough']:.3f}  "
+                  f"soft {r_['soft_px']:.1f} px  fringe {'n/a' if share is None else f'{100 * share:.1f} %'}{'  (unmixed)' if r_['unmixed'] else ''}")
+    (out / "edge.json").write_text(json.dumps({"score": a.score, "controls": {k: [round(v[0], 3), round(v[1], 2)] for k, v in ctl.items()}, "layers": rows}, indent=1))
+
+
+LUMA = np.array([0.299, 0.587, 0.114], np.float32)
+
+
+def _flow_split(y0, y1, dis, gx, gy):
+    """(d, motion) of one step on the luminance (levels of 0..255): d = |y1 - y0| per pixel and
+    the part of it that a DIS flow from the first frame to the second explains,
+    max(d - |y1 warped back - y0|, 0)."""
+    g0 = np.clip(y0 + 0.5, 0, 255).astype(np.uint8)
+    g1 = np.clip(y1 + 0.5, 0, 255).astype(np.uint8)
+    f = dis.calc(g0, g1, None)
+    yw = cv2.remap(y1, gx + f[..., 0], gy + f[..., 1], cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    d = np.abs(y1 - y0)
+    return d, np.clip(d - np.abs(yw - y0), 0.0, None), f
+
+
+def cmd_change(a):
+    """Round 7 (backlog T26). A frame is the sum over its parts of visibility x content, so a
+    step between two frames is exactly  sum(mean visibility x change of content)  +  sum(mean
+    content x change of visibility): the content term (what the content does under mattes that
+    stay) and the matte terms (what the mattes do over content that stays). A part is a layer,
+    or for a `morph_to` layer in mid-clip each of its two photos' contents with its weight in
+    the layer's picture (the probe's `last_parts`): the outline between the two photos inside
+    one layer is a matte like any other. Every part's content has its own motion: a dense flow
+    (DIS, medium preset) between the part's two pictures. Per pixel, on the luminance at
+    --proxy px (long side):
+      mix    = min(|content term|, |content term after each part's picture is warped back along
+               its flow|), plus the part of a matte term that no motion explains where both
+               photos are present or the visibility changes by under 0.1 per step (a crossfade)
+      reveal = the part of a matte term that no motion explains elsewhere: min(|matte term|,
+               |matte term counted from the visibility carried along the content's flow|); an
+               edge moves and its content does not move with it
+      motion = |content term| + sum |matte terms| - mix - reveal: content travels, and outlines
+               with it
+    summed over a region and over the steps, as shares of the summed |content term| + |matte
+    terms|. Regions: the frame, and per drawn layer the pixels where it is seen in one of the
+    two frames (visibility over 0.05). Dropped the same day: one flow between the two
+    composites (it explained 72 % of a wipe as motion: a flow moves a soft edge over a plain
+    sky); one content per layer (a morph layer's picture holds the outline between its two
+    photos, and the flow explained that outline as motion).
+    Controls: `--control` writes three scores from the score's two photos (a wipe, a crossfade,
+    a pan of the first photo) and measures them through the same path; each must read its own
+    share highest. With --clip (no mattes) one flow between the frames: motion and the rest."""
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_MEDIUM)
+
+    def proxy_size(h, w):
+        s = min(1.0, a.proxy / float(max(h, w)))
+        return max(8, int(round(w * s))), max(8, int(round(h * s)))
+
+    def shares(acc):
+        tot = max(acc[0], 1e-9)
+        return {"change": round(acc[0], 1), "motion": round(acc[1] / tot, 4), "reveal": round(acc[2] / tot, 4), "mix": round(acc[3] / tot, 4)}
+
+    def run_frames(frames, tag):
+        """A clip with no mattes (a list of RGB uint8 frames): motion and the rest."""
+        h, w = frames[0].shape[:2]
+        pw, ph = proxy_size(h, w)
+        gx, gy = np.meshgrid(np.arange(pw, dtype=np.float32), np.arange(ph, dtype=np.float32))
+        ys = [cv2.resize(f.astype(np.float32), (pw, ph), interpolation=cv2.INTER_AREA) @ LUMA for f in frames]
+        acc, rows = np.zeros(4), []
+        for i in range(1, len(ys) - 2, a.every):
+            d, m, f = _flow_split(ys[i], ys[i + 1], dis, gx, gy)
+            acc += (float(d.sum()), float(m.sum()), 0.0, float((d - m).sum()))
+            rows.append({"i": i, "t": round(i / (len(ys) - 1), 4), "step": round(float(d.mean()), 3),
+                         "motion": round(float(m.sum() / max(d.sum(), 1e-9)), 4), "flow_px": round(float(np.sqrt((f ** 2).sum(-1)).mean()), 2)})
+        r = shares(acc)
+        r["rest"] = round(r.pop("reveal") + r.pop("mix"), 4)
+        print(f"{tag}: steps {len(rows)}  motion {100 * r['motion']:.1f} %  rest {100 * r['rest']:.1f} %  (no mattes: the rest is not split)")
+        return {"frame": r, "rows": rows}
+
+    def measure(score_path, quiet=False):
+        score, scene, layers, A, B, n = build(score_path)
+        h, w = scene.h, scene.w
+        pw, ph = proxy_size(h, w)
+        gx, gy = np.meshgrid(np.arange(pw, dtype=np.float32), np.arange(ph, dtype=np.float32))
+
+        def small(x):
+            return cv2.resize(np.ascontiguousarray(np.asarray(x, np.float32)), (pw, ph), interpolation=cv2.INTER_AREA)
+
+        def state(t):
+            """The parts of the frame at t, back to front: per part (layer index, luminance of
+            its content, its visibility in the frame, the weight with which both photos are
+            present there). A `morph_to` layer in mid-clip is two parts, the first photo's
+            content and the second's (the probe's `last_parts`); any other layer is one."""
+            rs = []
+            for l in layers:
+                l.last_parts = None
+                rgb, al = l.render(t)
+                rs.append((rgb, al, getattr(l, "last_parts", None)))
+            al = [small(x) for _, x, _ in rs]
+            vis, above = [None] * len(layers), np.ones((ph, pw), np.float32)
+            for k in range(len(layers) - 1, -1, -1):
+                vis[k] = al[k] * above
+                above = above * (1.0 - al[k])
+            parts = []
+            for k, (rgb, _, lp) in enumerate(rs):
+                if lp is None:
+                    parts.append((k, 0, small(rgb) @ LUMA, vis[k], np.zeros((ph, pw), np.float32)))
+                    continue
+                c_a, c_b, a_a, a_b, w_a, w_b = lp
+                wa, wb = small(w_a), small(w_b)
+                sa = wa / np.maximum(wa + wb, 1e-4)
+                both = np.minimum(small(a_a), small(a_b))
+                parts.append((k, 0, small(c_a) @ LUMA, vis[k] * sa, both))
+                parts.append((k, 1, small(c_b) @ LUMA, vis[k] * (1.0 - sa), both))
+            return parts, vis
+        names = [l.name for l in layers]
+        acc = {nm: np.zeros(4) for nm in ["frame"] + names}
+        rows = []
+        i_prev, st_prev = None, None
+        for i in range(1, n - 2, a.every):
+            s0 = st_prev if i_prev == i else state(i / (n - 1))
+            s1 = state((i + 1) / (n - 1))
+            i_prev, st_prev = i + 1, s1
+            p0 = {(k, j): (c, v, b_) for k, j, c, v, b_ in s0[0]}
+            p1 = {(k, j): (c, v, b_) for k, j, c, v, b_ in s1[0]}
+            zero = np.zeros((ph, pw), np.float32)
+            content = content_res = matte = np.zeros((ph, pw), np.float32)
+            rv = np.zeros((ph, pw), np.float32)
+            mxm = np.zeros((ph, pw), np.float32)
+            y0 = np.zeros((ph, pw), np.float32)
+            y1 = np.zeros((ph, pw), np.float32)
+            fl = 0.0
+            for key in sorted(set(p0) | set(p1)):
+                # a part that exists in one of the two frames only (a morph that starts or ends
+                # between them) has the other frame's content of its layer and no visibility there
+                c0, v0, b0 = p0.get(key, (None, zero, zero))
+                c1, v1, b1 = p1.get(key, (None, zero, zero))
+                if c0 is None:
+                    c0 = c1
+                if c1 is None:
+                    c1 = c0
+                y0 = y0 + c0 * v0
+                y1 = y1 + c1 * v1
+                vm = 0.5 * (v0 + v1)
+                dc = c1 - c0
+                res, adv = dc, v0
+                if float(vm.max()) >= 0.02 and float(np.abs(dc).max()) >= 1e-3:
+                    # the part's content has its own motion: a flow between its two pictures
+                    g0 = np.clip(c0 + 0.5, 0, 255).astype(np.uint8)
+                    g1 = np.clip(c1 + 0.5, 0, 255).astype(np.uint8)
+                    f = dis.calc(g0, g1, None)
+                    res = cv2.remap(c1, gx + f[..., 0], gy + f[..., 1], cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE) - c0
+                    adv = cv2.remap(v0, gx - f[..., 0], gy - f[..., 1], cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                    fl += float((np.sqrt((f ** 2).sum(-1)) * vm).sum())
+                cm = 0.5 * (c0 + c1)
+                content = content + vm * dc
+                content_res = content_res + vm * res
+                m_all = cm * (v1 - v0)
+                m_res = cm * (v1 - adv)
+                matte = matte + m_all
+                # what no motion of the part's content explains of its visibility's change: a
+                # crossfade where both photos are present or the change is gradual (under 0.1
+                # of visibility per step; all of it a reveal over 0.3), a reveal elsewhere
+                un = np.minimum(np.abs(m_all), np.abs(m_res))
+                dv = np.abs(v1 - adv)
+                grad = 1.0 - np.clip((dv - 0.1) / 0.2, 0.0, 1.0)
+                mixw = np.maximum(np.maximum(b0, b1), grad)
+                rv = rv + un * (1.0 - mixw)
+                mxm = mxm + un * mixw
+            mx = np.minimum(np.abs(content), np.abs(content_res)) + mxm
+            d = np.abs(content) + sum_abs_matte(p0, p1, zero)
+            m = np.clip(d - mx - rv, 0.0, None)
+            vis0, vis1 = s0[1], s1[1]
+            row = {"i": i, "t": round(i / (n - 1), 4), "step": round(float(np.abs(y1 - y0).mean()), 3), "parts": round(float(d.mean()), 3),
+                   "flow_px": round(fl / (pw * ph), 2),
+                   "identity_err": round(float(np.abs((y1 - y0) - (matte + content)).max()), 4), "regions": {}}
+            regs = [("frame", np.ones((ph, pw), bool))] + [(nm, (p_ > 0.05) | (q_ > 0.05)) for nm, p_, q_ in zip(names, vis0, vis1)]
+            for nm, sel in regs:
+                part = np.array([float(d[sel].sum()), float(m[sel].sum()), float(rv[sel].sum()), float(mx[sel].sum())])
+                acc[nm] += part
+                if part[0] > 0:
+                    row["regions"][nm] = shares(part)
+            rows.append(row)
+            fr = row["regions"].get("frame", {"motion": 0, "reveal": 0, "mix": 0})
+            if not quiet:
+                print(f"{row['t']:.3f} step {row['step']:.3f}  motion {100 * fr['motion']:5.1f} %  reveal {100 * fr['reveal']:5.1f} %  mix {100 * fr['mix']:5.1f} %  flow {row['flow_px']:.2f} px")
+        summ = {nm: shares(v) for nm, v in acc.items() if v[0] > 0}
+        if not quiet:
+            print("whole clip, per region (change = the summed |content term| + |matte terms| of the luminance, levels x px of the proxy):")
+            for nm, r in summ.items():
+                print(f"{nm:>16}: change {r['change']:12.1f}  motion {100 * r['motion']:5.1f} %  reveal {100 * r['reveal']:5.1f} %  mix {100 * r['mix']:5.1f} %")
+        return {"summary": summ, "rows": rows}
+
+    def sum_abs_matte(p0, p1, zero):
+        out = zero.copy()
+        for key in sorted(set(p0) | set(p1)):
+            c0, v0, _ = p0.get(key, (None, zero, zero))
+            c1, v1, _ = p1.get(key, (None, zero, zero))
+            c0 = c1 if c0 is None else c0
+            c1 = c0 if c1 is None else c1
+            out = out + np.abs(0.5 * (c0 + c1) * (v1 - v0))
+        return out
+
+    if a.clip:
+        cap = cv2.VideoCapture(a.clip)
+        frames = []
+        while True:
+            ok, f = cap.read()
+            if not ok:
+                break
+            frames.append(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
+        if len(frames) < 4:
+            raise SystemExit(f"{a.clip}: {len(frames)} frames decoded")
+        res = run_frames(frames, Path(a.clip).parent.name)
+        (out / "change.json").write_text(json.dumps({"clip": a.clip, "proxy": a.proxy, "every": a.every, **res}, indent=1))
+        return
+    if a.control:
+        # three clips whose answer is known, as scores of the same pair, length and canvas,
+        # measured through the same path as any clip: a wipe (the second photo's matte grows
+        # from the top over content that stands), a crossfade (one layer, its content changes
+        # where it stands) and a pan (the first photo travels a quarter of the width)
+        base = json.loads(Path(a.score).read_text())
+        head = {k: base[k] for k in ("pair", "seconds", "fps", "max_long") if k in base}
+        A_, _ = P.canvas_pair(head["pair"], head.get("max_long", 1920))
+        ctl = {
+            "wipe": [{"name": "a", "from": "A", "mask": {"rule": "all"}, "depth": 0, "action": "hold"},
+                     {"name": "b", "from": "B", "mask": {"rule": "all"}, "depth": 1, "action": "materialise", "order": "rows",
+                      "noise_gain": 0.0, "feather": 0.02, "window": [0.0, 1.0], "curve": "linear"}],
+            "crossfade": [{"name": "b", "from": "B", "mask": {"rule": "all"}, "render": False},
+                          {"name": "a", "from": "A", "mask": {"rule": "all"}, "depth": 0, "action": "morph_to", "to": "b",
+                           "window": [0.0, 1.0], "curve": "linear", "mix_window": [0.0, 1.0], "ot_gain": 0.0, "exact": True,
+                           "match_colour": False}],
+            "pan": [{"name": "b", "from": "B", "mask": {"rule": "all"}, "depth": 0, "action": "hold"},
+                    {"name": "a", "from": "A", "mask": {"rule": "all"}, "depth": 1, "action": "move", "direction": [-1, 0],
+                     "travel_px": round(0.25 * A_.shape[1], 1), "window": [0.0, 1.0], "curve": "linear"}],
+        }
+        want = {"wipe": "reveal", "crossfade": "mix", "pan": "motion"}
+        res = {}
+        for tag, lays in ctl.items():
+            f = out / f"control_{tag}.json"
+            f.write_text(json.dumps(dict(head, tag="control_" + tag, layers=lays), indent=1))
+            r = measure(str(f), quiet=True)["summary"]["frame"]
+            top = max(("motion", "reveal", "mix"), key=lambda k: r[k])
+            res[tag] = dict(r, highest=top, passed=(top == want[tag]))
+            print(f"control {tag}: motion {100 * r['motion']:.1f} %  reveal {100 * r['reveal']:.1f} %  mix {100 * r['mix']:.1f} %  "
+                  f"highest {top} ({'as expected' if top == want[tag] else 'EXPECTED ' + want[tag]})")
+        (out / "change_control.json").write_text(json.dumps({"score": a.score, "proxy": a.proxy, "every": a.every, "controls": res}, indent=1))
+        return
+    res = measure(a.score)
+    (out / "change.json").write_text(json.dumps({"score": a.score, "proxy": a.proxy, "every": a.every, **res}, indent=1))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    ed = sub.add_parser("edge")
+    ed.add_argument("--score", required=True)
+    ed.add_argument("--out", required=True)
+    ed.set_defaults(fn=cmd_edge)
+    ch = sub.add_parser("change")
+    ch.add_argument("--score", default="")
+    ch.add_argument("--clip", default="", help="an mp4 from outside the probe (no mattes): motion and the rest")
+    ch.add_argument("--control", action="store_true", help="three synthetic clips from the score's photos: a wipe, a crossfade, a pan")
+    ch.add_argument("--proxy", type=int, default=960, help="the long side at which the step is measured, px")
+    ch.add_argument("--every", type=int, default=1)
+    ch.add_argument("--out", required=True)
+    ch.set_defaults(fn=cmd_change)
     fl = sub.add_parser("fields")
     fl.add_argument("--score", required=True)
     fl.add_argument("--out", required=True)

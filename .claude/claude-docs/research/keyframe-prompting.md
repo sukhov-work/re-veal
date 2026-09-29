@@ -307,6 +307,80 @@ Two prompt findings:
    takes kf_26's Laplacian variance from 202.4 to 85.9 at 1344×768. A keyframe made at canvas size is
    not tried; its memory and time on the box are UNVERIFIED.
 
+### 5.6 Generated backgrounds ("plates") for the layered probe (2026-09-29; Track B3; `benchmarks/runs/2026-09-29/plates/`)
+
+Result: klein 9B Q8_0 removed the named objects from all four photos of mismatch_3 and mismatch_2 once the
+prompt said what to leave in their place. The layer source counts 28 → 1, 17 → 2, 1 → 0 and 7 → 5 objects
+(share ≥ 0.004) inside the objects' zone. A photo's zone is the union of its object-group elements with a
+share of at least 0.004, dilated by 12 px. The plate is used only inside that zone. An Opus 5.5 subagent ran
+the plates. As of 2026-09-29 they are ungraded.
+
+Recipe: `~/keyframes/kf_run4.sh` unchanged, seed 20260926, 4 steps, cfg 1.0, one reference: the photo at
+the probe's canvas (1920×1440 for mismatch_3, 602×800 for mismatch_2). Outputs are 1344×1008 and 608×800.
+Wall time is 89–136 s and 34–54 s; MemAvailable was 34.8–36.1 GiB before and 15.60–17.93 GiB at the lowest.
+pl_03b is byte-identical to pl_03 (`cmp`).
+
+The prompt form: "Edit Picture 1." first, then one sentence per kind of object to remove, named by what it
+is, then "Where they were, show …" naming the surfaces behind them, then the keep-and-format tail: "Keep … and
+everything not mentioned exactly as it is in Picture 1. Photorealistic, one continuous photograph, the same
+camera, colours and framing as Picture 1, no new people, no new objects, no split screen, no border, no text."
+
+Hand-over prompts, verbatim:
+
+pl_01r (mismatch_3_S):
+
+> Edit Picture 1. Remove every person: the whole crowd standing and sitting behind the wire fence, including the men raising their arms. Remove the three slatted wooden benches and the small table with plates and cups in the foreground, and the bags. Remove the two large dark spoked wheels and the small wheel hanging on the brick wall, the white air conditioning unit and the blue and yellow flag, and put nothing in their place: bare white brick wall. Where the people and the benches were, show the plain grey concrete floor of the courtyard and the lower part of the brick wall with its painted panels, continuing their lines. Keep the chain-link fence, the metal rails, the strings of sequins, the window, the doorway, the painting of hills and everything not mentioned exactly as it is in Picture 1. Photorealistic, one continuous photograph, the same camera, colours and framing as Picture 1, no new people, no new objects, no split screen, no border, no text.
+
+pl_02r (mismatch_3_F):
+
+> Edit Picture 1. Remove every person: the nine men sitting on the sofas and the man leaning forward in the front. Remove the grey woven rope armchairs with green cushions, the low dark tables with the glasses, phones and ashtray, and the towel. Where they were, leave the dark wooden floor bare and show the long sofa with green cushions along the back wall, continuing its lines; put no furniture in their place. Keep the hanging light wooden ceiling rods, the red painting and the blue painting, the loudspeaker, the large window with the pine trees and the building outside, the green floor cushions at the left and everything not mentioned exactly as it is in Picture 1. Photorealistic, one continuous photograph, the same camera, colours and framing as Picture 1, no new people, no new objects, no split screen, no border, no text.
+
+pl_03, pl_03b (mismatch_2_S):
+
+> Edit Picture 1. Remove the man in the yellow suit peeking out from behind the tree. Where he was, show what was behind him: the soft, out-of-focus sunlit park with green foliage and pale sky, continuing its colours and blur. Keep the tree trunk at the left, its bark, the light and everything not mentioned exactly as it is in Picture 1. Photorealistic, one continuous photograph, the same camera and framing as Picture 1, no new people, no new objects, no split screen, no border, no text.
+
+pl_04r (mismatch_2_F):
+
+> Edit Picture 1. Remove every person: the man in the navy T-shirt holding up a phone in the front, the woman in the dark green top behind his hands, the smiling woman with long hair in the black dress, and the person cut off at the right edge. Remove the yellow plant pot and the painted bird at the top right of the mural. Where they were, show what was behind them: the brick wall with its painted mural, the large green leaves of the plants and the seat with pale blue patterned cushions, continuing their lines and patterns. Keep the pale yellow pipes, the window at the top, the dried palm leaves over the mural, the plants and everything not mentioned exactly as it is in Picture 1. Photorealistic, one continuous photograph, the same camera, colours and framing as Picture 1, no new people, no new objects, no split screen, no border, no text.
+
+The first prompts pl_01, pl_02 and pl_04 are verbatim in `benchmarks/runs/2026-09-29/agents/B3_report.md` and
+`plates/box/prompts/`. They were written from a channel-swapped view of the photos and name wrong colours.
+
+What worked:
+1. A replacement named as a surface: "put nothing in their place: bare white brick wall" and "leave the dark
+   wooden floor bare … put no furniture in their place". With these, the wheels, the air conditioner, the flag,
+   the armchairs and the tables left without replacements (sheet, by eye).
+2. People are removed on all four photos, in a crowd of 24 behind a chain-link fence too; the fence stays.
+3. The keep list holds what lies outside the zone in place: the window, the doorway, the paintings, the tree
+   trunk. The framing is unchanged.
+
+What did not work:
+1. Colour words override the reference. "The hanging blue wooden ceiling" (the ceiling is light wood) gave a
+   blue ceiling in pl_02.
+2. "Remove X" with only "show what was behind" left room for a replacement in X's place: in pl_01 a yellow
+   banner took the flag's place, a painted floor with artificial grass appeared, and the air conditioner stayed.
+   In pl_02 sofas and a box table took the armchairs' place.
+3. Small painted or held objects stay: in pl_04r the painted bird and the yellow pot were named and kept.
+4. klein redraws what it keeps. The mismatch_2_F mural came back with new painted plants. Outside the zone
+   the L difference to the photo is 16–21 levels on three plates and 4.7 on mismatch_2_S, so the plate cannot
+   replace the photo outside the zone.
+
+Colour: the specified match (Lab, plate + normalized convolution of (photo − plate) over the pixels outside
+the zone, sigma 40 px) blurs into the zone the objects outside it that the plate removed, as dark discs on
+mismatch_3. A match over the outside pixels that agree within 10 L* has no discs by eye; its seam step is
+larger (46.16 against 22.64 L on mismatch_3_S). The layered probe reads the second variant
+(`plate_agree.png`; decided on the main thread, `TRANSITIONS.md §12.23.3`).
+
+One run at canvas size (1920×1440) failed in the recipe's `--max-vram 20` budget (5,298 MB needed, 5,274 MB
+available); host memory stayed at 15.39 GiB or more.
+
+In the probe (round 7, `TRANSITIONS.md §12.21`): the plate is the fill of a layer's `plate`
+(`plate.image`) and is shown where a drawn object has left, on at most 12.4 % of the canvas on
+mismatch_3 and 3.6 % on mismatch_2. An object un-premultiplied against the plate was measured and
+dropped: the generated background is not the photo's own background at the object's edge, and the
+object mattes read 2.0–4.3 on the outline measure against 1.2–2.1 without it.
+
+
 ## 6. Gaps
 
 - No source states what Qwen-Image-Edit-2511 does with an instruction it cannot satisfy from the

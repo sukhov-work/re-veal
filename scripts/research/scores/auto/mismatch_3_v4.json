@@ -1,0 +1,798 @@
+{
+ "pair": "mismatch_3",
+ "tag": "auto_r7",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "layers_dir": "benchmarks/runs/2026-09-28/layers_v3",
+ "owner": "Automatic per-element score, round 7 (fixed rules, no per-pair parameter; layered_probe.py --auto4): edit this file to tune the scene.",
+ "auto_facts": {
+  "sky_share": [
+   0.001,
+   0
+  ],
+  "route": "elements",
+  "elements": [
+   75,
+   56
+  ],
+  "considered": [
+   33,
+   28
+  ],
+  "matched_groups": 19,
+  "layers": 10,
+  "matches": [
+   {
+    "layer": "e0_door",
+    "a": [
+     "door#4"
+    ],
+    "b": [
+     "wall#6"
+    ],
+    "cost": 1.034822,
+    "mean_disparity": 0.159
+   },
+   {
+    "layer": "e1_building",
+    "a": [
+     "building#2",
+     "fence#20"
+    ],
+    "b": [
+     "tree#10",
+     "wall#25"
+    ],
+    "cost": 0.997917,
+    "mean_disparity": 0.188
+   },
+   {
+    "layer": "e2_flag",
+    "a": [
+     "flag#9"
+    ],
+    "b": [
+     "window#3"
+    ],
+    "cost": 1.048127,
+    "mean_disparity": 0.188
+   },
+   {
+    "layer": "e3_person",
+    "a": [
+     "person#47",
+     "person#31"
+    ],
+    "b": [
+     "person#28"
+    ],
+    "cost": 0.173525,
+    "mean_disparity": 0.464
+   },
+   {
+    "layer": "e4_person",
+    "a": [
+     "person#32",
+     "person#27"
+    ],
+    "b": [
+     "person#21"
+    ],
+    "cost": 0.289914,
+    "mean_disparity": 0.489
+   },
+   {
+    "layer": "e5_person",
+    "a": [
+     "person#13",
+     "person#16",
+     "person#40"
+    ],
+    "b": [
+     "person#31"
+    ],
+    "cost": 0.172837,
+    "mean_disparity": 0.529
+   },
+   {
+    "layer": "e6_person",
+    "a": [
+     "person#56",
+     "person#35",
+     "person#49",
+     "person#51",
+     "person#60"
+    ],
+    "b": [
+     "person#36"
+    ],
+    "cost": 0.317491,
+    "mean_disparity": 0.595
+   },
+   {
+    "layer": "e7_bench",
+    "a": [
+     "bench#68",
+     "fan#3"
+    ],
+    "b": [
+     "chair#35"
+    ],
+    "cost": 0.655216,
+    "mean_disparity": 0.65
+   },
+   {
+    "layer": "e8_bench",
+    "a": [
+     "bench#66"
+    ],
+    "b": [
+     "table#54",
+     "chair#43"
+    ],
+    "cost": 0.361128,
+    "mean_disparity": 0.86
+   },
+   {
+    "layer": "e9_bench",
+    "a": [
+     "bench#69"
+    ],
+    "b": [
+     "chair#39"
+    ],
+    "cost": 0.649033,
+    "mean_disparity": 0.921
+   }
+  ],
+  "ground_share": [
+   0.999,
+   1.0
+  ],
+  "ground": "none: the rest follows the elements",
+  "drawn_over_the_sheet": [
+   "e2_flag",
+   "e3_person",
+   "e4_person",
+   "e5_person",
+   "e6_person",
+   "e7_bench",
+   "e8_bench",
+   "e9_bench"
+  ],
+  "steer_the_sheet": [
+   "e0_door",
+   "e1_building"
+  ],
+  "rest": [
+   "fan#5",
+   "table#70",
+   "fence#26",
+   "person#21",
+   "person#44",
+   "person#57",
+   "person#22",
+   "person#24",
+   "person#39",
+   "person#29",
+   "person#38",
+   "bag#71",
+   "fence#43"
+  ],
+  "plates": [
+   true,
+   true
+  ]
+ },
+ "layers": [
+  {
+   "name": "all_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "all"
+   },
+   "plate": {
+    "dilate": 8,
+    "sigma": 40,
+    "scales": [
+     6,
+     18,
+     54,
+     162
+    ],
+    "settle_px": 3.0,
+    "holes": [
+     "e2_flag_b",
+     "e3_person_b",
+     "e4_person_b",
+     "e5_person_b",
+     "e6_person_b",
+     "e7_bench_b",
+     "e8_bench_b",
+     "e9_bench_b"
+    ],
+    "image": "benchmarks/runs/2026-09-29/plates/mismatch_3_F/plate_agree.png"
+   }
+  },
+  {
+   "name": "e0_door_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     6
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e1_building_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     10,
+     25
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e2_flag_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     3
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e3_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     28
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e4_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     21
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e5_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     31
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e6_person_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     36
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e7_bench_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     35
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e8_bench_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     43,
+     54
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e9_bench_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     39
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "action": "morph_to",
+   "window": [
+    0.08,
+    0.92
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "bright",
+   "ot_border": 0.2,
+   "field": {
+    "from": "layers",
+    "layers": [
+     "e0_door",
+     "e1_building"
+    ],
+    "fallback": "ot",
+    "sigma": 0.04,
+    "kappa": 0.02
+   },
+   "stagger": {
+    "amount": 0.4,
+    "scale_px": 360,
+    "seed": 29
+   },
+   "name": "rest",
+   "from": "A",
+   "mask": {
+    "rule": "all"
+   },
+   "depth": 0,
+   "to": "all_b",
+   "ot_local": 0.06,
+   "ot_floor": 0.3,
+   "ot_bend": 0.75,
+   "mix": "shape",
+   "plate": {
+    "dilate": 8,
+    "sigma": 40,
+    "scales": [
+     6,
+     18,
+     54,
+     162
+    ],
+    "settle_px": 3.0,
+    "holes": [
+     "e2_flag",
+     "e3_person",
+     "e4_person",
+     "e5_person",
+     "e6_person",
+     "e7_bench",
+     "e8_bench",
+     "e9_bench"
+    ],
+    "image": "benchmarks/runs/2026-09-29/plates/mismatch_3_S/plate_agree.png"
+   }
+  },
+  {
+   "name": "e0_door",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     4
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 2,
+   "action": "morph_to",
+   "to": "e0_door_b",
+   "window": [
+    0.1,
+    0.82
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  },
+  {
+   "name": "e1_building",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2,
+     20
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 3,
+   "action": "morph_to",
+   "to": "e1_building_b",
+   "window": [
+    0.116,
+    0.836
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  },
+  {
+   "name": "e2_flag",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     9
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 4,
+   "action": "morph_to",
+   "to": "e2_flag_b",
+   "window": [
+    0.131,
+    0.851
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  },
+  {
+   "name": "e3_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     31,
+     47
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 5,
+   "action": "morph_to",
+   "to": "e3_person_b",
+   "window": [
+    0.147,
+    0.867
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 44
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  },
+  {
+   "name": "e4_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     27,
+     32
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 6,
+   "action": "morph_to",
+   "to": "e4_person_b",
+   "window": [
+    0.162,
+    0.882
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 45
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  },
+  {
+   "name": "e5_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     13,
+     16,
+     40
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 7,
+   "action": "morph_to",
+   "to": "e5_person_b",
+   "window": [
+    0.178,
+    0.898
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 46
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  },
+  {
+   "name": "e6_person",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     35,
+     49,
+     51,
+     56,
+     60
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 8,
+   "action": "morph_to",
+   "to": "e6_person_b",
+   "window": [
+    0.193,
+    0.913
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 47
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  },
+  {
+   "name": "e7_bench",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     3,
+     68
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 9,
+   "action": "morph_to",
+   "to": "e7_bench_b",
+   "window": [
+    0.209,
+    0.929
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  },
+  {
+   "name": "e8_bench",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     66
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 10,
+   "action": "morph_to",
+   "to": "e8_bench_b",
+   "window": [
+    0.224,
+    0.944
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  },
+  {
+   "name": "e9_bench",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     69
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 11,
+   "action": "morph_to",
+   "to": "e9_bench_b",
+   "window": [
+    0.24,
+    0.96
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  }
+ ]
+}

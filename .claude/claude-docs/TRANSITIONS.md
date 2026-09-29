@@ -271,6 +271,9 @@ pairs); DNG and ARW have never been decoded from a real file; the owner's usabil
 | Layered probe round 6, 2026-09-28 evening (§12.17; page `benchmarks/runs/2026-09-28/layered_r6/`; scores `mismatch_{4,6}_r6.json`, `scores/auto/*_v3.json`; M3 Pro, CPU, beside two other jobs) | 3 s, 90 frames, nine clips byte-identical on two runs. Hand-written: mismatch_6 (1146×1524) prep 35.6 s, render 32.4 s, steps 0.04 / 0.01, md5 `fc42da91…`; mismatch_4 (1920×1092) 10.9 / 41.0 s, steps 0.0 / 0.0, `531895da…`. Automatic (`--auto3`, elements from `layers_v2`): mismatch_1 (1444×1920) 17.5 / 64.2 s, `fcbc8f44…`; mismatch_7 (1920×1488) 28.4 / 89.7 s, `a11cc816…`; mismatch_4 15.2 / 44.6 s, `caa9f3e1…`; mismatch_6 5.0 / 37.5 s, `348da836…`; mismatch_5 (1920×1080) 13.2 / 48.8 s, `4f8a73aa…`; mismatch_3 (1920×1440, ten layers) 49.8 / 182.0 s, `02400e79…`; mismatch_2 (602×800) 42.3 / 9.3 s, `151a5224…`. Probe md5 `2ac27ee6…`; the 25 md5s of rounds 1–5 unchanged; `transitions.py` untouched |
 | Merged layer source on the 24 fixture photos, 2026-09-28 evening (§12.18; `scripts/research/layer_merge.py`; page `benchmarks/runs/2026-09-28/layers_v2/`; scratch environment with torchvision 0.28.0; CPU, 4 torch threads, beside render jobs) | Grounding DINO base + SAM 2.1 Hiera-L 12.2 s per photo (median; 10.2–15.1), SAM 3 28.6 s (25.2–35.0), the whole v2 run 23.4–39.8 s per photo; peak RSS 6.5–6.9 GB (v2), 12.7 GB (v3); SAM 3 weights 3,439,938,512 B; 14 of 14 mismatch photos byte-identical on two runs, 0 socket attempts; on the main thread mismatch_4_S gives md5 `fa677ab4…` / `3a782a94…` |
 | Keyframes inside the layered probe, 2026-09-28 evening (§12.19; `scripts/research/keyframe_layer.py`; clips `benchmarks/runs/2026-09-28/keylayer/`) | FLUX.2 klein 9B Q8_0 on the second machine: seven runs of 50–95 s, MemAvailable 36.2–36.8 → 17.57–18.96 GiB; six clips of 90 frames at the canvas size, byte-identical on two renders; Laplacian variance of L at the keyframe frames 20–66 % under the source clip's |
+| Layered probe round 7, 2026-09-29 (§12.21; page `benchmarks/runs/2026-09-29/layered_r7/`; scores `scores/auto/*_v4.json`; M3 Pro, CPU, beside a regression run) | 3 s, 90 frames, seven clips byte-identical on two runs. Automatic (`--auto4`, elements from `layers_v3`): mismatch_1 (1444×1920) prep 9.9 s, render 66.6 s, steps 0.04 / 0.02, md5 `8eeb239a…`; mismatch_7 (1920×1488) 20.3 / 92.1 s, 0.03 / 0.03, `c3ba476d…`; mismatch_6 (1146×1524) 5.3 / 28.8 s, `e0b588c5…`; mismatch_4 (1920×1092) 13.4 / 35.2 s, `bb70cc2f…`; mismatch_5 (1920×1080) 11.6 / 37.0 s, `6691169d…`; mismatch_3 (1920×1440, eight drawn objects) 29.3 / 103.3 s, `ffe2818a…`; mismatch_2 (602×800) 28.4 / 6.5 s, `049c60f9…`. The measure `change` takes about the clip's render time at every second step. Probe md5 `54e9ee97…` (3,711 lines), `layered_diag.py` `b5779a51…`; the 34 md5s of rounds 1–6 unchanged; `transitions.py` untouched |
+| Merged layer source with SAM 3, second run, 2026-09-29 (§12.22; `benchmarks/runs/2026-09-29/e4/`; CPU, beside render jobs) | 24 of 24 photos byte-identical to `layers_v3`, 0 socket attempts, 61.3–99.6 s per photo (median 70.4; SAM 3 alone 45.6), wall 1,750 s, peak RSS 11.55 GB |
+| Generated backgrounds, 2026-09-29 (§12.23; `benchmarks/runs/2026-09-29/plates/`; FLUX.2 klein 9B Q8_0 on the second machine) | nine runs: 89–136 s at 1344×1008, 34–54 s at 608×800, MemAvailable 34.8–36.1 → 15.60–17.93 GiB; one repeated run byte-identical; 1920×1440 does not fit `--max-vram 20` |
 
 Goal numbers on the real surface (2026-09-26, `benchmarks/runs/2026-09-26/surface/` and `bench/`, morph 2 s, canvas ≤ 1920 px, 480-px proxy; run 1 through the CLI and run 2 through the bench script give identical numbers):
 
@@ -2013,3 +2016,250 @@ The sentence is a verdict on `keylayer_b` and `keylayer_c`, where a state is one
 generated keyframes. It is not a target for `auto_r6` or `layered_r6`. mismatch_4's "many critiques
 apply same as in mismatch_6" then carries the boundaries of `auto_r6` and the keyframe clips. The
 first version of 12.20.2 item 3 and of 12.20.5 listed it as a round-7 target for both pairs.
+
+### 12.21 Round 7: a measure of what explains a frame's change, the same buildings keep their shapes, a ground whose outline travels with its content, generated backgrounds (2026-09-29; page `benchmarks/runs/2026-09-29/layered_r7/index.html`; scores `scores/auto/<pair>_v4.json`)
+
+Result: on the two pairs the owner called a reveal, the share of the ground's change that a moving
+outline explains falls from 34.3 to 21.2 % (mismatch_1) and from 48.3 to 13.4 % (mismatch_7), and the
+share that moving content explains rises from 23.5 to 38.7 % and from 16.8 to 54.3 %. On mismatch_7
+the ground follows a map fitted to 74 keypoints the two photos share (0.81 px), so the towers keep
+their shapes. On mismatch_3 and mismatch_2 the place an object leaves shows a generated background,
+and the outline of an object is 1.01–1.33 times its smoothed length (round 6: 1.08–2.14). Not met:
+mismatch_5's crossfade has no change, the boundaries on mismatch_6 and mismatch_4 changed only
+through the elements, and 21 % of mismatch_1's ground still changes by a moving outline. Seven clips
+are byte-identical on two runs; the 34 md5s of rounds 1–6 are unchanged on the final probe (md5
+`54e9ee97…`, 3,711 lines); nothing in `transitions.py` changed. Ungraded as of 2026-09-29.
+
+12.21.1 The measure `change` (`scripts/research/layered_diag.py change`). A frame is the sum over
+its parts of visibility × content, so a step between two frames is exactly the sum of (mean
+visibility × change of content) and the sum of (mean content × change of visibility). A part is a
+layer; a `morph_to` layer in mid-clip is two parts, the first photo's content and the second's,
+each with its weight in the layer's picture (the probe sets `last_parts`). Every part's content
+has its own dense flow (DIS, medium preset) between its two pictures. On the luminance at a
+960-px long side, per pixel:
+
+| share | what it counts |
+|---|---|
+| `mix` | the change of content that remains after each part's picture is warped back along its flow, and the change of visibility that no flow explains where both photos are present or the visibility changes by under 0.1 per step |
+| `reveal` | the change of visibility that no flow explains elsewhere: an edge moves and its content does not move with it |
+| `motion` | the rest: content travels, and outlines with it |
+
+Controls (`--control`, three scores from the pair's two photos, measured through the same path): a
+wipe reads 92.5 % reveal, a crossfade 99.2 % mix, a pan of a quarter of the width 91.4 % motion.
+Against the owner's verdicts on the ground or the buildings of five clips:
+
+| clip | the owner | motion / reveal / mix (%) |
+|---|---|---|
+| `layered_r5_flow`, mismatch_6 | yes / yes / yes | 33.0 / 6.9 / 60.1 |
+| `auto_r6`, mismatch_6 | picked as closer | 27.7 / 6.1 / 66.3 |
+| `auto_r6`, mismatch_4 | "marginally better", yes / yes / yes | 30.3 / 7.7 / 62.1 |
+| `auto_r6`, mismatch_1 | "some form of reveal with solid margin" | 23.5 / 34.3 / 42.3 |
+| `auto_r6`, mismatch_7 | "even worse than in mismatch_1" | 16.8 / 48.3 / 34.9 |
+
+The reveal share orders the five clips as the owner did. The mix share is the largest in the
+three accepted clips (60–66 %), so the measure does not say that a crossfade inside a layer is a
+fault. Two first versions were dropped the same day. One flow between the two composites read
+72.2 % of the wipe control as motion: a flow moves a soft edge over a plain sky. One content per
+layer read mismatch_1's ground as 54.4 % motion and 11.8 % reveal: a morph layer's picture holds
+the outline between its two photos, and the flow explained that outline as motion.
+
+12.21.2 The measure `edge` (`layered_diag.py edge`), per object matte at rest: `rough`, the
+length of the outline over the length of the same outline smoothed at 6 px; `soft_px`, the width
+of the matte's ramp; `fringe`, the share of the inner rim whose colour is nearer to the colour
+outside the matte than to the matte's core (the `rim` measure of round 6, on the colour the layer
+carries). Controls: a disc reads rough 1.000, the disc with its outline displaced by up to 12 px
+1.354, the disc blurred at 4 px soft 12.6 px. The owner's verdict "rough edges" is on the round-6
+mattes, which read 1.22–2.14 on mismatch_3; no verdict exists yet on a smooth matte.
+
+12.21.3 Keys added to `scripts/research/layered_probe.py`, all default-off (the module docstring
+carries a paragraph on the round-6 keys and one on these).
+
+| key | on | what it does |
+|---|---|---|
+| `map: {kind, fallback, keep_if_iou, inward}` | `morph_to` | the layer's field comes from a map in place of the transport between the mattes. `kind: "features"`: the keypoints the two photos share (SIFT, ratio 0.75) within 8 px of the two mattes, a homography by MAGSAC at 2.5 px, held with at least 30 inliers and a sane shape (the constants of `transitions.py`). `kind: "box"`: the axis-aligned map between the two mattes' boxes, anchored at a border both mattes touch, each scale within 1/4–4. `kind: "columns"`: a scale per column (dropped, 12.21.6). `fallback` engages with a line on the log |
+| `keep_if_iou: x` inside `map` | a layer that follows the scene's flow | the map from the mattes is used only when the flow does not register the two mattes: the first matte pushed along the flow overlaps its target at an IoU under x |
+| `known_frame`, `known_px` | `morph_to` with a map | where the field has carried a photo's frame into the canvas, the mattes continue past the frame's edge and the other photo is shown, from `known_px` inside the edge on |
+| `inward: share` inside `map`; `ot_border: {"inward": share}` | `morph_to` | only the component of the field that pulls content away from a border falls to zero at that border (backlog T23) |
+| `plate.image`, `plate.keep`; `unmix: PLATE` | a plate; an object | the plate's fill is a picture; a kept zone holds the fill at rest too, for an object un-premultiplied against it (built, measured, off: 12.21.6) |
+| `shrink: px` | mask rule `element` | the matte ends that far inside the element's mask |
+
+Also new: `--auto4 PAIR` (writes `scores/auto/<pair>_v4.json`, tag `auto_r7`) with `--r7 columns`
+(`_v4c`, tag `auto_r7c`) and `--r7 whole` (`_v4w`, tag `auto_r7w`); the report's `morph` block
+records the map and the flow's IoU.
+
+12.21.4 The automatic score of round 7 (`auto_score2(..., r6=AUTO3, r7=AUTO4)`). Matching and
+every rule not named here are round 6's.
+1. The elements come from the merged layer source with SAM 3 (`benchmarks/runs/2026-09-28/layers_v3`,
+   §12.22; the owner's ruling of 2026-09-29).
+2. The ground under a sky takes `map: {features, fallback box, keep_if_iou 0.7, inward 0.08}`
+   and `known_frame`. The threshold 0.7 lies between the flow's IoU on the two accepted pairs
+   (0.842, 0.829) and on the two reveal pairs (0.601, and mismatch_7 takes the features). A ground
+   that melts into the sky (mismatch_5) and the rest of a scene with no sky (mismatch_3,
+   mismatch_2) keep round 6's fields.
+3. The matched clouds are one layer (round 6: up to three, each cut against the others).
+4. A plate takes the generated background of its photo where one exists
+   (`benchmarks/runs/2026-09-29/plates/<photo>/plate_agree.png`, §12.23) and a zone 8 px wider than
+   the object's matte.
+5. An object's matte is its element's mask shrunk 3 px and blurred 2 px, with no guided filter; an
+   object takes `map: {features, fallback ot}`. On the 16 object mattes of mismatch_3 the guided
+   filter of round 6 (r 20, two passes) reads rough 1.46 and fringe 15.3 % (medians), the mask
+   blurred 2 px 1.06 and 33.7 %, the mask shrunk 3 px and blurred 2 px 1.04 and 20.6 %.
+
+12.21.5 Results, round 6 → round 7 (`layered_diag.py`, the final probe). Shares: motion / reveal /
+mix of the ground's or the rest's region. Fill seen: the largest share of the canvas where a fill
+is what the viewer sees (on mismatch_3 and mismatch_2 in round 7 the fill is the generated
+background). At rest: the largest difference from the photo in the two frames beside each
+endpoint.
+
+| pair | the ground's field in round 7 | travel px | shares (%) | fill seen (%) | at rest, levels | md5 of `auto_r7` |
+|---|---|---|---|---|---|---|
+| mismatch_1 | box, 1.61 × in height (the flow's IoU 0.601) | 36 → 124 | 23.5 / 34.3 / 42.3 → 38.7 / 21.2 / 40.1 | 5.9 → 10.2 | 3 → 3 | `8eeb239a…` |
+| mismatch_7 | features, 74 inliers of 139, 0.81 px | 14 → 227 | 16.8 / 48.3 / 34.9 → 54.3 / 13.4 / 32.3 | 12.8 → 11.2 | 8 → 7 | `c3ba476d…` |
+| mismatch_6 | round 6's flow kept (IoU 0.842) | 40 → 46 | 27.7 / 6.1 / 66.3 → 31.9 / 5.9 / 62.1 | 3.4 → 3.6 | 2 → 2 | `e0b588c5…` |
+| mismatch_4 | round 6's flow kept (IoU 0.829) | 117 → 110 | 30.3 / 7.7 / 62.1 → 29.7 / 7.9 / 62.4 | 3.7 → 4.2 | 42 → 44 | `bb70cc2f…` |
+| mismatch_5 | the ground melts into the sky (round 6) | 74 → 79 | 41.9 / 5.6 / 52.5 → 40.1 / 6.2 / 53.7 | 3.9 → 3.9 | 13 → 12 | `6691169d…` |
+| mismatch_3 | the rest follows its surfaces (round 6) | 70 → 61 | 36.2 / 3.6 / 60.2 → 34.4 / 3.4 / 62.3 | 13.7 → 12.4 | 0 → 0 | `ffe2818a…` |
+| mismatch_2 | the rest follows its surfaces (round 6) | 20 → 22 | 24.6 / 3.2 / 72.2 → 21.1 / 2.3 / 76.6 | 5.0 → 3.6 | 0 → 0 | `049c60f9…` |
+
+Object mattes (`edge`), round 6 → round 7: mismatch_3 rough 1.22–2.14 (median 1.54, 18 mattes) →
+1.01–1.33 (1.03, 16 mattes), fringe median 17.1 → 20.3 %, ramp 21.4 → 6.2 px; mismatch_2 rough
+1.08–1.17 → 1.03–1.04, fringe 24.2 → 21.2 %. On mismatch_4, mismatch_5 and mismatch_6 the clip
+equals the round-6 rules on the new elements: a subagent's render with the round-6 probe frozen
+at `0f97537` has the same md5s (§12.22). Timings (M3 Pro, CPU, beside a regression run): prep
+5.3–29.3 s, render 28.8–103.3 s (mismatch_3, eight drawn objects).
+
+12.21.6 Tried and dropped, fields.
+1. The ground steered by element maps from the mattes' boxes, blended at 0.04 × the long side,
+   bend cap on: the field's bend stood at 3.13 and the office building of mismatch_1 leaned and
+   fanned out (by my eye on frames 28–40, `benchmarks/runs/2026-09-29/look/m1_try1.jpg`).
+2. The same blended at 0.012 × the long side with no cap: the field folds beside the building
+   (swirls on frames 28–40, `look/m1_try2.jpg`).
+3. The column map (`kind: "columns"`): bend 4.17 and 1.34, IoU of the pushed matte 0.569 (box:
+   0.675), reveal 22.1 % (box: 21.2 %); roofs turn wavy (`look/m1_columns.jpg`).
+4. One layer for the whole frame on mismatch_7 (`--r7 whole`): the first photo's frame, carried
+   into the canvas, stands in the sky as a rounded rectangle from 0.7 s to 1.8 s
+   (`look/m7_whole.jpg`). The measure reads 26.5 / 0.0 / 73.5 and does not see the rectangle: it
+   is a change of the mix, not of a matte.
+5. Three cloud layers from the new elements on mismatch_7: seams between the cloud layers (by my
+   eye, `look/m7_try1_f42_f50.jpg`). Between that render and the final one the sky's reveal share
+   fell from 23.6 to 13.7 %; the two renders also differ in which layers make the sky's flow.
+
+12.21.7 Tried and dropped, objects.
+1. An object un-premultiplied against the generated plate (`unmix`, `plate.keep`): on mismatch_3
+   the mattes read rough 2.0–4.3 and fringe 21–71 %, and the frames beside the endpoints stood
+   0.42 and 0.49 levels off the photos. A generated background is not the photo's own background
+   at the object's edge, and the opacity the un-premultiplication needs rises wherever the two
+   differ.
+2. The plate matched in colour over every pixel outside the zone (`plate.png`): dark discs about
+   40 px across inside the zone on mismatch_3 (§12.23).
+
+12.21.8 Limits of the result.
+1. mismatch_1: the pushed ground overlaps its target at IoU 0.675, and the rest of the second
+   photo's skyline still comes up inside a growing shape (reveal 21.2 %). A map that registers
+   the two skylines bends the buildings (12.21.6 item 3); none was found that does both.
+2. mismatch_1: the fill seen in the sky rises from 5.9 to 10.2 % of the canvas at the largest;
+   the ground travels farther and uncovers more of the sky's fill.
+3. mismatch_7: a thin blue rim along some cloud edges and a pale pink band above the skyline at
+   the right between 1.0 s and 1.8 s (by my eye); no measure reads either. The second photo's
+   buildings at the left and the right appear in place: the first photo holds none there.
+4. mismatch_3: the flag (group object) is matched to the window of the second photo (group
+   opening, 16.1 % of the canvas, cost 1.048) and drawn as an object; the layer grows into a large
+   patch between 1.2 s and 1.8 s (backlog T29).
+5. The fringe of the object mattes rose from 17.1 to 20.3 % (median, mismatch_3): the shrunk
+   matte carries more of the place the object left than the filtered one.
+
+12.21.9 Not done in this round.
+1. mismatch_5's crossfade and the bridge with no rule of its own (target 5 of the handover).
+2. The boundaries of `auto_r6` on mismatch_6 and mismatch_4 (target 4): no rule changed; the
+   elements did.
+3. The cause of mismatch_4's 44 levels in its last interior frames.
+4. The join rule for small elements (§12.22) is not in the score.
+
+### 12.22 The layer source with SAM 3 behind the automatic score (2026-09-29; outputs `benchmarks/runs/2026-09-29/e4/`; an Opus 5.5 subagent, re-checked on the main thread)
+
+Result: the merged layer source with SAM 3 reproduces byte for byte on 24 of 24 photos, and the
+round-7 automatic score reads it (`AUTO4["layers_dir"]`); by match cost it is a gain on
+mismatch_7 and mismatch_1 and a loss on mismatch_3 and mismatch_6. The owner's ruling of
+2026-09-29: "all layer examples from `merged v3 (+ SAM 3)` look really cool and accurate to me,
+lets go this way". `--auto3` still reads `layers_v2`, so the round-6 clips keep their md5s.
+
+12.22.1 Determinism. A second run of `layer_merge.py --routes gdino_sam2,sam3` on the 24 photos
+(`e4/layers_v3_run2`, offline, the old source's stage reused by `--skip-base`): `layers.npz` and
+`layers.json` equal `benchmarks/runs/2026-09-28/layers_v3` on 24 of 24 (`cmp`, repeated on the
+main thread: 48 of 48 files), 0 socket attempts in 24 `timing.json`, hub bytes 12,310,035,528
+before and after. Per photo 61.3–99.6 s (median 70.4; SAM 3 alone 45.6) beside the main thread's
+jobs, peak RSS 11.55 GB. The run does not re-prove the old source's stage; §12.18 did on 14 photos.
+
+12.22.2 The matching from `layers_v3` against `layers_v2` (`auto_score2`, round-6 rules; elements
+first / second photo; mean cost over the matched groups).
+
+| pair | elements | matched groups | mean cost | what changed |
+|---|---|---|---|---|
+| mismatch_1 | 34 / 16 → 59 / 63 | 5 → 3 | 0.606 → 0.384 | one building of 1.25 % of the canvas collects 13 elements of 12.75 % |
+| mismatch_7 | 17 / 18 → 37 / 35 | 4 → 5 | 0.479 → 0.334 | every building goes to a building |
+| mismatch_4 | 14 / 10 → 22 / 28 | 4 → 5 | 0.551 → 0.548 | the left skyline is two groups |
+| mismatch_6 | 22 / 6 → 38 / 9 | 2 → 3 | 0.856 → 0.901 | every building of the first photo goes to a tree: the second photo's one building stands 0.60–0.84 of the diagonal away, past `max_dist` 0.35 |
+| mismatch_3 | 59 / 48 → 75 / 56 | 15 → 19 (10 drawn) | 0.498 → 0.570 | a flag is matched to a window at cost 1.048 (backlog T29) |
+| mismatch_2 | 5 / 17 → 7 / 22 | 3 → 5 | 0.754 → 0.667 | a tree is still matched to a building (0.942) |
+| mismatch_5 | 23 / 7 → 38 / 9 | 0 → 0 | – | the second photo holds no element over 0.004 outside its sky |
+
+12.22.3 The grain. Of the 34 building elements of mismatch_1_F, 26 are SAM 3 masks and 8 are what
+the label map leaves; 23 lie under `min_share` 0.004, so the matcher never considers them. Across
+the 24 photos 77 of 134 building elements lie under 0.004. By the subagent's eye on five overlays
+the SAM 3 elements are whole buildings and the label map's remainders are roof strips or blocks
+that span several buildings (up to 14.8 % of the canvas); no reference exists (UNVERIFIED). A join
+rule was measured and is not in the score: a surface element under 0.004 joins the touching
+element of its group whose median disparity lies within 0.10. It takes the building elements of
+the 14 mismatch photos from 123 to 82 and mismatch_1's mean cost to 0.303; the matches of
+mismatch_2, 3, 5 and 6 stay the same; on mismatch_1_F it joins towers a viewer sees as separate
+(the subagent's eye on `e4/overlays_v3j/mismatch_1_F_building.jpg`).
+
+12.22.4 A cross-check. The subagent rendered the seven scores from `layers_v3` with the round-6
+probe frozen at `0f97537`. Its clips of mismatch_4, mismatch_5 and mismatch_6 have the md5s of the
+main thread's `auto_r7` clips (`bb70cc2f…`, `6691169d…`, `e0b588c5…`): on these three pairs round
+7 changes the elements and nothing else.
+
+### 12.23 Generated backgrounds for the objects' places (2026-09-29; `benchmarks/runs/2026-09-29/plates/`; `research/keyframe-prompting.md §5.6`; an Opus 5.5 subagent on the second machine, re-checked on the main thread)
+
+Result: FLUX.2 klein 9B at Q8_0 made one background per photo of mismatch_3 and mismatch_2 with
+the named objects removed, and the probe shows it where an object has moved away: on at most
+12.4 % of the canvas on mismatch_3 and 3.6 % on mismatch_2 (round 6 showed a smooth fill on 13.7
+and 5.0 %). The owner's ruling of 2026-09-29 allows it under three conditions: "realistic ( for a
+given context )", "keeping 50+% of objects original and consitnet between frames", "not inventing
+completely new objects". Ungraded as of 2026-09-29.
+
+12.23.1 The runs. Seed 20260926, 4 steps, cfg 1.0, the photo at the probe's canvas as the one
+reference, outputs 1344×1008 (mismatch_3) and 608×800 (mismatch_2). Wall 89–136 s and 34–54 s;
+MemAvailable 34.8–36.1 GiB before, 15.60–17.93 GiB at the lowest. One run repeated is
+byte-identical (sha256 `8533f5fb…`, read again from the main thread). One run at 1920×1440 failed
+inside the recipe's `--max-vram 20` budget (5,298 MB needed, 5,274 MB available); host memory
+stayed at 15.39 GiB or more. The second machine after the runs, read from the main thread at
+01:17 BST: no hold file, 0 containers, 34 GB available, `~/keyframes` 44 GB. The seven prompts
+are verbatim in DECISIONS 2026-09-29 (Track B3) and in the prompting note.
+
+12.23.2 Screening (`plates/screen_plate.py`; the layer source run on the plate counts the
+elements of the object groups of at least 0.004 inside the objects' zone).
+
+| photo | zone, share of the canvas | objects in the zone, photo → plate | what stays |
+|---|---|---|---|
+| mismatch_3_S | 54.1 % | 28 → 1 | a person of 0.4 % |
+| mismatch_3_F | 39.2 % | 17 → 2 | the long sofa, which stands in the photo too, and a cushion |
+| mismatch_2_S | 54.2 % | 1 → 0 | nothing |
+| mismatch_2_F | 59.0 % | 7 → 5 | the painted bird and the yellow pot (named in the prompt, kept), the seat and two pillows |
+
+The control reads the photo's own objects (28, 17, 1, 7) and 2–3 objects on a smooth fill, so
+counts of 2 or less are within the detector's noise. The zone is the union of every object
+element of the photo; the probe shows the plate only where a drawn object has left, which is the
+12.4 and 3.6 % above. Three zones cover more than half of their photo: the first condition of the
+ruling is the owner's to judge.
+
+12.23.3 What the main thread took and what it did not. The plate the probe reads is
+`plate_agree.png`: matched to the photo in colour over the outside pixels that agree with it
+within 10 L*. The match over every outside pixel (`plate.png`) draws dark discs about 40 px across
+into the zone on mismatch_3, because objects just outside the zone differ from the plate; the
+`plate_agree.png` variant pays with a larger step at the zone's edge (46.16 against 22.64 L on
+mismatch_3_S). Outside the zone a plate stands 4.7–21.0 levels of L off its photo, so a plate
+never replaces the photo there. The first three prompts named wrong colours (written from a
+channel-swapped view) and klein followed the words: a light wooden ceiling came back blue. By the
+subagent's eye the only content that may count as invented is the mural of mismatch_2_F, redrawn
+with new painted leaves, and the posters redrawn along the wall of mismatch_3_S.

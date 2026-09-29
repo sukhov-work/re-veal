@@ -81,7 +81,29 @@ its affine part (a building keeps its straight lines), `ot_border` pins the fiel
 canvas border, `gain_clip: [lo, hi]` bounds the contrast
 gain of the colour match; `unmix: BACKDROP` gives a layer its own colour, un-premultiplied against that
 backdrop's filled estimate (a half-transparent cloud carries no sky), with `"settle": false` on the
-backdrop's entry for that layer. Mask rule `element` takes its matte from the layer source
+backdrop's entry for that layer.
+Round-6 keys (2026-09-28; the owner on round 5: "picture morphs into some duplicate final picture
+that is already there", "clouds skewed alot"; all default-off; reference `TRANSITIONS.md §12.17.3`):
+`plate: {holes, dilate, sigma, scales, settle_px}` on a layer that lies under other layers of its
+photo (inside their zones it holds a fill and never their content); `mix: "shape"` on `morph_to`
+(one matte, the level set of the two warped mattes' signed distances); `ot_bend: cap` (the field is
+its affine part plus a rest whose bend stays under the cap); `ot_balance: s`; a backdrop's
+`prefer_known` / `prefer_px`; on any mask rule `snap: {r, eps, iters}` (a guided filter moves the
+matte's edge to the photo's) and `times_not: [names]`. `--auto3 PAIR` writes the round-6 score.
+Round-7 keys (2026-09-29; the owner on round 6: "some form of reveal with solid margin ... nothing
+is transforming there", the same buildings "preserved buidlings shapes", objects "very crudely cut
+out of background"; all default-off; reference `TRANSITIONS.md §12.21`): on `morph_to`
+`map: {kind, fallback}` takes the field from the keypoints the two photos share inside the two
+mattes (`kind: "features"`, a homography; the same thing keeps its shape) or from the two mattes'
+boxes (`kind: "box"`, an axis-aligned map) in place of the transport; `known_frame: true` with
+`known_px` shows the other photo where a field has carried a photo's frame into the canvas;
+`ot_border: {"inward": share}` pins only the component of a field that pulls content away from a
+border; `plate.image: FILE` takes the plate's fill from a picture (a generated background) and
+`plate.keep: [names]` keeps the fill under the named holes at rest too (an object un-premultiplied
+against it: `unmix: PLATE_LAYER`); on the mask rule `element`, `shrink: px` ends the matte that far
+inside the element's mask. `--auto4 PAIR` writes the round-7 score (tag `auto_r7`); `--r7 columns`
+and `--r7 whole` write its two variants.
+Mask rule `element` takes its matte from the layer source
 (`scripts/research/layer_source.py`: one element per thing or per connected region of a label, with
 its label, group and depth; `layers_dir` in the score): `ids`, or `groups` / `not_groups`; `soft`.
 `morph_to` with `field: {from: "layers", fallback: "ot"}` moves along the scene's flow (the matched
@@ -117,6 +139,8 @@ import transitions as T  # noqa: E402
 FIX = ROOT / "fixtures"
 LAYERS_DIR = "benchmarks/runs/2026-09-28/layers"      # the layer source's output (layer_source.py), per photo
 LAYERS_DIR_R6 = "benchmarks/runs/2026-09-28/layers_v2"    # the merged source (layer_merge.py: instances from Grounding DINO + SAM 2.1); --auto3 reads it
+LAYERS_DIR_R7 = "benchmarks/runs/2026-09-28/layers_v3"    # the merged source with SAM 3 (owner ruling 2026-09-29: "lets go this way"); --auto4 reads it
+PLATES_DIR = "benchmarks/runs/2026-09-29/plates"          # generated backgrounds, one per photo (<photo>/plate_agree.png); --auto4 reads one where it exists
 PROPS = (("one_picture", "one picture"), ("transforms", "content transforms"),
          ("not_invented", "nothing invented"))
 
@@ -347,6 +371,117 @@ def cap_bend(field, alpha, cap, sigmas=(12.0, 24.0, 48.0, 96.0, 192.0)):
             gain = cap / now
             out = out * gain
     return (aff + out).astype(np.float32), {"bend_p95": [round(before, 3), round(p95(out), 3)], "sigma": used, "gain": round(gain, 3)}
+
+
+def pin_inward(field, band_px):
+    """Round 7 (backlog T23). The border pin of round 5 brings the whole field to zero over a
+    fifth of the short side; a ground that lies inside that band hardly travels (36 px on
+    mismatch_1 after the gain that restored the bend cap). Here only the component that pulls
+    content away from a border falls to zero at that border, over `band_px`: content slides
+    along a border and leaves through it, and no border is exposed."""
+    h, w = field.shape[:2]
+    gx, gy = _full_grid(h, w)
+    b = max(float(band_px), 1.0)
+    fx, fy = field[..., 0], field[..., 1]
+    out = np.empty_like(field)
+    out[..., 0] = np.where(fx > 0, fx * smoothstep(gx / b), fx * smoothstep((w - 1 - gx) / b))
+    out[..., 1] = np.where(fy > 0, fy * smoothstep(gy / b), fy * smoothstep((h - 1 - gy) / b))
+    return out
+
+
+def homography_field(H, h, w):
+    """The displacement field (h, w, 2) of the map x -> H x, px. Round 7."""
+    gx, gy = _full_grid(h, w)
+    den = H[2, 0] * gx + H[2, 1] * gy + H[2, 2]
+    x = (H[0, 0] * gx + H[0, 1] * gy + H[0, 2]) / den
+    y = (H[1, 0] * gx + H[1, 1] * gy + H[1, 2]) / den
+    return np.stack([x - gx, y - gy], -1).astype(np.float32)
+
+
+def box_of(alpha, pct=2.0, touch_px=8):
+    """The box of a matte (alpha over 0.5) as (x0, y0, x1, y1) and the borders it touches: the
+    `pct` and 100 - `pct` percentiles of its x and of its y, and the canvas border itself on a
+    side where at least `touch_px` of its pixels lie on the border. Round 7."""
+    h, w = alpha.shape
+    hard = alpha > 0.5
+    ys, xs = np.where(hard)
+    if len(xs) < 50:
+        return None
+    x0, x1 = (float(v) for v in np.percentile(xs, [pct, 100.0 - pct]))
+    y0, y1 = (float(v) for v in np.percentile(ys, [pct, 100.0 - pct]))
+    touch = {"left": int(hard[:, 0].sum()) >= touch_px, "right": int(hard[:, -1].sum()) >= touch_px,
+             "top": int(hard[0].sum()) >= touch_px, "bottom": int(hard[-1].sum()) >= touch_px}
+    if touch["left"]:
+        x0 = 0.0
+    if touch["right"]:
+        x1 = float(w - 1)
+    if touch["top"]:
+        y0 = 0.0
+    if touch["bottom"]:
+        y1 = float(h - 1)
+    return (x0, y0, x1, y1), touch
+
+
+def box_fields(alpha_a, alpha_b, scale_max=4.0):
+    """Round 7 (backlog T26): the axis-aligned map between the boxes of two mattes, x -> sx (x -
+    ax) + bx and the same in y: a building grows, narrows and travels as a whole and keeps its
+    verticals, a ground that spans the width grows upward from the bottom border. Each scale
+    lies within 1 / `scale_max` .. `scale_max`; an axis is anchored at a border both mattes
+    touch, else at the boxes' centres. Returns the field A -> B, the field B -> A (its exact
+    inverse) and the facts, or None when a matte is empty."""
+    ba, bb = box_of(alpha_a), box_of(alpha_b)
+    if ba is None or bb is None:
+        return None
+    (ax0, ay0, ax1, ay1), ta = ba
+    (bx0, by0, bx1, by1), tb = bb
+    h, w = alpha_a.shape
+    gx, gy = _full_grid(h, w)
+    out = {"kind": "box", "box_a": [round(v, 1) for v in ba[0]], "box_b": [round(v, 1) for v in bb[0]]}
+    fields = []
+    sc, an = [], []
+    for g, a0, a1, b0, b1, near, far in ((gx, ax0, ax1, bx0, bx1, "left", "right"), (gy, ay0, ay1, by0, by1, "top", "bottom")):
+        k = float(np.clip((b1 - b0) / max(a1 - a0, 1.0), 1.0 / scale_max, scale_max))
+        if ta[far] and tb[far]:
+            pa, pb = a1, b1
+        elif ta[near] and tb[near]:
+            pa, pb = a0, b0
+        else:
+            pa, pb = 0.5 * (a0 + a1), 0.5 * (b0 + b1)
+        fields.append((k * (g - pa) + pb - g, (g - pb) / k + pa - g))
+        sc.append(round(k, 4))
+        an.append([round(pa, 1), round(pb, 1)])
+    out.update({"scale": sc, "anchor": an})
+    F = np.stack([fields[0][0], fields[1][0]], -1).astype(np.float32)
+    G = np.stack([fields[0][1], fields[1][1]], -1).astype(np.float32)
+    return F, G, out
+
+
+def column_fields(alpha_a, alpha_b, smooth_px, scale_max=4.0, min_cover=0.8, floor=0.02):
+    """Round 7 (backlog T24): two mattes that stand on the bottom border (a ground under a sky)
+    are registered column by column. In every column the first photo's height above the border
+    is scaled to the second's: y -> (h - 1) - (h - 1 - y) s(x), s = height of B / height of A,
+    both heights smoothed over `smooth_px` along x (and at least `floor` x h), s within
+    1 / scale_max .. scale_max. A vertical stays a vertical, the pushed matte's outline is the
+    target's outline up to the smoothing, and the map has an exact inverse, so nothing folds.
+    Returns the two fields and the facts, or None when a matte stands on the border in fewer
+    than `min_cover` of the columns."""
+    h, w = alpha_a.shape
+    hs, cover = [], []
+    for al in (alpha_a, alpha_b):
+        hard = al > 0.5
+        cover.append(float(hard[-2:].any(0).mean()))
+        hh = cv2.GaussianBlur(hard.sum(0).astype(np.float32)[None, :], (0, 0), max(float(smooth_px), 1.0), borderType=cv2.BORDER_REPLICATE)[0]
+        hs.append(np.maximum(hh, floor * h))
+    if min(cover) < min_cover:
+        return None
+    sc = np.clip(hs[1] / hs[0], 1.0 / scale_max, scale_max).astype(np.float32)
+    _, gy = _full_grid(h, w)
+    up = (h - 1.0) - gy
+    zero = np.zeros((h, w), np.float32)
+    F = np.stack([zero, up * (1.0 - sc[None, :])], -1).astype(np.float32)
+    G = np.stack([zero, up * (1.0 - 1.0 / sc[None, :])], -1).astype(np.float32)
+    return F, G, {"kind": "columns", "cover": [round(v, 3) for v in cover], "smooth_px": round(float(smooth_px), 1),
+                  "scale": [round(float(sc.min()), 3), round(float(np.median(sc)), 3), round(float(sc.max()), 3)]}
 
 
 _GRID = {}
@@ -659,10 +794,22 @@ class Scene:
         gx, gy = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
         num = [np.zeros((hs, ws, 2), np.float32), np.zeros((hs, ws, 2), np.float32)]
         den = [np.zeros((hs, ws), np.float32), np.zeros((hs, ws), np.float32)]
+        took, skip = set(), set()
+        if not names:
+            # round 7: a layer that took its own map (`map`) in place of the flow of its
+            # surfaces makes the scene's flow itself, and those surfaces do not
+            for lay in self.layers_all:
+                if lay.action == "morph_to" and lay.spec.get("field") and lay.spec.get("map"):
+                    lay.fields()
+                    if lay.map_used:
+                        took.add(lay.name)
+                        skip |= set(lay.spec["field"].get("layers") or [])
         for lay in self.layers_all:
             if names and lay.name not in names:
                 continue
-            if lay.spec.get("field"):
+            if lay.name in skip:
+                continue
+            if lay.spec.get("field") and lay.name not in took:
                 continue        # a layer that follows the flow does not make it
             if lay.action == "morph_to":
                 pairs = ((lay.F, lay.alpha0), (lay.G, lay.tgt.alpha0))
@@ -691,6 +838,25 @@ class Scene:
                 n_ = n_ + kappa * cv2.resize(fallback[k], (ws, hs), interpolation=cv2.INTER_AREA)
             out.append(cv2.resize(n_ / (d_ + kappa)[..., None], (w, h), interpolation=cv2.INTER_CUBIC))
         self.masks[key] = (out[0], out[1])
+        return self.masks[key]
+
+    def features(self):
+        """Round 7 (backlog T27): the keypoints the two photos share, once per scene: SIFT on
+        both canvases and the ratio test, with the tool's constants (`transitions.py` TCFG), no
+        geometry yet. Returns (points of A, points of B), (n, 2) px each."""
+        key = "_features"
+        if key not in self.masks:
+            det = cv2.SIFT_create(nfeatures=T.TCFG["sift_features"])
+            kA, dA = det.detectAndCompute(T.gray_of(self.A), None)
+            kB, dB = det.detectAndCompute(T.gray_of(self.B), None)
+            pa = pb = np.zeros((0, 2), np.float32)
+            if dA is not None and dB is not None and len(dA) >= 8 and len(dB) >= 8:
+                knn = cv2.BFMatcher(cv2.NORM_L2).knnMatch(dA, dB, k=2)
+                good = [m for m, n in (p for p in knn if len(p) == 2) if m.distance < T.TCFG["ratio"] * n.distance]
+                if good:
+                    pa = np.float32([kA[m.queryIdx].pt for m in good]).reshape(-1, 2)
+                    pb = np.float32([kB[m.trainIdx].pt for m in good]).reshape(-1, 2)
+            self.masks[key] = (pa, pb)
         return self.masks[key]
 
     def elements(self, src):
@@ -854,6 +1020,11 @@ class Scene:
                 a = (np.isin(el, sorted(ids)) | (el == 0)).astype(np.float32)   # unnamed pixels count as the rest
             else:
                 a = np.isin(el, sorted(ids - set(m.get("minus_ids", [])))).astype(np.float32)
+            if m.get("shrink", 0):
+                # round 7 (backlog T28): the matte ends `shrink` px inside the element's mask, so
+                # its rim holds the object and not what lies around it
+                k = int(m["shrink"])
+                a = cv2.erode(a, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1)))
             if m.get("soft", 0):
                 a = cv2.GaussianBlur(a, (0, 0), float(m["soft"]))
         else:
@@ -1250,9 +1421,12 @@ class Layer:
             # between two plates shows the other photo's own pixels before a
             # fill (render_morph5).
             zs = []
+            self.plate_keep = set(pl.get("keep", []))
             for nm in pl.get("holes", []):
                 z = (s.masks[nm] > float(pl.get("thr", 0.02))).astype(np.float32)
-                k = int(pl.get("dilate", 2))
+                # round 7: a kept zone is the hole's support and no wider (the layer over it is
+                # un-premultiplied against the fill there, at rest as in motion)
+                k = 0 if nm in self.plate_keep else int(pl.get("dilate", 2))
                 if k:
                     z = cv2.dilate(z, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1)))
                 if pl.get("soft", 0):
@@ -1260,7 +1434,16 @@ class Layer:
                 zs.append((nm, z))
             zone = np.max([z for _, z in zs], axis=0) if zs else np.zeros((h, w), np.float32)
             known = ((1.0 - zone) * (self.alpha0 > 0.5)).astype(np.float32)
-            self.plate_fill = fill_field(self.lab, known, float(pl.get("sigma", 40.0)), pl.get("scales")).astype(np.float32)
+            if pl.get("image"):
+                # round 7 (backlog T22; owner ruling 2026-09-29: generated content "as a helper
+                # to fill stuff"): the fill is a picture of the photo with its objects removed,
+                # generated once per photo and matched to the photo in colour at low frequency
+                im = T.load_image_rgb(str(ROOT / pl["image"]))
+                if im.shape[:2] != (h, w):
+                    im = cv2.resize(im, (w, h), interpolation=cv2.INTER_LANCZOS4)
+                self.plate_fill = T.lab_of(im).astype(np.float32)
+            else:
+                self.plate_fill = fill_field(self.lab, known, float(pl.get("sigma", 40.0)), pl.get("scales")).astype(np.float32)
             self.plate_zones = zs
             self.plate_px = float(pl.get("settle_px", 3.0))
             self.plate_cache = None
@@ -1274,7 +1457,12 @@ class Layer:
             # no channel clipped). The backdrop keeps its fill under this
             # layer at rest: give its entry `"settle": false`.
             bd = self.by_name[sp["unmix"]]
-            est = (np.asarray(bd.fitA_img, np.float32) + bd.resA) if self.src == "A" else (np.asarray(bd.fitB_img, np.float32) + bd.resB)
+            if getattr(bd, "plate_fill", None) is not None:
+                # round 7 (backlog T28): an object over a plate is un-premultiplied against the
+                # plate's fill under it, so its soft edge carries no pixel of the place it left
+                est = bd.plate_fill
+            else:
+                est = (np.asarray(bd.fitA_img, np.float32) + bd.resA) if self.src == "A" else (np.asarray(bd.fitB_img, np.float32) + bd.resB)
             bg = lab_to_rgb(est)
             # the least opacity a colour inside the gamut can explain: a
             # bright cloud pixel over a darker sky needs a >= (I - Bg) /
@@ -1490,7 +1678,14 @@ class Layer:
                 self.ot_info = dict(self.ot_info, nonrigid_rms_px=[round(ra_, 1), round(rb_, 1)], rigid=rho)
             self.field_spec = sp.get("field")
             self._own = (self.F, self.G)
-            if sp.get("ot_bend") and not sp.get("field"):
+            self.map_info, self._map, self.map_used = None, None, False
+            if sp.get("map"):
+                got = self._map_fields(sp["map"])
+                if got is not None:
+                    self._map, self.map_info = (got[0], got[1]), got[2]
+                    if not self.field_spec or self.map_info["kind"] == "features":
+                        self._use_map()
+            if sp.get("ot_bend") and not sp.get("field") and not self.map_used:
                 # round 6: the field may bend its layer by `ot_bend` at most
                 # (measured 2026-09-28: the clips the owner picked bend 0.23-0.75
                 # at the 95th percentile, the clouds he called "skewed alot" 2.8-3.0).
@@ -1500,13 +1695,11 @@ class Layer:
                 self.F, ia_ = cap_bend(self.F, self.alpha0, float(sp["ot_bend"]))
                 self.G, ib_ = cap_bend(self.G, tgt.alpha0, float(sp["ot_bend"]))
                 self.ot_info = dict(self.ot_info, bend=[ia_, ib_])
-            if sp.get("ot_border"):
+            if sp.get("ot_border") and not self.map_used:
                 # round 5: the field falls to zero at the canvas border over
                 # `ot_border` x the short side: a layer that touches the border
                 # never pulls away from it and shows its cut edge
-                bw = T.border_weight(h, w, float(sp["ot_border"]))[..., None]
-                self.F, self.G = self.F * bw, self.G * bw
-                if sp.get("ot_bend") and not sp.get("field"):
+                if self._pin(sp["ot_border"]) and sp.get("ot_bend") and not sp.get("field"):
                     self._bend_after_pin(float(sp["ot_bend"]))
             gain = float(sp.get("ot_gain", 1.0))
             self.F, self.G = self.F * gain, self.G * gain
@@ -1529,6 +1722,96 @@ class Layer:
             self.stag = None
             if not self.field_spec:
                 self._finish_fields()
+
+    def _pin(self, spec):
+        """The border pin. A number: round 5, the whole field falls to zero at the canvas border
+        over that share of the short side (returns True: the bend cap is restored after it).
+        {"inward": share}: round 7, `pin_inward`."""
+        h, w = self.scene.h, self.scene.w
+        if isinstance(spec, dict):
+            band = float(spec.get("inward", 0.08)) * min(h, w)
+            self.F, self.G = pin_inward(self.F, band), pin_inward(self.G, band)
+            return False
+        bw = T.border_weight(h, w, float(spec))[..., None]
+        self.F, self.G = self.F * bw, self.G * bw
+        return True
+
+    def _use_map(self):
+        """The layer's field is its map (`_map_fields`). A map from the mattes takes the inward
+        pin (`map.inward`, x the short side); a map fitted to features takes none: what its
+        frame leaves uncovered shows the other photo (`known_frame`). No bend cap: a map is
+        affine, or for `columns` the registration itself."""
+        self.F, self.G = self._map
+        mp = self.spec["map"]
+        if self.map_info["kind"] != "features" and mp.get("inward"):
+            band = float(mp["inward"]) * min(self.scene.h, self.scene.w)
+            self.F, self.G = pin_inward(self.F, band), pin_inward(self.G, band)
+        self.map_used = True
+        self.ot_info = dict(self.ot_info, map=self.map_info)
+
+    def _map_fields(self, mp):
+        """Round 7, `map` on `morph_to`: the layer's field from what the two photos show or
+        from the two mattes' boxes, in place of the transport between the mattes.
+        `kind: "features"` (backlog T27; the owner on mismatch_7: "zoom preserved buidlings
+        shapes acrooss transitions ( because those are really same buldings )"): the keypoints
+        the two photos share (Scene.features) that lie within `reach_px` of the layer's matte
+        in the first photo and of its target's in the second, a homography by MAGSAC; it holds
+        with at least `min_inliers` inliers (the tool's class A floor) and a sane shape
+        (`transitions._sane`). What is the same thing in both photos keeps its shape and the
+        mix changes its light. `kind: "box"` (backlog T26): `box_fields`. `kind: "columns"`
+        (backlog T24): `column_fields`, and the box when the mattes do not stand on the bottom
+        border. `fallback` names the kind to use when the features give no map ("box",
+        "columns", or "ot": the transport stays); the fallback engages with a line on the log.
+        On a layer that follows the scene's flow (`field`) a map from the mattes is used only
+        when that flow does not register the two mattes: `keep_if_iou` (see _finish_fields).
+        Returns (F, G, facts) or None."""
+        s, tgt = self.scene, self.tgt
+        h, w = s.h, s.w
+        kind = mp.get("kind", "features")
+        if kind == "features":
+            pa, pb = s.features()
+            need = int(mp.get("min_inliers", T.TCFG["min_inliers"]))
+            n_sel = n_in = 0
+            H = rmse = None
+            if len(pa):
+                k = 2 * int(mp.get("reach_px", 8)) + 1
+                ker = np.ones((k, k), np.uint8)
+                ma = cv2.dilate((self.alpha0 > 0.5).astype(np.uint8), ker)
+                mb = cv2.dilate((tgt.alpha0 > 0.5).astype(np.uint8), ker)
+                ia = np.clip(np.round(pa).astype(int), 0, [w - 1, h - 1])
+                ib = np.clip(np.round(pb).astype(int), 0, [w - 1, h - 1])
+                sel = (ma[ia[:, 1], ia[:, 0]] > 0) & (mb[ib[:, 1], ib[:, 0]] > 0)
+                n_sel = int(sel.sum())
+                if n_sel >= 8:
+                    Hm, mask = cv2.findHomography(pa[sel], pb[sel], getattr(cv2, "USAC_MAGSAC", cv2.RANSAC),
+                                                  float(mp.get("thresh", T.TCFG["magsac_thresh"])), maxIters=10000, confidence=0.999)
+                    if Hm is not None and mask is not None and abs(float(np.linalg.det(Hm))) > 1e-9:
+                        inl = mask.ravel().astype(bool)
+                        n_in = int(inl.sum())
+                        if n_in >= need and T._sane(np.linalg.inv(Hm), (h, w)):
+                            proj = cv2.perspectiveTransform(pa[sel][inl].reshape(-1, 1, 2), Hm).reshape(-1, 2)
+                            rmse = float(np.sqrt(((proj - pb[sel][inl]) ** 2).sum(1).mean()))
+                            H = Hm
+            if H is not None:
+                print(f"  map {self.name}: features ({n_in} inliers of {n_sel} matches inside the two mattes, rmse {rmse:.2f} px)", flush=True)
+                return (homography_field(H, h, w), homography_field(np.linalg.inv(H), h, w),
+                        {"kind": "features", "matches": n_sel, "inliers": n_in, "rmse_px": round(rmse, 2),
+                         "H": [[round(float(v), 6) for v in row] for row in H]})
+            kind = mp.get("fallback", "ot")
+            print(f"  map {self.name}: no map from features ({n_in} inliers of {n_sel} matches inside the two mattes, "
+                  f"{need} needed): {'the transport' if kind == 'ot' else kind}", flush=True)
+        if kind == "columns":
+            got = column_fields(self.alpha0, tgt.alpha0, float(mp.get("smooth", 0.02)) * w, float(mp.get("scale_max", 4.0)))
+            if got is not None:
+                return got
+            print(f"  map {self.name}: the mattes do not stand on the bottom border: box", flush=True)
+            kind = "box"
+        if kind == "box":
+            got = box_fields(self.alpha0, tgt.alpha0, float(mp.get("scale_max", 4.0)))
+            if got is not None:
+                return got
+            print(f"  map {self.name}: no box (a matte under 50 px): the transport", flush=True)
+        return None
 
     def linear(self, t, window=None):
         """The clipped linear progress through a window (the layer's own by default)."""
@@ -1588,7 +1871,9 @@ class Layer:
         with its own transport; at the first use for one that follows the
         scene's flow (every other layer is prepared by then)."""
         s, sp = self.scene, self.spec
-        if self.field_spec:
+        # round 7: a layer whose own map is fitted to features keeps it (the whole layer is the
+        # same thing in both photos); it does not follow the scene's flow
+        if self.field_spec and not self.map_used:
             fs = self.field_spec
             fb = self._own if fs.get("fallback") == "ot" else None
             F, G = s.layer_flow(float(fs.get("sigma", 0.1)), float(fs.get("kappa", 0.02)), fs.get("layers"), fb, self.name)
@@ -1599,11 +1884,29 @@ class Layer:
                 self.G, ib_ = cap_bend(self.G, self.tgt.alpha0, float(sp["ot_bend"]))
                 self.ot_info = dict(self.ot_info, bend=[ia_, ib_])
             if sp.get("ot_border"):
-                bw = T.border_weight(s.h, s.w, float(sp["ot_border"]))[..., None]
-                self.F, self.G = self.F * bw, self.G * bw
-                if sp.get("ot_bend"):
+                if self._pin(sp["ot_border"]) and sp.get("ot_bend"):
                     self._bend_after_pin(float(sp["ot_bend"]))
+            thr = (sp.get("map") or {}).get("keep_if_iou")
+            if self._map is not None and thr is not None:
+                # round 7 (backlog T24, T26): does the flow register the two mattes? The first
+                # photo's matte pushed along it against the target's matte, intersection over
+                # union. Measured 2026-09-29 on the round-6 clips: 0.851 and 0.790 on the two
+                # pairs whose clip the owner ticked or picked (mismatch_6, mismatch_4), 0.568
+                # and 0.376 on the two he called "some form of reveal" (mismatch_1, mismatch_7).
+                pushed = warp_along(self.alpha0, self.F, 1.0, exact=True) > 0.5
+                tb = self.tgt.alpha0 > 0.5
+                iou = float((pushed & tb).sum()) / max(float((pushed | tb).sum()), 1.0)
+                if iou >= float(thr):
+                    print(f"  map {self.name}: the scene's flow registers the two mattes (IoU {iou:.3f} >= {float(thr):.2f}): kept", flush=True)
+                    self.ot_info = dict(self.ot_info, flow_iou=round(iou, 3))
+                else:
+                    print(f"  map {self.name}: the scene's flow does not register the two mattes (IoU {iou:.3f} < {float(thr):.2f}): "
+                          f"{self.map_info['kind']}", flush=True)
+                    self._use_map()
+                    self.ot_info = dict(self.ot_info, flow_iou=round(iou, 3))
         stg = sp.get("stagger")
+        if stg and self.map_used and self.map_info["kind"] == "features":
+            stg = None          # the same thing in both photos moves as one piece: no place starts later
         if stg:
             amt = float(np.clip(stg.get("amount", 0.3), 0.0, 0.8))
             n_a = noise_field(s.h, s.w, float(stg.get("scale_px", 300)), s.seed + int(stg.get("seed", 21)))
@@ -1652,6 +1955,9 @@ class Layer:
         alls = self.scene.layers_all
         ws = []
         for nm, _ in self.plate_zones:
+            if nm in getattr(self, "plate_keep", ()):
+                ws.append(1.0)
+                continue
             acts = [l for l in alls if l.render_it and (l.name == nm or l.spec.get("to") == nm)]
             d = max(a.away(t)[idx] for a in acts) if acts else 100.0
             ws.append(round(float(smoothstep(d / self.plate_px)), 4))
@@ -1705,6 +2011,11 @@ class Layer:
         # night sky given a cloud's statistics had its texture amplified 2.5 x
         # and the rim of every filled zone showed; measured by eye, 2026-09-28)
         gc = tuple(self.spec.get("gain_clip", (0.4, 2.5)))
+        # round 7, `known_frame`: a field may carry a photo's frame into the canvas (a zoom out);
+        # the mattes continue past the frame's edge and the other photo is shown there
+        kf = bool(self.spec.get("known_frame")) and getattr(self, "map_used", False)
+        bm = cv2.BORDER_REPLICATE if kf else cv2.BORDER_CONSTANT
+        self.last_parts = None
         qc = float(curve_of(self.colour_curve, self.linear(t, self.colour_window))) if self.colour_curve != "smoothstep" \
             else float(smoothstep(self.linear(t, self.colour_window)))
         if self.colour_rel and bd is not None:
@@ -1742,8 +2053,8 @@ class Layer:
             pb_ = (np.clip(cf(ub), 0, 1) if cf else smoothstep(ub)).astype(np.float32)
             ra = np.clip((ua - m0) / max(1.0 - m0, 1e-6), 0, 1).astype(np.float32)
             rb = np.clip((ub - m0) / max(1.0 - m0, 1e-6), 0, 1).astype(np.float32)
-            a_a = warp_along(self.alpha0, self.F, pa, exact=True)
-            a_b = warp_along(tgt.alpha0, self.G, 1.0 - pb_, exact=True)
+            a_a = warp_along(self.alpha0, self.F, pa, bm, exact=True)
+            a_b = warp_along(tgt.alpha0, self.G, 1.0 - pb_, bm, exact=True)
             c_a = warp_along(np.ascontiguousarray(rgb_a), self.F, pa, cv2.BORDER_REPLICATE, exact=True)
             c_b = warp_along(np.ascontiguousarray(rgb_b), self.G, 1.0 - pb_, cv2.BORDER_REPLICATE, exact=True)
             r_a = warp_along(ra, self.F, pa, cv2.BORDER_REPLICATE, exact=True)
@@ -1757,18 +2068,27 @@ class Layer:
             r = min(1.0, max(0.0, (u - m0) / max(1.0 - m0, 1e-6)))
             q = float(smoothstep(r / rho))
             fade = float(smoothstep((r - rho) / max(1.0 - rho, 1e-6))) if self.to_backdrop else 0.0
-            a_a = warp_along(self.alpha0, self.F, p, exact=True)
-            a_b = warp_along(tgt.alpha0, self.G, 1.0 - p, exact=True)
+            a_a = warp_along(self.alpha0, self.F, p, bm, exact=True)
+            a_b = warp_along(tgt.alpha0, self.G, 1.0 - p, bm, exact=True)
             c_a = warp_along(np.ascontiguousarray(rgb_a), self.F, p, cv2.BORDER_REPLICATE, exact=True)
             c_b = warp_along(np.ascontiguousarray(rgb_b), self.G, 1.0 - p, cv2.BORDER_REPLICATE, exact=True)
             p_b = 1.0 - p
-        if va is not None or vb is not None:
+        if va is not None or vb is not None or kf:
             # round 6: between two plates the photo's own pixels come before a
             # fill. Both known or both filled: the mix q. Only the second
             # photo's known: 1. Only the first's: 0.
             one = np.ones_like(self.alpha0)
             v_a = warp_along(one if va is None else va, self.F, p, cv2.BORDER_REPLICATE, exact=True)
             v_b = warp_along(one if vb is None else vb, self.G, p_b, cv2.BORDER_REPLICATE, exact=True)
+            if kf:
+                # known inside the photo's carried frame, from `known_px` inside its edge on (a
+                # switch at the edge draws the frame's outline; the class A clip of 2026-09-23
+                # showed it as a rectangle in the sky)
+                kp = float(self.spec.get("known_px", 0.03 * max(self.scene.h, self.scene.w)))
+                k_a = cv2.GaussianBlur(warp_along(one, self.F, p, exact=True), (0, 0), kp)
+                k_b = cv2.GaussianBlur(warp_along(one, self.G, p_b, exact=True), (0, 0), kp)
+                v_a = v_a * np.clip(2.0 * k_a - 1.0, 0.0, 1.0)
+                v_b = v_b * np.clip(2.0 * k_b - 1.0, 0.0, 1.0)
             q = (q * (v_a * v_b + (1.0 - v_a) * (1.0 - v_b)) + (1.0 - v_a) * v_b).astype(np.float32)
             # for the measures (layered_diag.py holes, layers): the share of the plate's
             # picture that is a fill, and where it shows the second photo's own pixels
@@ -1793,6 +2113,9 @@ class Layer:
             w_b = a_b * (1.0 - (1.0 - q) * a_a)
             rgb = (c_a * w_a[..., None] + c_b * w_b[..., None]) / np.maximum(w_a + w_b, 1e-4)[..., None]
             self.last_q = q
+            # for the measure (layered_diag.py change): the two photos' contents, their warped
+            # mattes and their weights in this layer's picture
+            self.last_parts = (c_a, c_b, a_a, a_b, w_a, w_b)
             return rgb, np.clip(alpha * (1.0 - fade), 0, 1)
         c = 4.0 * q * (1.0 - q)
         lin = a_a * (1.0 - q) + a_b * q
@@ -1801,6 +2124,7 @@ class Layer:
         w_b = a_b * (q + 0.5 * c)
         rgb = (c_a * w_a[..., None] + c_b * w_b[..., None]) / np.maximum(w_a + w_b, 1e-4)[..., None]
         self.last_q = q
+        self.last_parts = (c_a, c_b, a_a, a_b, w_a, w_b)
         return rgb, np.clip(alpha * (1.0 - fade), 0, 1)
 
     def render_morph(self, t):
@@ -1813,6 +2137,7 @@ class Layer:
                 or self.valid is not None or getattr(self.tgt, "valid", None) is not None:
             return self.render_morph5(t)
         tgt = self.tgt
+        self.last_parts = None
         u = self.linear(t)
         p = curve_of(self.curve, u)
         m0, m1 = self.mix_window
@@ -1843,6 +2168,7 @@ class Layer:
         w_a = a_a * ((1.0 - q) + 0.5 * c)
         w_b = a_b * (q + 0.5 * c)
         rgb = (c_a * w_a[..., None] + c_b * w_b[..., None]) / np.maximum(w_a + w_b, 1e-4)[..., None]
+        self.last_parts = (c_a, c_b, a_a, a_b, w_a, w_b)
         return rgb, np.clip(alpha, 0, 1)
 
     def edge_alpha(self, p):
@@ -2498,6 +2824,43 @@ AUTO3 = {
 }
 
 
+# Round 7 (2026-09-29), the owner on round 6's automatic clips: "some form of reveal with solid
+# margin , it looks pretty 2d and fake, nothing is transforming there" (mismatch_1, mismatch_7);
+# the 2026-09-23 class A clip "preserved buidlings shapes acrooss transitions ( because those are
+# really same buldings ) and morphed stuff around them" (mismatch_7); objects "very crudely cut out
+# of background with rough edges" (mismatch_3, mismatch_2). What `--auto4` adds, each a fixed rule:
+AUTO4 = {
+    "layers_dir": LAYERS_DIR_R7,        # the elements: the merged source with SAM 3 (owner ruling 2026-09-29)
+    # a surface and the sheet take their map from the keypoints the two photos share inside their mattes (the
+    # same buildings keep their shapes); where the photos share none, from the two mattes' boxes (a building
+    # grows and travels as a whole into its counterpart, its outline carried by its content)
+    # the sheet under a sky: a map from the keypoints the two photos share inside its mattes (the same
+    # buildings keep their shapes); with none, the round-6 flow where it registers the two mattes (IoU
+    # of the pushed matte at least `keep_if_iou`), else a map from the mattes themselves (`fallback`)
+    "map_sheet": {"kind": "features", "fallback": "box", "keep_if_iou": 0.7, "inward": 0.08},
+    "map_object": {"kind": "features", "fallback": "ot"},      # an object without shared keypoints keeps its transport
+    "known_px": 0.03,                   # x the long side: from a carried frame's edge inward the other photo shows
+    "one_cloud_layer": True,            # the matched clouds are one layer: no seam between two cloud layers
+    # an object's matte is its element's mask shrunk 3 px and blurred 2 px, with no guided filter. Measured
+    # 2026-09-29 on the 16 object mattes of mismatch_3: the outline is 1.22-2.05 x its smoothed length with the
+    # guided filter of round 6 (median 1.46) and 1.02-1.33 x with this matte (median 1.04); the rim nearer to
+    # the outside colour 15.3 % (median) against 20.6 %, and 33.7 % for the mask blurred and not shrunk
+    "object_matte": {"shrink": 3, "soft": 2},
+    "plate_dilate": 8,                  # px: the plate's zone covers the rim that the shrunk matte leaves
+    "whole": False,                     # True: a pair whose whole frames share keypoints is one layer (the variant `auto_r7w`)
+    "tag": "auto_r7",
+    "plates_dir": PLATES_DIR,           # a generated background per photo, where one exists (owner ruling 2026-09-29)
+    "plate_file": "plate_agree.png",    # matched to the photo in colour where the two agree (the match over every pixel
+                                        # outside the zone drew dark discs 40 px across on mismatch_3, 2026-09-29)
+    # an object un-premultiplied against the plate under it (`unmix`, `plate.keep`): off. Measured 2026-09-29 on
+    # mismatch_3 with it on: the outline of the object mattes 2.0-4.3 x its smoothed length (round 6: 1.2-2.1),
+    # the rim nearer to the outside colour on 21-71 % (round 6: 8-32 %), the frames beside the endpoints 0.42
+    # and 0.49 levels off the photos (round 6: 0.0). A generated background is not the photo's own background
+    # at the object's edge, and the opacity the un-premultiplication needs rises wherever the two differ.
+    "unmix_objects": False,
+}
+
+
 # the label groups and their neighbours: the layer source's proposal (layer_source.py, 2026-09-28)
 def _groups():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -2562,10 +2925,12 @@ def match_elements(ea, eb, diag, cfg=AUTO2, neighbours=None):
     return groups
 
 
-def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920, cfg=AUTO2, r6=None):
+def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920, cfg=AUTO2, r6=None, r7=None):
     """The per-element automatic score. See the section comment. `r6` (AUTO3)
     gives the round-6 score: every pixel in one layer, fields that do not
-    bend their layer, a sky that shows a fill last."""
+    bend their layer, a sky that shows a fill last. `r7` (AUTO4, with `r6`)
+    gives the round-7 score: maps from shared keypoints or from the mattes'
+    boxes, generated plates, objects un-premultiplied against their plate."""
     A, B = canvas_pair(pair, max_long)
     h, w = A.shape[:2]
     diag = math.hypot(w, h)
@@ -2598,6 +2963,28 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
     kept, rest = groups[:cfg["max_layers"]], groups[cfg["max_layers"]:]
     lum = match_elements(lights["A"], lights["B"], diag, cfg, nb)[:1]
     cl = match_elements(clouds["A"], clouds["B"], diag, cfg, nb)[:3]
+    if r7 and r7["one_cloud_layer"] and len(cl) > 1:
+        cl = [{"a": [e for g in cl for e in g["a"]], "b": [e for g in cl for e in g["b"]], "cost": min(g["cost"] for g in cl)}]
+    whole = None
+    if r7 and r7["whole"]:
+        # round 7, the variant: the two whole frames share keypoints (the tool's class A floor):
+        # the pair is one layer that follows the map fitted to them
+        sc_ = Scene(A, B, 0)
+        pa_, pb_ = sc_.features()
+        if len(pa_) >= 8:
+            H_, m_ = cv2.findHomography(pa_, pb_, getattr(cv2, "USAC_MAGSAC", cv2.RANSAC), T.TCFG["magsac_thresh"], maxIters=10000, confidence=0.999)
+            if H_ is not None and m_ is not None and int(m_.sum()) >= T.TCFG["min_inliers"] and T._sane(np.linalg.inv(H_), (h, w)):
+                whole = {"matches": int(len(pa_)), "inliers": int(m_.sum())}
+    if whole:
+        return {"pair": pair, "tag": r7["tag"], "seconds": seconds, "fps": fps, "max_long": max_long, "layers_dir": layers_dir,
+                "owner": "Automatic score, round 7, the whole-frame rule (the two frames share keypoints: one layer; layered_probe.py --auto4 --r7 whole): edit this file to tune the scene.",
+                "auto_facts": {"route": "one layer: the frames share keypoints", "whole": whole},
+                "layers": [{"name": "all_b", "from": "B", "render": False, "mask": {"rule": "all"}},
+                           {"name": "frame", "from": "A", "mask": {"rule": "all"}, "depth": 0, "action": "morph_to", "to": "all_b",
+                            "window": [0.08, 0.92], "curve": "smootherstep", "mix_window": [0.3, 0.7], "exact": True,
+                            "ot_grid": 64, "ot_eps": 0.04, "ot_mass": "alpha",
+                            "map": {"kind": "features", "fallback": "ot"}, "known_frame": True,
+                            "known_px": round(r7["known_px"] * max(h, w), 1)}]}
     ground = [sum(e["area_share"] for e in meta[s_]["elements"] if e["group"] not in sky_g) for s_ in ("A", "B")]
     # the ground of the first photo has no counterpart when the second holds under `ground_ratio` of it
     melt = has_sky and ground[1] < cfg["ground_ratio"] * ground[0]
@@ -2641,9 +3028,24 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
     is_obj = [bool(r6) and kept[gi]["a"][0]["group"] in r6["object_groups"] for gi in order]
 
     def el_mask(g, side, rank):
+        if r7 and g["a"][0]["group"] in r6["object_groups"]:
+            return dict({"rule": "element", "ids": sorted(e["id"] for e in g[side])}, **r7["object_matte"])
         if r6:
             return {"rule": "element", "ids": sorted(e["id"] for e in g[side]), "snap": dict(r6["snap"])}
         return {"rule": "element", "ids": sorted(e["id"] for e in g[side]), "soft": 2}
+
+    def plate_of(side, holes):
+        # round 6: a fill from the layer's own pixels; round 7: a generated background where one
+        # exists for the photo, and the fill kept under the objects un-premultiplied against it
+        d = dict(r6["plate"], holes=list(holes))
+        if r7:
+            d["dilate"] = r7["plate_dilate"]
+            f = Path(r7["plates_dir"]) / f"{pair}_{'S' if side == 'a' else 'F'}" / r7["plate_file"]
+            if (ROOT / f).exists():
+                d["image"] = str(f)
+            if r7["unmix_objects"]:
+                d["keep"] = list(holes)
+        return d
 
     sky_made = {"a": [], "b": []}
 
@@ -2673,7 +3075,7 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
             gb["minus_ids"] = [e["id"] for e in orphans]
         gb_layer = {"name": "ground_b", "from": "B", "render": False, "mask": gb}
         if r6 and not melt and names_obj:
-            gb_layer["plate"] = dict(r6["plate"], holes=[nm_ + "_b" for nm_ in names_obj])
+            gb_layer["plate"] = plate_of("b", [nm_ + "_b" for nm_ in names_obj])
         if r6:
             # round 6: the ground's mask comes first, the mattes of the sky's layers end short of it
             layers.append(gb_layer)
@@ -2684,6 +3086,8 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
         g = kept[gi]
         nm = names_el[rank]
         layers.append({"name": nm + "_b", "from": "B", "render": False, "mask": el_mask(g, "b", rank)})
+        if r7 and r7["unmix_objects"] and is_obj[rank] and not melt:
+            layers[-1]["unmix"] = "ground_b" if has_sky else "all_b"
         facts["matches"].append({"layer": nm, "a": [f"{e['label']}#{e['id']}" for e in g["a"]],
                                  "b": [f"{e['label']}#{e['id']}" for e in g["b"]], "cost": g["cost"],
                                  "mean_disparity": round(disp(g), 3)})
@@ -2748,8 +3152,11 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
     else:
         ab_layer = {"name": "all_b", "from": "B", "render": False, "mask": {"rule": "all"}}
         if r6 and names_obj:
-            ab_layer["plate"] = dict(r6["plate"], holes=[nm_ + "_b" for nm_ in names_obj])
-        layers.append(ab_layer)
+            ab_layer["plate"] = plate_of("b", [nm_ + "_b" for nm_ in names_obj])
+        if r7:
+            layers.insert(0, ab_layer)      # a plate is prepared before the objects un-premultiplied against it
+        else:
+            layers.append(ab_layer)
         sky = None
         # no sky: the rest of the frame gathers into the second photo's own lighter parts, place by place
         base = {"name": "rest", "from": "A", "mask": {"rule": "all"}, "depth": 0, "to": "all_b",
@@ -2763,7 +3170,7 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
         if not melt:
             base["mix"] = "shape"
         if names_obj:
-            base["plate"] = dict(r6["plate"], holes=list(names_obj))
+            base["plate"] = plate_of("a", names_obj)
         if names_srf and not melt:
             # the sheet follows the matched surfaces, each where it stands, and its own transport far from them
             base["field"] = {"from": "layers", "layers": list(names_srf), "fallback": "ot",
@@ -2771,6 +3178,10 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
         elif "field" in base and not melt:
             del base["field"]          # no surface is matched: the sheet's own transport
             base["ot_balance"] = r6["cloud_balance"]
+    if r7 and has_sky and not melt:
+        # round 7: the ground's own map; its outline is carried by its content, and where its
+        # frame leaves the canvas uncovered the other photo shows
+        base.update({"map": dict(r7["map_sheet"]), "known_frame": True, "known_px": round(r7["known_px"] * max(h, w), 1)})
     layers.append(base)       # the ground's mask exists before the sky's (an `invert` of it)
     if r6 and has_sky:
         layers.append({"name": "ground_wide", "from": "A", "render": False,
@@ -2821,6 +3232,10 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
             lay.update({"ot_bend": r6["bend"], "exact": True, "mix": "shape"})
             if not is_obj[rank]:
                 lay["render"] = False          # a surface: its transport steers the sheet
+        if r7 and is_obj[rank]:
+            lay["map"] = dict(r7["map_object"])
+            if r7["unmix_objects"] and not melt:
+                lay["unmix"] = base["name"]
         layers.append(lay)
     for k, e in enumerate(orphans):
         layers.append({"name": f"new{k}_{e['label'].replace(' ', '_')}", "from": "B",
@@ -2828,6 +3243,11 @@ def auto_score2(pair, layers_dir=LAYERS_DIR, seconds=3.0, fps=30, max_long=1920,
                        "window": [0.55, 0.95], "curve": "smootherstep", "order": "edge", "edge_norm": "px", "edge_thr": 0.0,
                        "speed_density": 0.0, "front_soft_px": 30, "front_wide_px": 90, "wide_gain": 0.5, "turb_px_amp": 12, "turb_px": 16})
     facts["rest"] = [f"{e['label']}#{e['id']}" for g in rest for e in g["a"]]
+    if r7:
+        facts["plates"] = [bool(l_.get("plate", {}).get("image")) for l_ in layers if l_.get("plate")]
+        return {"pair": pair, "tag": r7["tag"], "seconds": seconds, "fps": fps, "max_long": max_long, "layers_dir": layers_dir,
+                "owner": "Automatic per-element score, round 7 (fixed rules, no per-pair parameter; layered_probe.py --auto4): edit this file to tune the scene.",
+                "auto_facts": facts, "layers": layers}
     if r6:
         return {"pair": pair, "tag": "auto_r6", "seconds": seconds, "fps": fps, "max_long": max_long, "layers_dir": layers_dir,
                 "owner": "Automatic per-element score, round 6 (fixed rules, no per-pair parameter; layered_probe.py --auto3): edit this file to tune the scene.",
@@ -2885,6 +3305,9 @@ def measure_layers(layers, n):
                 "peak_px_per_frame_p95": round(float(np.percentile(mag[sel], 95)) * dp, 2) if sel.any() else 0.0,
                 "mix_window": lay.mix_window,
                 "rigid": lay.ot_info.get("rigid"), "nonrigid_rms_px": lay.ot_info.get("nonrigid_rms_px")}
+            for k_ in ("map", "flow_iou"):
+                if lay.ot_info.get(k_) is not None:
+                    out["morph"][lay.name][k_] = lay.ot_info[k_] if getattr(lay, "map_used", False) or k_ == "flow_iou" else None
         if getattr(lay, "flow", None) is not None:
             if lay.flow[0] == "layers":
                 F, _ = lay.scene.layer_flow(lay.flow[1], lay.flow[2], lay.flow[5])
@@ -3172,8 +3595,12 @@ def main():
     ap.add_argument("--auto", action="append", default=[], help="a pair id: write scores/auto/<pair>.json by the fixed rules and render it (repeatable)")
     ap.add_argument("--auto2", action="append", default=[], help="a pair id: write scores/auto/<pair>_v2.json by the per-element rules (needs the layer source's output) and render it (repeatable)")
     ap.add_argument("--auto3", action="append", default=[], help="a pair id: write scores/auto/<pair>_v3.json by the round-6 rules (every pixel in one layer, fields that do not bend, a sky that shows a fill last) and render it (repeatable)")
+    ap.add_argument("--auto4", action="append", default=[], help="a pair id: write scores/auto/<pair>_v4.json by the round-7 rules (maps from shared keypoints or from the mattes' boxes, generated plates, the elements with SAM 3) and render it (repeatable)")
+    ap.add_argument("--r7", default="", choices=["", "columns", "whole"],
+                    help="with --auto4, a variant of the round-7 rules: columns (the sheet's map from the mattes is the column map; "
+                         "tag auto_r7c, <pair>_v4c.json), whole (a pair whose frames share keypoints is one layer; tag auto_r7w, <pair>_v4w.json)")
     ap.add_argument("--layers-dir", default=LAYERS_DIR, help="the layer source's output folder, relative to the repo")
-    ap.add_argument("--write-only", action="store_true", help="with --auto / --auto2 / --auto3: write the score and stop")
+    ap.add_argument("--write-only", action="store_true", help="with --auto / --auto2 / --auto3 / --auto4: write the score and stop")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ref", action="append", default=[], help="tag=DIR: copy a reference clip's outputs beside the probe (pair from the first --score)")
     ap.add_argument("--pair", default="", help="pair for --ref when no --score is given")
@@ -3209,6 +3636,21 @@ def main():
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(json.dumps(auto, indent=1) + "\n")
             print(f"  auto3 {pair_id}: {json.dumps(auto['auto_facts'])}", flush=True)
+            a.score.append(str(dst))
+        for pair_id in a.auto4:
+            r7 = dict(AUTO4)
+            sfx = ""
+            if a.r7 == "columns":
+                r7.update({"map_sheet": dict(AUTO4["map_sheet"], fallback="columns"), "tag": "auto_r7c"})
+                sfx = "c"
+            elif a.r7 == "whole":
+                r7.update({"whole": True, "tag": "auto_r7w"})
+                sfx = "w"
+            auto = auto_score2(pair_id, a.layers_dir if a.layers_dir != LAYERS_DIR else AUTO4["layers_dir"], r6=AUTO3, r7=r7)
+            dst = ROOT / "scripts" / "research" / "scores" / "auto" / f"{pair_id}_v4{sfx}.json"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(json.dumps(auto, indent=1) + "\n")
+            print(f"  auto4 {pair_id}: {json.dumps(auto['auto_facts'])}", flush=True)
             a.score.append(str(dst))
         if a.write_only:
             return 0
