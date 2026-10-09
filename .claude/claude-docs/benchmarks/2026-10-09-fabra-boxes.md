@@ -54,3 +54,13 @@ crf 18, yuv420p, 30 fps, no audio. Opened for the owner at 14:58 EEST; ungraded.
 - The layer source's detection prompts have no word for a utility box or cabinet; the boxes stayed
   inside the building element in both photos (backlog T32).
 - `tr14_variants.py --render` loads `roma_*.npy` unconditionally; the stub is documented beside the field files.
+
+## Stage 3b — the re-timed clip (owner, verbatim: "take final clips and make edited versions which will be twice as fast in the middle and hold final frame for 3s")
+`merge.py --middle-speed 2 --tail 3`: photo 1 1.5 s | 1→2 2.0 s | photo 2 0.5 s | 2→3 1.0 s (×2) |
+photo 3 0.5 s | 3→4 1.0 s (×2) | photo 4 0.5 s | 4→5 1.0 s (×2) | photo 5 0.5 s | 5→6 1.0 s (×2) |
+photo 6 0.5 s | 6→7 2.0 s | photo 7 3.0 s. The doubled transitions take every other rendered frame
+(`np.linspace` over the 60, both endpoints kept). 444 frames, 14.8 s; join steps 0.01–0.08 levels;
+largest frame step 9.65 levels (1536×1920) / 7.81 (1080×1350) inside a doubled transition, against
+4.77 at single speed. `final/fabra_boxes_edit_1536x1920.mp4` (md5 b21ddff8…) and
+`final/fabra_boxes_edit_instagram_1080x1350.mp4` (md5 9a216668…). Ungraded as of 15:10 EEST.
+The reading of "the middle" (the opening and closing transitions at full pace) is the agent's.
