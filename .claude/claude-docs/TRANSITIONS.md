@@ -2311,3 +2311,20 @@ photo 7; 609 frames, 20.3 s. The same photo decoded from two clips differs by 2.
 of the two decoded endpoint frames and the frame step at every join is 0.00; the largest step in
 the clip is 4.77 levels inside the 4→5 transition. Outputs `final/fabra_boxes_1536x1920.mp4`
 (md5 cb43ca07…) and `final/fabra_boxes_instagram_1080x1350.mp4` (md5 52836583…), libx264 crf 18.
+
+12.24.5 The chain (the owner's third order of the day, verbatim: "lets try something different, take
+`tr14_luma_3s` , but lets drop 3.heic and 4 heic (their open window creates noise) and lets try to
+pin and anchor image around left and right box as much as possible so they don;t float and make it
+all one smnooth animation instead of several joined transitions , also total clip lengs - 6 sec, 3
+sec for all transitions and 3 sec to hold final image"). `scripts/research/chain_luma.py`: photos
+1, 2, 5, 6 are warped onto photo 7's full frame by `reveal.run_alignment` (strict; 1312–1995
+inliers, 0.58–1.2 px, confidence 86–98), cropped once (canvas 1494×1920), then pinned to photo 7 by
+a homography from SIFT matches in the wall ring around the two boxes (the ring: the box grown 35 %,
+the box plus 10 px blanked). Measured by phase correlation of each ring against photo 7, the stills
+drift up to 1.78 px after Reveal alone (still 6) and within 0.5 px after the pin, on both boxes. A
+similarity pin left still 6 at 3.08 px on the left box. Between two pinned stills the field is the
+mask-held form with no camera motion, so the boxes' content never moves; the luma order runs inside
+the feathered mask. One smootherstep over the four segments (32 / 13 / 13 / 32 frames) or a linear
+ease (22–23 each), 90 frames, then photo 7 for 90 frames. Outputs under
+`benchmarks/runs/2026-10-09/fabra/chain_final_{smootherstep,linear}/` and `final/fabra_boxes_chain_luma_{eased,even}_1080x1350.mp4`
+(md5 7cbc94c7…, c596f9c9…). Ungraded as of 2026-10-09 15:40 EEST.

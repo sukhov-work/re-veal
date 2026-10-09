@@ -64,3 +64,21 @@ largest frame step 9.65 levels (1536×1920) / 7.81 (1080×1350) inside a doubled
 4.77 at single speed. `final/fabra_boxes_edit_1536x1920.mp4` (md5 b21ddff8…) and
 `final/fabra_boxes_edit_instagram_1080x1350.mp4` (md5 9a216668…). Ungraded as of 15:10 EEST.
 The reading of "the middle" (the opening and closing transitions at full pace) is the agent's.
+
+## Stage 4 — one continuous chain in one frame (owner, verbatim: "lets try something different, take `tr14_luma_3s` , but lets drop 3.heic and 4 heic (their open window creates noise) and lets try to pin and anchor image around left and right box as much as possible so they don;t float and make it all one smnooth animation instead of several joined transitions , also total clip lengs - 6 sec, 3 sec for all transitions and 3 sec to hold final image")
+`scripts/research/chain_luma.py 1 2 5 6 7 --seconds 3 --hold 3 --variant luma --size 1080x1350 [--ease linear]`, 34 s per render.
+
+| step | what | numbers |
+|---|---|---|
+| Reveal onto photo 7 | strict `reshot`, residual off on all | 1→7 1457 inliers 0.58 px 98 · 2→7 1809 0.79 94 · 5→7 1995 0.83 93 · 6→7 1312 1.2 86; crop 3860×4958 at (157, 39); canvas 1494×1920 |
+| the boxes | two largest components of the 1→2 change | (0, 362, 391, 969) and (1156, 533, 338, 729) |
+| ring drift before the pin (dx, dy px vs photo 7; response) | still 1 / 2 / 5 / 6 | left box (−0.03, 0.32; 0.71) (0.69, 0.29; 0.78) (−0.26, −0.32; 0.75) (0.40, 0.37; 0.37) · right box (0.34, 0.09; 0.77) (−0.02, −0.06; 0.81) (−0.20, −0.56; 0.79) (−1.78, −0.75; 0.47) |
+| the pin (homography, MAGSAC++ 3 px, SIFT in the rings) | inliers of matches | 2595/2670 · 2965/3095 · 2748/2953 · 1812/2074 |
+| ring drift after the pin | still 1 / 2 / 5 / 6 | left (−0.09, 0.04; 0.70) (0.48, 0.02; 0.75) (−0.45, −0.16; 0.74) (0.33, 0.19; 0.73) · right (0.28, 0.05; 0.76) (0.13, 0.14; 0.81) (−0.02, −0.20; 0.78) (0.39, −0.50; 0.81) |
+| a similarity pin instead (dropped) | after | still 6 left box (−3.08, 1.62; 0.31) |
+| the field between stills | `hold-dis`, camera motion identity | box-centre motion 0.0 px (a whole-frame homography would move them 0.35–2.62 px) |
+| segments by frame | smootherstep / linear | 1→2 0–31, 2→5 32–44, 5→6 45–57, 6→7 58–89 / 0–22, 23–44, 45–66, 67–89 |
+| clips | 180 frames, 6.0 s, 30 fps | eased 1080×1350 md5 7cbc94c7… (step peak 3.96 at f36, hold ≤ 0.10) · even c596f9c9… (peak 2.90) · 1494×1920 twins 4a806c8d…, f78cf3c3… |
+
+Ungraded as of 15:40 EEST. Not done: a measure of the box drift inside the animation frames (the
+stills are measured; the field inside the mask is zero by construction).
