@@ -2,7 +2,10 @@
 """Chain research (2026-10-09, the owner's box photos): several photos of one subject become ONE
 continuous transition in ONE frame. Every photo but the last is warped onto the LAST photo's frame
 by Reveal's own aligner (reveal.run_alignment: BEFORE = the reference, the strict `reshot` profile,
-ECC and the gated residual), the stills are cropped to the rectangle every warped photo covers,
+ECC and the gated residual) and kept in the reference's FULL frame (`--crop none`, the default since
+the owner's "do not crop anything"; a pixel no photo covers keeps its last known content: the
+previous still's, or for the first still the next still's, or the reference's; `--crop valid` crops
+to the rectangle every warped photo covers instead),
 then each still is pinned to the last one by a homography (MAGSAC++; `--pin similarity` for 4 DOF)
 estimated from SIFT matches in the WALL RING around the two boxes (the changed objects; `--no-anchor`
 skips it), and the TR14 `luma` effect (inside the changed-region mask B appears in order of A's
@@ -10,13 +13,16 @@ brightness) runs across the consecutive pairs under a single ease over --seconds
 holds --hold s. The field between two pinned stills is the mask-held one (`--field hold-dis`: no
 camera motion, the DIS residual zeroed inside the feathered mask, so the boxes' content stays put;
 `--field hold` is the TR14 `luma` clip's field, the residual scaled by the DIS certainty).
+`--variant tool-luma` is the transitions tool's own `luma` preset instead (no field, no mask: the
+whole frame of B appears in order of A's brightness, the tool's `luma_mask`), on the pinned stills;
+`--variant tool-luma-melt-soft` adds melt-soft's swirl inside the changed-region mask to it.
 Not part of either tool; imports reveal and transitions (research only, as tr14_variants.py does).
 Runs in `.venv`.
 
   chain_luma.py PHOTO... --out DIR [--seconds 3] [--hold 3] [--lead 0] [--max-long 1920]
                 [--mode reshot|loose] [--ease smootherstep|linear] [--variant luma|hold-dis|luma-melt-soft]
                 [--size 1080x1350] [--fps 30] [--color 0.7] [--no-anchor] [--pin homography|similarity]
-                [--field hold-dis|hold]
+                [--field hold-dis|hold] [--crop none|valid]
 Outputs in DIR: aligned/<i>_<name>.jpg (the stills in the common frame, after the pin),
 chain.mp4 (and chain_<size>.mp4), strip.jpg (one tile per 0.25 s, labelled), boxes.jpg (the two
 boxes and their rings on the first still), report.json: Reveal's metrics per warped photo, the
@@ -100,6 +106,7 @@ def ring_shift(gref, g, box, shape):
     x, y, bw, bh = box
     gx, gy = int(bw * RING_GROW), int(bh * RING_GROW)
     X0, Y0, X1, Y1 = max(0, x - gx), max(0, y - gy), min(w, x + bw + gx), min(h, y + bh + gy)
+    X1, Y1 = X1 - (X1 - X0) % 2, Y1 - (Y1 - Y0) % 2     # an odd window biases phaseCorrelate by 0.5 px
     a, b = gref[Y0:Y1, X0:X1].astype(np.float32).copy(), g[Y0:Y1, X0:X1].astype(np.float32).copy()
     ix0, iy0 = max(0, x - X0 - RING_INSET), max(0, y - Y0 - RING_INSET)
     ix1, iy1 = x - X0 + bw + RING_INSET, y - Y0 + bh + RING_INSET
@@ -141,7 +148,8 @@ def main():
     ap.add_argument("--max-long", type=int, default=1920)
     ap.add_argument("--mode", default="reshot", choices=("reshot", "loose"))
     ap.add_argument("--ease", default="smootherstep", choices=("smootherstep", "linear"))
-    ap.add_argument("--variant", default="luma", choices=("luma", "hold-dis", "luma-melt-soft"))
+    ap.add_argument("--variant", default="luma", choices=("luma", "hold-dis", "luma-melt-soft", "tool-luma", "tool-luma-melt-soft"))
+    ap.add_argument("--crop", default="none", choices=("none", "valid"), help="none = the reference's full frame (default); valid = the rectangle every warped photo covers")
     ap.add_argument("--size", default="", help="also write chain_<WxH>.mp4 scaled to this size")
     ap.add_argument("--fps", type=float, default=30.0)
     ap.add_argument("--color", type=float, default=0.7, help="the tool's color path strength")
@@ -171,26 +179,59 @@ def main():
         report["align"][p.name] = met
         print(f"  {p.name} -> {ref.name}: {met.get('method')} {met.get('inliers')} inliers, {met.get('rmse_px')} px, "
               f"confidence {met.get('confidence')}, mode {met['mode']}, residual {met['residual']}, {met['seconds']} s", flush=True)
-    valid_all = valids[0].copy()
-    for v in valids[1:]:
-        valid_all = cv2.bitwise_and(valid_all, v)
-    x, y, w, h = rv.crop_rect(valid_all)
+    fill_share = []
+    if a.crop == "valid":
+        valid_all = valids[0].copy()
+        for v in valids[1:]:
+            valid_all = cv2.bitwise_and(valid_all, v)
+        x, y, w, h = rv.crop_rect(valid_all)
+    else:
+        # the full frame; a pixel a photo does not cover keeps its last known content
+        x, y, w, h = 0, 0, refA.shape[1], refA.shape[0]
+        base = refA
+        for j in range(len(warped) - 1, 0, -1):
+            base = np.where(valids[j][..., None] > 0, warped[j], base)
+        filled = []
+        prev = base
+        for k, (W, Vm) in enumerate(zip(warped, valids)):
+            f = np.where(Vm[..., None] > 0, W, prev)
+            filled.append(f)
+            prev = f
+            fill_share.append(round(float((Vm == 0).mean()), 4))
+        warped = filled
     stills = [W[y:y + h, x:x + w] for W in warped] + [refA[y:y + h, x:x + w]]
+    report["fill_share"] = fill_share
     stills = [rv.scaled_copy(s, a.max_long)[0] for s in stills]
     H0, W0 = stills[0].shape[:2]
     W0, H0 = W0 - W0 % 2, H0 - H0 % 2
     stills = [np.ascontiguousarray(s[:H0, :W0]) for s in stills]
     report["crop"] = {"full": [int(x), int(y), int(w), int(h)], "canvas": [W0, H0]}
-    print(f"  aligned {len(stills)} stills onto {ref.name}: crop {w}x{h} at ({x},{y}) of the full frame, canvas {W0}x{H0}, {time.time() - t0:.1f} s", flush=True)
+    print(f"  aligned {len(stills)} stills onto {ref.name}: crop {a.crop} {w}x{h} at ({x},{y}) of the full frame, canvas {W0}x{H0}, "
+          f"filled share per still {fill_share}, {time.time() - t0:.1f} s", flush=True)
 
     # 2. the boxes (from the first repaint), the ring drift before the pin, the pin, the drift after
     boxes, mask01 = find_boxes(stills[0], stills[1])
     report["boxes"] = [list(b) for b in boxes]
+    if a.crop == "none":
+        sc = W0 / refA.shape[1]
+        box_fill = []
+        for Vm in valids:
+            vs = cv2.resize(Vm, (W0, H0), interpolation=cv2.INTER_NEAREST)
+            box_fill.append([round(float((vs[by:by + bh, bx:bx + bw] == 0).mean()), 4) for bx, by, bw, bh in boxes])
+        report["box_fill_share"] = box_fill
+        print(f"  filled share inside the boxes per still (left, right): {box_fill}", flush=True)
     rmask = ring_mask((H0, W0), boxes)
     grays = [T.gray_of(s) for s in stills]
-    before = [[ring_shift(grays[-1], g, b, (H0, W0)) for g in grays] for b in boxes]
+    # phaseCorrelate's sub-pixel peak carries a bias of up to 0.5 px on some windows (the reference
+    # against itself read dy 0.5 on the 1->7 pair): every shift is reported minus that self-reading
+    def drift(b):
+        bias = ring_shift(grays[-1], grays[-1], b, (H0, W0))
+        return [(round(dx - bias[0], 2), round(dy - bias[1], 2), r) for dx, dy, r in (ring_shift(grays[-1], g, b, (H0, W0)) for g in grays)], bias
+    before, biases = zip(*[drift(b) for b in boxes])
+    before = list(before)
+    report["ring_bias"] = [list(bb) for bb in biases]
     for bi, b in enumerate(boxes):
-        print(f"  box {bi} {b}: ring drift vs the last still before the pin {before[bi]}", flush=True)
+        print(f"  box {bi} {b}: ring drift vs the last still before the pin {before[bi]} (self-reading {biases[bi]} subtracted)", flush=True)
     pins = []
     if not a.no_anchor:
         for k in range(len(stills) - 1):
@@ -210,7 +251,7 @@ def main():
             pins.append({"still": photos[k].name, "matches": nm, "inliers": ni, "applied": True,
                          "scale": round(s, 5), "rotation_deg": round(rot, 3), "shift_px": [round(float(M[0, 2]), 2), round(float(M[1, 2]), 2)]})
             print(f"  pin {photos[k].name}: {ni} of {nm} ring matches, scale {s:.5f}, rotation {rot:.3f} deg, shift ({M[0, 2]:.2f}, {M[1, 2]:.2f}) px", flush=True)
-    after = [[ring_shift(grays[-1], g, b, (H0, W0)) for g in grays] for b in boxes]
+    after = [drift(b)[0] for b in boxes]
     for bi, b in enumerate(boxes):
         print(f"  box {bi}: ring drift after the pin {after[bi]}", flush=True)
     report["pin"] = pins
@@ -243,11 +284,14 @@ def main():
         mask = V.changed_mask(A, B, H)
         F = cv2.GaussianBlur((mask > 0).astype(np.float32), (0, 0), V.MIX_FEATHER_SIGMA)
         F_B = cv2.warpPerspective(F, H, (W0, H0), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
-        dis = T.dense_displacement(A, B)
-        fields = {"dis": dis, "roma": dis}       # the RoMa field was never adopted: the DIS field stands in
-        corr = V.build_corr(fields, a.field, dH_AB, dH_BA, F, F_B)
+        if a.variant in ("tool-luma", "tool-luma-melt-soft"):
+            dis, corr = {"diag": {}}, None
+        else:
+            dis = T.dense_displacement(A, B)
+            fields = {"dis": dis, "roma": dis}       # the RoMa field was never adopted: the DIS field stands in
+            corr = V.build_corr(fields, a.field, dH_AB, dH_BA, F, F_B)
         order = V.order_map(A, B, mask, "luma") if a.variant in ("luma", "luma-melt-soft") else None
-        flow = V.curl_noise(H0, W0, mask, feather_px=64) if a.variant == "luma-melt-soft" else None
+        flow = V.curl_noise(H0, W0, mask, feather_px=64) if a.variant in ("luma-melt-soft", "tool-luma-melt-soft") else None
         cache = T.color_cache(A, B)
         sA, sB = T.lab_stats(A, lab=cache[0]), T.lab_stats(B, lab=cache[2])
         segs.append(dict(A=A, B=B, corr=corr, F=F, order=order, flow=flow, cache=cache, sA=sA, sB=sB))
@@ -302,10 +346,14 @@ def main():
         else:
             s = segs[seg]
             Ai, Bi = T.color_pair_at(s["A"], s["B"], s["sA"], s["sB"], u, a.color, T.TCFG, s["cache"])
-            override = None
-            if s["order"] is not None:
-                override = u * (1.0 - s["F"]) + V.reveal_mix(s["order"], u) * s["F"]
-            f = V.morph_frame_mixed(Ai, Bi, s["corr"], u, u, override)
+            if a.variant in ("tool-luma", "tool-luma-melt-soft"):
+                m = T.luma_mask(Ai, u)[..., None]
+                f = T.to_u8(Ai * (1 - m) + Bi * m)
+            else:
+                override = None
+                if s["order"] is not None:
+                    override = u * (1.0 - s["F"]) + V.reveal_mix(s["order"], u) * s["F"]
+                f = V.morph_frame_mixed(Ai, Bi, s["corr"], u, u, override)
             if s["flow"] is not None:
                 sw_ = amp * float(np.sin(np.pi * u))
                 f = cv2.remap(f, gx + sw_ * s["flow"][..., 0], gy + sw_ * s["flow"][..., 1], cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)

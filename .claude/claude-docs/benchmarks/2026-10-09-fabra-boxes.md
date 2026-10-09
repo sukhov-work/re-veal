@@ -82,3 +82,23 @@ The reading of "the middle" (the opening and closing transitions at full pace) i
 
 Ungraded as of 15:40 EEST. Not done: a measure of the box drift inside the animation frames (the
 stills are measured; the field inside the mask is zero by construction).
+
+## Stage 4b — all seven photos, the tool's `luma`, no crop (owner, verbatim: "can you do same but with `luma_3s` effect from original `benchmarks/runs/2026-10-09/fabra/1-7/index.html` , chain photos , all 7, and do not crop anythjing, in last video you cropped parts of boxes")
+`chain_luma.py 1 2 3 4 5 6 7 --variant tool-luma --crop none [--ease linear]`. Photo 7's full frame
+(4123×5154 → 1536×1920). Coverage of that frame by the aligned photos 1–6: 97.9 / 98.1 / 97.8 / 98.0 /
+94.8 / 96.9 %; the uncovered wedge sits at the bottom and the left; the fill inside the boxes (left,
+right): 0.6 / 0 · 0.1 / 0 · 0.7 / 0 · 0.7 / 0 · 0.9 / 3.1 · 0 / 0.9 %. Reveal strict: 3→7 813 inliers
+0.95 px 91 · 4→7 2141 0.74 95 (the rest as Stage 4). Ring drift after the pin, stills 1–6, left box
+(−0.09, 0.10) (0.70, 0.03) (0.36, 0.08) (0.25, 0.04) (−0.44, −0.15) (0.36, 0.23); right box (0.34,
+0.03) (0.09, 0.14) (−0.32, −0.52) (−0.26, −0.16) (0.01, −0.24) (0.37, −0.72) px. Segments by frame
+27 / 10 / 8 / 8 / 10 / 27 (eased), 15 each (even). Clips: `final/fabra_boxes_chain7_luma_eased_1080x1350.mp4`
+md5 3be7692c… (step peak 12.93 at f42) · `…_even_…` 5beedcd1… (7.71) · 1536×1920 twins 32b01a8d…,
+050de2e5…; 180 frames, 6.0 s. Ungraded as of 15:55 EEST.
+
+## Stage 4c — the pinned 1→7 pair with the luma reveal plus melt-soft's swirl (owner, verbatim: "do another variant , just 1.heic to 7 heic pair  , with boxes anchored and with that nice mix of tr14_melt-soft_3s and luma_3s")
+`chain_luma.py 1 7 --variant tool-luma-melt-soft` and, in case the TR14 luma was meant, `--variant
+luma-melt-soft`; one smootherstep over 3 s, photo 7 held 3 s; no fill inside the boxes. Still 1 after
+the pin: (−0.05, 0.06) and (0.09, 0.00) px on the two rings (phaseCorrelate's self-reading of 0.5 px
+on dy subtracted). Clips: `final/fabra_boxes_pair17_luma_melt_1080x1350.mp4` md5 7b9a2bdc… (step peak
+1.55) · `final/fabra_boxes_pair17_tr14luma_melt_1080x1350.mp4` e52fa072… (1.67) · 1536×1920 twins
+24a7812a…, 325454d4…. Ungraded as of 15:55 EEST.

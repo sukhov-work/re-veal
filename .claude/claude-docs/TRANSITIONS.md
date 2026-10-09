@@ -2328,3 +2328,15 @@ the feathered mask. One smootherstep over the four segments (32 / 13 / 13 / 32 f
 ease (22–23 each), 90 frames, then photo 7 for 90 frames. Outputs under
 `benchmarks/runs/2026-10-09/fabra/chain_final_{smootherstep,linear}/` and `final/fabra_boxes_chain_luma_{eased,even}_1080x1350.mp4`
 (md5 7cbc94c7…, c596f9c9…). Ungraded as of 2026-10-09 15:40 EEST.
+
+12.24.6 All seven photos, the tool's `luma`, no crop; the pinned pair with the swirl (the owner's
+fourth and fifth orders of the day, verbatim in DECISIONS 2026-10-09 fourth line). The chain keeps
+photo 7's full frame (`--crop none`): the other photos cover 94.8–98.1 % of it, and a pixel none of
+them covers keeps its last known content (the fill reaches at most 3.1 % of a box, still 5, right
+box). `--variant tool-luma` runs the tool's `luma_mask` over the whole frame, no field. Six segments
+under one smootherstep get 27 / 10 / 8 / 8 / 10 / 27 frames; the frame step peaks at 12.9 levels in
+the 8-frame 3→4 step (the open roller door), 7.7 with the linear ease. The pinned 1→7 pair with the
+luma reveal and melt-soft's swirl inside the changed region (`tool-luma-melt-soft`): still 1 within
+0.1 px of photo 7 on both rings; `final/fabra_boxes_pair17_luma_melt_1080x1350.mp4` (md5 7b9a2bdc…),
+beside the TR14-luma form of the mix (e52fa072…). The drift measure subtracts phaseCorrelate's
+self-reading (0.5 px on this pair's windows). Ungraded as of 2026-10-09 15:55 EEST.
