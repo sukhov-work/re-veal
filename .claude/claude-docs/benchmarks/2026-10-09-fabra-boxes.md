@@ -102,3 +102,20 @@ the pin: (−0.05, 0.06) and (0.09, 0.00) px on the two rings (phaseCorrelate's 
 on dy subtracted). Clips: `final/fabra_boxes_pair17_luma_melt_1080x1350.mp4` md5 7b9a2bdc… (step peak
 1.55) · `final/fabra_boxes_pair17_tr14luma_melt_1080x1350.mp4` e52fa072… (1.67) · 1536×1920 twins
 24a7812a…, 325454d4…. Ungraded as of 15:55 EEST.
+
+## Stage 5 — the `draw` variant on photos 1, 2, 5, 6, 7 (owner, verbatim: "another attempt, can you merge everything ( except 3 and 4) - i want to created an effect of really gradual and elaborate drawing process on those boxes , all recent stuff event melts , while nice, were too crude and global , probably `…/fabra_boxes_pair17_luma_melt_1536x1920.mp4` came closest to what i meant but need even more subtle (box position stability is nice at least ) . Also the problem with multiple images is that final video still has hard jumps and visible cuts and stops between frames clearly visible , i expected it to be really seamless continous process , also boxes still shift a little with multiple frames.")
+`chain_luma.py 1 2 5 6 7 --variant draw --seconds 3|6 --hold 3`. Background: one dissolve 1 → 7.
+Box zone 17.8 % of the canvas (the union changed region eroded 15 px, feathered 8 px). Fronts: width
+0.35, order 0.5 edge-distance of the new paint + 0.3 brightness of the old coat + 0.2 noise (6 and
+24 px); overlap 0.35 of a step. Pin: global homography, then per box a translation by the ring shift.
+
+| measure | value |
+|---|---|
+| ring drift after the global pin, stills 1 / 2 / 5 / 6 | left (−0.25, 0.21) (0.73, 0.02) (−0.52, −0.24) (0.43, 0.26); right (0.67, 0.09) (0.10, 0.14) (−0.01, −0.21) (0.34, −0.68) px |
+| after the local pin | left (0.04, −0.04) (0.03, 0.01) (−0.06, 0.06) (0.01, −0.04); right (0.06, 0.02) (−0.01, 0.00) (0.01, 0.01) (0.02, −0.03) px |
+| fill inside the boxes (left, right), stills 1 / 2 / 5 / 6 | 3.9 / 0 · 3.8 / 0 · 3.5 / 3.1 · 2.7 / 0.9 % of the box's (enlarged) bbox, taken from the next still |
+| frame step, 3 s clip (1080×1350) | peak 1.74 at f40, mean 0.58 over the transition, hold ≤ 0.057 |
+| frame step, 6 s clip | peak 1.01 at f90, mean 0.34, hold ≤ 0.034 (0.053 at 1536×1920); before the one-keyframe encoder a 1.45 pop at frame 250 |
+| clips | `final/fabra_boxes_draw5_3s_1080x1350.mp4` md5 060881c6… (180 frames, 6.0 s) · `…_6s_…` 1dd840d9… (270 frames, 9.0 s) · 1536×1920 twins 599922f3…, e42f0ad0… |
+
+Ungraded as of 16:15 EEST. The left box's bbox includes the cable above it (the 1→2 change mask).

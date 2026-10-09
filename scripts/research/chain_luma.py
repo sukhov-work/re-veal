@@ -16,6 +16,14 @@ camera motion, the DIS residual zeroed inside the feathered mask, so the boxes' 
 `--variant tool-luma` is the transitions tool's own `luma` preset instead (no field, no mask: the
 whole frame of B appears in order of A's brightness, the tool's `luma_mask`), on the pinned stills;
 `--variant tool-luma-melt-soft` adds melt-soft's swirl inside the changed-region mask to it.
+`--variant draw` (2026-10-09, the owner's "really gradual and elaborate drawing process on those
+boxes"): outside the box zone one slow dissolve from the first photo to the last; inside it every
+repaint spreads as a soft irregular front (order = the new paint's edge distance, the old paint's
+brightness and two scales of noise; width --front), the repaints overlapping in time by --overlap of
+a step so no boundary is synchronized across the box; no field, no swirl, no colour path. The zone
+is the union of the changed regions eroded --zone-erode px and feathered. On top of the global pin,
+each box gets a local sub-pixel pin: the ring shift measured against the last still is applied as a
+translation of the box's zone, blended over the ring (`--no-local-pin` skips it).
 Not part of either tool; imports reveal and transitions (research only, as tr14_variants.py does).
 Runs in `.venv`.
 
@@ -46,6 +54,28 @@ sys.path.insert(0, str(ROOT / "scripts" / "research"))
 import transitions as T  # noqa: E402
 import reveal as rv  # noqa: E402  (research only: the two tools never import each other)
 import tr14_variants as V  # noqa: E402
+
+import subprocess
+import imageio_ffmpeg
+
+
+class OneKeyframeEncoder(T.FrameEncoder):
+    """The tool's encoder with ONE keyframe: libx264's periodic keyframe (every 250 frames) decodes
+    1.4 levels off the drifted P-frames before it, a visible pop inside a long hold (seen at frame
+    250 of the 9 s draw clip, 2026-10-09)."""
+
+    def __init__(self, path, w, h, fps, n_frames, crf=None):
+        self.path = Path(path)
+        self.w, self.h = int(w), int(h)
+        self.n = 0
+        g = str(max(1, int(n_frames)))
+        cmd = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error",
+               "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{self.w}x{self.h}", "-r", f"{float(fps):g}", "-i", "-",
+               "-an", "-c:v", "libx264", "-preset", "medium", "-crf", str(crf if crf is not None else T.TCFG["video_crf"]),
+               "-g", g, "-keyint_min", g, "-sc_threshold", "0",
+               "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(self.path)]
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+
 
 RING_GROW = 0.35          # the ring around a box: its box grown by this fraction of its size
 RING_INSET = 10           # px: the box interior blanked that far outside the box too
@@ -148,7 +178,11 @@ def main():
     ap.add_argument("--max-long", type=int, default=1920)
     ap.add_argument("--mode", default="reshot", choices=("reshot", "loose"))
     ap.add_argument("--ease", default="smootherstep", choices=("smootherstep", "linear"))
-    ap.add_argument("--variant", default="luma", choices=("luma", "hold-dis", "luma-melt-soft", "tool-luma", "tool-luma-melt-soft"))
+    ap.add_argument("--variant", default="luma", choices=("luma", "hold-dis", "luma-melt-soft", "tool-luma", "tool-luma-melt-soft", "draw"))
+    ap.add_argument("--overlap", type=float, default=0.35, help="draw: a repaint starts this fraction of a step before its turn and ends as late")
+    ap.add_argument("--front", type=float, default=0.35, help="draw: the width of a repaint's front in order units (TR14's luma uses 0.15)")
+    ap.add_argument("--zone-erode", type=int, default=15, help="draw: the union changed region eroded this many px is the drawing zone")
+    ap.add_argument("--no-local-pin", action="store_true", help="skip the per-box sub-pixel pin after the global one")
     ap.add_argument("--crop", default="none", choices=("none", "valid"), help="none = the reference's full frame (default); valid = the rectangle every warped photo covers")
     ap.add_argument("--size", default="", help="also write chain_<WxH>.mp4 scaled to this size")
     ap.add_argument("--fps", type=float, default=30.0)
@@ -191,12 +225,19 @@ def main():
         base = refA
         for j in range(len(warped) - 1, 0, -1):
             base = np.where(valids[j][..., None] > 0, warped[j], base)
+        # a pixel a photo does not cover takes the NEXT photo's content when that covers it (the
+        # repaint has not reached it yet: the next state is the closer one), else the previous
+        # filled still's, else the reference's
+        nxt = [None] * len(warped)
+        later = refA
+        for j in range(len(warped) - 1, -1, -1):
+            nxt[j] = later
+            later = np.where(valids[j][..., None] > 0, warped[j], later)
         filled = []
-        prev = base
+        prev = None
         for k, (W, Vm) in enumerate(zip(warped, valids)):
-            f = np.where(Vm[..., None] > 0, W, prev)
+            f = np.where(Vm[..., None] > 0, W, nxt[k])
             filled.append(f)
-            prev = f
             fill_share.append(round(float((Vm == 0).mean()), 4))
         warped = filled
     stills = [W[y:y + h, x:x + w] for W in warped] + [refA[y:y + h, x:x + w]]
@@ -254,6 +295,30 @@ def main():
     after = [drift(b)[0] for b in boxes]
     for bi, b in enumerate(boxes):
         print(f"  box {bi}: ring drift after the pin {after[bi]}", flush=True)
+    local = []
+    if not a.no_local_pin:
+        for bi, (bx, by, bw, bh) in enumerate(boxes):
+            gx_, gy_ = int(bw * RING_GROW), int(bh * RING_GROW)
+            X0, Y0 = max(0, bx - gx_), max(0, by - gy_)
+            X1, Y1 = min(W0, bx + bw + gx_), min(H0, by + bh + gy_)
+            wgt = np.zeros((H0, W0), np.float32)
+            wgt[Y0 + 20:Y1 - 20, X0 + 20:X1 - 20] = 1.0
+            wgt = cv2.GaussianBlur(wgt, (0, 0), 8)[..., None]
+            for k in range(len(stills) - 1):
+                dx, dy, r = after[bi][k]
+                if abs(dx) < 0.05 and abs(dy) < 0.05:
+                    local.append({"still": photos[k].name, "box": bi, "shift": [dx, dy], "applied": False})
+                    continue
+                M = np.float32([[1, 0, -dx], [0, 1, -dy]])    # the ring reads the still (dx, dy) off the reference: move it back (a +(dx, dy) move doubled the error on the first try)
+                moved = cv2.warpAffine(stills[k], M, (W0, H0), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                stills[k] = T.to_u8(stills[k] * (1 - wgt) + moved * wgt)
+                local.append({"still": photos[k].name, "box": bi, "shift": [dx, dy], "applied": True})
+        grays = [T.gray_of(s) for s in stills]
+        after_local = [drift(b)[0] for b in boxes]
+        for bi, b in enumerate(boxes):
+            print(f"  box {bi}: ring drift after the local pin {after_local[bi]}", flush=True)
+        report["local_pin"] = local
+        report["ring_drift_after_local"] = after_local
     report["pin"] = pins
     report["ring_drift"] = {"before": before, "after": after,
                             "max_abs_before_px": round(max(max(abs(r[0]), abs(r[1])) for rows in before for r in rows), 2),
@@ -268,6 +333,7 @@ def main():
 
     # 3. the segments: what is left between consecutive stills, the changed region, the luma order
     segs = []
+    segs_masks = []
     for k in range(len(stills) - 1):
         t1 = time.time()
         A, B = stills[k], stills[k + 1]
@@ -284,13 +350,26 @@ def main():
         mask = V.changed_mask(A, B, H)
         F = cv2.GaussianBlur((mask > 0).astype(np.float32), (0, 0), V.MIX_FEATHER_SIGMA)
         F_B = cv2.warpPerspective(F, H, (W0, H0), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP)
-        if a.variant in ("tool-luma", "tool-luma-melt-soft"):
+        if a.variant in ("tool-luma", "tool-luma-melt-soft", "draw"):
             dis, corr = {"diag": {}}, None
         else:
             dis = T.dense_displacement(A, B)
             fields = {"dis": dis, "roma": dis}       # the RoMa field was never adopted: the DIS field stands in
             corr = V.build_corr(fields, a.field, dH_AB, dH_BA, F, F_B)
         order = V.order_map(A, B, mask, "luma") if a.variant in ("luma", "luma-melt-soft") else None
+        if a.variant == "draw":
+            # the drawing order inside this step: the new paint's edges first (as a drawing starts with
+            # its lines), the old coat's bright parts early, and noise at two scales for an irregular front
+            edges = cv2.Canny(gB, 60, 160)
+            dist = cv2.distanceTransform(255 - edges, cv2.DIST_L2, 5).astype(np.float32)
+            rng = np.random.default_rng(k + 1)
+            noise = (cv2.GaussianBlur(rng.standard_normal((H0, W0)).astype(np.float32), (0, 0), 6)
+                     + 0.5 * cv2.GaussianBlur(rng.standard_normal((H0, W0)).astype(np.float32), (0, 0), 24))
+            full = np.full((H0, W0), 255, np.uint8)
+            order = (0.5 * V.rank_order(dist, full) + 0.3 * V.rank_order(-gA.astype(np.float32), full)
+                     + 0.2 * V.rank_order(noise, full))
+            order = V.rank_order(order, full)
+            segs_masks.append(mask)
         flow = V.curl_noise(H0, W0, mask, feather_px=64) if a.variant in ("luma-melt-soft", "tool-luma-melt-soft") else None
         cache = T.color_cache(A, B)
         sA, sB = T.lab_stats(A, lab=cache[0]), T.lab_stats(B, lab=cache[2])
@@ -304,6 +383,17 @@ def main():
         print(f"  segment {info['pair']}: {info['inliers_left']} inliers between the stills, corner motion "
               f"{info['corner_motion_px']} px, at the box centres {info['box_centre_motion_px']} px, mask {info['mask_share']:.3f}, {info['prep_s']} s", flush=True)
 
+    zone = None
+    if a.variant == "draw":
+        uni = np.zeros((H0, W0), np.uint8)
+        for m in segs_masks:
+            uni = cv2.bitwise_or(uni, m)
+        ke = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * a.zone_erode + 1,) * 2)
+        zone = cv2.GaussianBlur(cv2.erode(uni, ke).astype(np.float32) / 255.0, (0, 0), 8)[..., None]
+        cv2.imwrite(str(out / "zone.jpg"), cv2.cvtColor(T.to_u8(stills[0] * (0.4 + 0.6 * zone)), cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 85])
+        report["draw"] = {"zone_share": round(float((zone > 0.5).mean()), 4), "overlap": a.overlap, "front": a.front, "zone_erode": a.zone_erode}
+        print(f"  draw zone: {report['draw']['zone_share']:.3f} of the canvas", flush=True)
+
     # 4. the frames: one ease over the whole chain, then the hold
     nseg = len(segs)
     N = int(round(a.seconds * a.fps))
@@ -311,11 +401,12 @@ def main():
     ease = smootherstep if a.ease == "smootherstep" else (lambda v: np.clip(v, 0.0, 1.0))
     gx, gy = T._grid(H0, W0)
     amp = V.MELT_AMP * max(H0, W0)
-    enc = T.FrameEncoder(out / "chain.mp4", W0, H0, a.fps)
+    total = n_lead + N + n_hold
+    enc = OneKeyframeEncoder(out / "chain.mp4", W0, H0, a.fps, total)
     enc2 = None
     if a.size:
         sw, sh = [int(v) for v in a.size.lower().split("x")]
-        enc2 = T.FrameEncoder(out / f"chain_{sw}x{sh}.mp4", sw, sh, a.fps)
+        enc2 = OneKeyframeEncoder(out / f"chain_{sw}x{sh}.mp4", sw, sh, a.fps, total)
     tiles, every = [], max(1, int(round(a.fps / 4)))
     timeline = []
 
@@ -339,7 +430,20 @@ def main():
         pos = g * nseg
         seg = min(int(np.floor(pos)), nseg - 1)
         u = pos - seg
-        if i == N - 1 or (u >= 1.0 - 1e-9):
+        if a.variant == "draw" and 0 < i < N - 1:
+            beta = pos / nseg
+            bg = stills[0].astype(np.float32) * (1 - beta) + stills[-1].astype(np.float32) * beta
+            fin = stills[0].astype(np.float32)
+            for k2, s2 in enumerate(segs):
+                lead_ = 0.0 if k2 == 0 else a.overlap
+                tail_ = 0.0 if k2 == nseg - 1 else a.overlap
+                t_k = float(np.clip((pos - k2 + lead_) / (1.0 + lead_ + tail_), 0.0, 1.0))
+                if t_k <= 0.0:
+                    break
+                m = V.reveal_mix(s2["order"], t_k, a.front)[..., None]
+                fin = fin * (1 - m) + s2["B"].astype(np.float32) * m
+            f = T.to_u8(bg * (1 - zone) + fin * zone)
+        elif i == N - 1 or (u >= 1.0 - 1e-9):
             f, u = stills[seg + 1].copy(), 1.0
         elif u <= 1e-9:
             f = stills[seg].copy()

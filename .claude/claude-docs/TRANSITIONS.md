@@ -2340,3 +2340,16 @@ luma reveal and melt-soft's swirl inside the changed region (`tool-luma-melt-sof
 0.1 px of photo 7 on both rings; `final/fabra_boxes_pair17_luma_melt_1080x1350.mp4` (md5 7b9a2bdc…),
 beside the TR14-luma form of the mix (e52fa072…). The drift measure subtracts phaseCorrelate's
 self-reading (0.5 px on this pair's windows). Ungraded as of 2026-10-09 15:55 EEST.
+
+12.24.7 The `draw` variant (the owner's sixth order of the day, verbatim in DECISIONS 2026-10-09
+fifth line: "really gradual and elaborate drawing process on those boxes", the luma and melt clips
+"too crude and global", the chains with "hard jumps and visible cuts and stops", the boxes that
+"still shift a little"). Three changes answer the three complaints. The background outside the box
+zone is one slow dissolve from photo 1 to photo 7, so nothing outside the boxes ever steps. Inside
+the zone each repaint spreads as a soft irregular front ordered by the new paint's edges, the old
+coat's brightness and noise, and consecutive repaints overlap by 0.35 of a step, so a pixel's state
+changes once per repaint through a soft front and the box never changes everywhere at once; the
+frame step peaks at 1.7 levels (the luma chains: 4–13). Each box is pinned a second time by its own
+ring shift, to 0.06 px (the global pin alone: 0.7 px). The clip's encoder places one keyframe: the
+periodic one at frame 250 popped 1.45 levels in a hold. Clips `final/fabra_boxes_draw5_{3s,6s}_1080x1350.mp4`
+(md5 060881c6…, 1dd840d9…). Ungraded as of 2026-10-09 16:15 EEST.
