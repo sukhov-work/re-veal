@@ -43,7 +43,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import transitions as T  # noqa: E402
 import reveal as rv  # noqa: E402  (research only: the two tools never import each other)
 
-VARIANTS = ("dis", "roma", "roma-x-cert", "hold", "hold-dis", "luma", "edge-grow", "melt", "melt-soft")
+VARIANTS = ("dis", "roma", "roma-x-cert", "hold", "hold-dis", "luma", "edge-grow", "melt", "melt-soft",
+            "luma-melt-soft")   # 2026-10-09: luma's reveal order + melt-soft's swirl (the owner's pick on the box pair)
 RUN = tuple(v for v in os.environ.get("TR14_VARIANTS", ",".join(VARIANTS)).split(",") if v)
 MELT_AMP = 0.012          # of the canvas long edge (23 px at 1920)
 MELT_SIGMA = 0.04         # noise correlation length, of the canvas short edge
@@ -179,8 +180,9 @@ def iter_frames_tr14(A, B, spec, corr, variant, mask):
     cache = T.color_cache(A, B)
     sA, sB = T.lab_stats(A, lab=cache[0]), T.lab_stats(B, lab=cache[2])
     F = cv2.GaussianBlur((mask > 0).astype(np.float32), (0, 0), MIX_FEATHER_SIGMA)
-    order = order_map(A, B, mask, variant) if variant in ("luma", "edge-grow") else None
-    flow = (curl_noise(h, w, mask, feather_px=64) if variant == "melt-soft"
+    order = (order_map(A, B, mask, "luma" if variant == "luma-melt-soft" else variant)
+             if variant in ("luma", "edge-grow", "luma-melt-soft") else None)
+    flow = (curl_noise(h, w, mask, feather_px=64) if variant in ("melt-soft", "luma-melt-soft")
             else curl_noise(h, w, mask) if variant == "melt" else None)
     gx, gy = T._grid(h, w)
     amp = MELT_AMP * max(h, w)
@@ -370,6 +372,7 @@ def render(base, out, seconds, pairs):
 DESC = {
     "dis": "the current tool: homography + DIS residual, DIS consistency as the splat weight",
     "roma": "the RoMa field, RoMa certainty as the splat weight (the clips you graded on 2026-09-15)",
+    "luma-melt-soft": "hold field; inside the mask B appears in order of A's brightness (luma) AND the composited frame is swirled by melt-soft's field (2026-10-09, the owner's mix on the box pair)",
     "roma-x-cert": "TR2d as written: RoMa displacement × certainty (both directions)",
     "hold": "TR2d, residual form: camera motion + (RoMa − camera) × certainty; uncertain content crossfades in place — the named 'fade in place' mode",
     "hold-dis": "the same hold built from the tool's own DIS field, no RoMa: camera motion + (DIS − camera) × (1 − changed mask); the mask gates the residual instead of a certainty",

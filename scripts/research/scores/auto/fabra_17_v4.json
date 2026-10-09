@@ -1,0 +1,314 @@
+{
+ "pair": "fabra_17",
+ "tag": "auto_r7",
+ "seconds": 3.0,
+ "fps": 30,
+ "max_long": 1920,
+ "layers_dir": "benchmarks/runs/2026-10-09/fabra/layers_v3",
+ "owner": "Automatic per-element score, round 7 (fixed rules, no per-pair parameter; layered_probe.py --auto4): edit this file to tune the scene.",
+ "auto_facts": {
+  "sky_share": [
+   0.007,
+   0
+  ],
+  "route": "elements",
+  "elements": [
+   9,
+   9
+  ],
+  "considered": [
+   5,
+   5
+  ],
+  "matched_groups": 3,
+  "layers": 3,
+  "matches": [
+   {
+    "layer": "e0_building",
+    "a": [
+     "building#1"
+    ],
+    "b": [
+     "building#1"
+    ],
+    "cost": 0.011799,
+    "mean_disparity": 0.069
+   },
+   {
+    "layer": "e1_signboard",
+    "a": [
+     "signboard#2"
+    ],
+    "b": [
+     "signboard#2"
+    ],
+    "cost": 0.016106,
+    "mean_disparity": 0.093
+   },
+   {
+    "layer": "e2_road",
+    "a": [
+     "road#6"
+    ],
+    "b": [
+     "road#7",
+     "sidewalk#9"
+    ],
+    "cost": 0.006847,
+    "mean_disparity": 0.474
+   }
+  ],
+  "ground_share": [
+   0.993,
+   1.0
+  ],
+  "ground": "none: the rest follows the elements",
+  "drawn_over_the_sheet": [
+   "e1_signboard"
+  ],
+  "steer_the_sheet": [
+   "e0_building",
+   "e2_road"
+  ],
+  "rest": [],
+  "plates": [
+   false,
+   false
+  ]
+ },
+ "layers": [
+  {
+   "name": "all_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "all"
+   },
+   "plate": {
+    "dilate": 8,
+    "sigma": 40,
+    "scales": [
+     6,
+     18,
+     54,
+     162
+    ],
+    "settle_px": 3.0,
+    "holes": [
+     "e1_signboard_b"
+    ]
+   }
+  },
+  {
+   "name": "e0_building_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     1
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "name": "e1_signboard_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2
+    ],
+    "shrink": 3,
+    "soft": 2
+   }
+  },
+  {
+   "name": "e2_road_b",
+   "from": "B",
+   "render": false,
+   "mask": {
+    "rule": "element",
+    "ids": [
+     7,
+     9
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   }
+  },
+  {
+   "action": "morph_to",
+   "window": [
+    0.08,
+    0.92
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "bright",
+   "ot_border": 0.2,
+   "field": {
+    "from": "layers",
+    "layers": [
+     "e0_building",
+     "e2_road"
+    ],
+    "fallback": "ot",
+    "sigma": 0.04,
+    "kappa": 0.02
+   },
+   "stagger": {
+    "amount": 0.4,
+    "scale_px": 360,
+    "seed": 29
+   },
+   "name": "rest",
+   "from": "A",
+   "mask": {
+    "rule": "all"
+   },
+   "depth": 0,
+   "to": "all_b",
+   "ot_local": 0.06,
+   "ot_floor": 0.3,
+   "ot_bend": 0.75,
+   "mix": "shape",
+   "plate": {
+    "dilate": 8,
+    "sigma": 40,
+    "scales": [
+     6,
+     18,
+     54,
+     162
+    ],
+    "settle_px": 3.0,
+    "holes": [
+     "e1_signboard"
+    ]
+   }
+  },
+  {
+   "name": "e0_building",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     1
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 2,
+   "action": "morph_to",
+   "to": "e0_building_b",
+   "window": [
+    0.1,
+    0.82
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  },
+  {
+   "name": "e1_signboard",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     2
+    ],
+    "shrink": 3,
+    "soft": 2
+   },
+   "depth": 3,
+   "action": "morph_to",
+   "to": "e1_signboard_b",
+   "window": [
+    0.17,
+    0.89
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "ot_rigid": 0.6,
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "map": {
+    "kind": "features",
+    "fallback": "ot"
+   }
+  },
+  {
+   "name": "e2_road",
+   "from": "A",
+   "mask": {
+    "rule": "element",
+    "ids": [
+     6
+    ],
+    "snap": {
+     "r": 20,
+     "eps": 4.0,
+     "iters": 2
+    }
+   },
+   "depth": 4,
+   "action": "morph_to",
+   "to": "e2_road_b",
+   "window": [
+    0.24,
+    0.96
+   ],
+   "curve": "smootherstep",
+   "mix_window": [
+    0.3,
+    0.7
+   ],
+   "ot_grid": 64,
+   "ot_eps": 0.04,
+   "ot_mass": "alpha",
+   "stagger": {
+    "amount": 0.3,
+    "scale_px": 260,
+    "seed": 43
+   },
+   "ot_bend": 0.75,
+   "exact": true,
+   "mix": "shape",
+   "render": false
+  }
+ ]
+}

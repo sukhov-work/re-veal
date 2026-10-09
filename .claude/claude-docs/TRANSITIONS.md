@@ -2263,3 +2263,51 @@ never replaces the photo there. The first three prompts named wrong colours (wri
 channel-swapped view) and klein followed the words: a light wooden ceiling came back blue. By the
 subagent's eye the only content that may count as invented is the mural of mismatch_2_F, redrawn
 with new painted leaves, and the posters redrawn along the wall of mismatch_3_S.
+
+### 12.24 A one-off on the owner's box photos: the graded approaches on a real repaint, the pick, the mix, the merged clip (2026-10-09; outputs `benchmarks/runs/2026-10-09/fabra/`, gitignored; sheet `benchmarks/2026-10-09-fabra-boxes.md`)
+
+Result: on a real re-shot sequence (seven iPhone HEIC photos of two utility boxes beside a roller
+door, 4:5, graffiti → primer → pink → painted trees, shot 2026-09-20 to 2026-10-04) the owner
+picked two TR14 variants, `luma` and `melt-soft`, over Reveal's wipe and fade, the tool's seven
+presets, the other TR14 variants and the layered probe's automatic clip; a new variant
+`luma-melt-soft` combines them, six 2 s pair clips were rendered and joined into one 20.3 s mp4
+at 1536×1920 and at the Instagram post size 1080×1350. Nothing in `transitions.py` or `reveal.py`
+changed; the variant lives in `scripts/research/tr14_variants.py`. Ungraded as of 2026-10-09 15:00 EEST.
+
+12.24.1 What ran on the triage pair 1→7 (`benchmarks/runs/2026-10-09/fabra/1-7/index.html`, 15 clips, 3 s):
+
+| approach | clips | numbers |
+|---|---|---|
+| Reveal `align --video`, strict `reshot` | wipe, fade | sift 1452 inliers, 0.59 px, ecc_rho 0.973, 13.3 % changed, confidence 98; 7.9 s; 1524×1920 |
+| transitions presets | morph, flow-dissolve, luma, dissolve, snap-morph, iris, wipe | class A, 875 inliers, 0.66 px, certainty 0.614, median disp 31.4 px; 1536×1920; 11–18 s each; morph warping 0.0042, feat 0.431, dissolve_fit 0.058 |
+| TR14 variants (RoMa field stubbed by the DIS field) | dis, hold-dis, luma, edge-grow, melt-soft | mask 13.3 %, in-mask disp 25–28 px, wobble 7.0–7.5 px (the photos' own edge 6.28 / 5.42); `dis` = `morph` byte for byte |
+| layered probe `--auto4` | auto_r7 | 9 elements per photo, matched building, signboard, road; the boxes in the rest layer; a whole-frame morph |
+
+The layer source's prompts have no word for a utility box, so the thing that changes never became
+an element (backlog T32). The owner's words on the page: "I really liked effects in tr14_luma_3s and
+tr14_melt-soft_3s verysmooth and elements on boxes flow and transtion more naturally. For final
+video, try to mix those two approaches, do a 2s transitions instead of three and do all pairs ( and
+then merge to final mp4 clip, suitable for instagram".
+
+12.24.2 The mix. `luma-melt-soft` = the hold field, luma's reveal order inside the changed-region
+mask (B appears where A is bright first) and melt-soft's divergence-free swirl on the composited
+frame, zero at both ends. On 1→7 at 2 s: md5 6d33188f, edge_ratio 0.1763 (luma 0.1199, melt-soft
+0.1802), wobble 7.49 px, endpoints exact.
+
+12.24.3 The six pairs at 2 s (`run_pairs.sh tr14:luma-melt-soft 2`; 14–15 s per pair; endpoints 0.0 / 0.0 on all):
+
+| pair | inliers | mask of canvas | in-mask disp px | wobble px | edge_ratio |
+|---|---|---|---|---|---|
+| 1→2 | 728 | 20.5 % | 11.84 | 7.70 | 0.243 |
+| 2→3 | 658 | 15.1 % | 6.01 | 2.21 | 0.261 |
+| 3→4 | 1186 | 17.4 % | 4.58 | 0.59 | 0.182 |
+| 4→5 | 1970 | 18.2 % | 21.30 | 8.07 | 0.102 |
+| 5→6 | 1566 | 15.8 % | 19.22 | 1.90 | 0.113 |
+| 6→7 | 1194 | 25.8 % | 14.20 | 3.95 | 0.170 |
+
+12.24.4 The merge (`merge.py`): 1.5 s on photo 1, 1.0 s on each photo between clips, 2.0 s on
+photo 7; 609 frames, 20.3 s. The same photo decoded from two clips differs by 2.5–3.3 levels mean
+(0.6–0.7 after a 3 px blur, phase shift under 0.1 px): codec noise, so the hold is a linear blend
+of the two decoded endpoint frames and the frame step at every join is 0.00; the largest step in
+the clip is 4.77 levels inside the 4→5 transition. Outputs `final/fabra_boxes_1536x1920.mp4`
+(md5 cb43ca07…) and `final/fabra_boxes_instagram_1080x1350.mp4` (md5 52836583…), libx264 crf 18.
