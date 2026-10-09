@@ -2353,3 +2353,16 @@ frame step peaks at 1.7 levels (the luma chains: 4–13). Each box is pinned a s
 ring shift, to 0.06 px (the global pin alone: 0.7 px). The clip's encoder places one keyframe: the
 periodic one at frame 250 popped 1.45 levels in a hold. Clips `final/fabra_boxes_draw5_{3s,6s}_1080x1350.mp4`
 (md5 060881c6…, 1dd840d9…). Ungraded as of 2026-10-09 16:15 EEST.
+
+12.24.8 The box pinned on itself (the owner's seventh order of the day, verbatim in DECISIONS
+2026-10-09 sixth line: "boxes positions and dimenstions need to be even more stable", the last
+frames' drawing "visibly jump", "do all 7 images"). The afternoon's pin locked the wall ring around a
+box, and the ring measure read 0.06 px; the box stands in front of the wall, and SIFT matches inside
+the box (73–875 inliers per still) showed it 14 px off on photo 5 and 8–10 px on photo 6. The pin is
+now that in-box similarity, two passes: every box within 0.25 px and 0.04 % of size on every still but
+one (0.8 px). Each still's light is matched to photo 7 over the wall rings (Lab mean and spread), and
+the same drawing of photos 6 and 7 differs by 9–12 levels inside the boxes instead of 17–18. A pin
+from the four outline edges was tried and dropped (a shadow edge on photo 3 fooled it by 9 px). Clips
+`final/fabra_boxes_draw7_{3s,6s}_1080x1350.mp4` (md5 e7b1d005…, 4f6ce7dd…). Ungraded as of
+2026-10-09 16:35 EEST. Lesson for the tool: a changed object in front of the aligned plane needs its
+own pin; the wall's registration says nothing about it.

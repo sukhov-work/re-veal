@@ -119,3 +119,23 @@ Box zone 17.8 % of the canvas (the union changed region eroded 15 px, feathered 
 | clips | `final/fabra_boxes_draw5_3s_1080x1350.mp4` md5 060881c6… (180 frames, 6.0 s) · `…_6s_…` 1dd840d9… (270 frames, 9.0 s) · 1536×1920 twins 599922f3…, e42f0ad0… |
 
 Ungraded as of 16:15 EEST. The left box's bbox includes the cable above it (the 1→2 change mask).
+
+## Stage 6 — the box pinned on itself, the light matched, all seven photos (owner, verbatim: "boxes positions and dimenstions need to be even more stable bewtween frames, also on last couple of frames drawigs visibly jump bewtween transition ( although it is same drawing with some added elements ) , do all 7 images")
+`chain_luma.py 1 2 3 4 5 6 7 --variant draw --seconds 3|6 --hold 3` (defaults now `--local-pin sift --match-light auto`).
+
+| still | left box: inliers · off at the centre (px) · scale → after | right box: inliers · off · scale → after |
+|---|---|---|
+| 1 | 194 · (−1.02, 0.54) · 1.0029 → (0.10, 0.05) | 291 · (−1.08, −0.07) · 0.9978 → (−0.01, −0.04) |
+| 2 | 138 · (0.13, 0.09) · 0.9994 → (−0.13, 0.01) | 253 · (−1.49, −0.83) · 0.9955 → (−0.04, −0.04) |
+| 3 | 96 · (1.11, −0.18) · 0.9964 → (−0.20, −0.13) | 73 · (−0.38, −0.45) · 0.9966 → (−0.06, 0.10) |
+| 4 | 174 · (0.30, −0.17) · 0.9982 → (0.00, −0.02) | 183 · (−0.63, −0.33) · 0.9969 → (0.79, 0.46) after two passes |
+| 5 | 367 · (13.99, −1.76) · 0.9840 → (−0.24, 0.13) | 362 · (−0.99, 0.20) · 0.9986 → (−0.21, −0.25) |
+| 6 | 562 · (−7.84, −1.12) · 0.9993 → (−0.04, −0.01) | 875 · (−9.70, −0.92) · 0.9904 → (0.16, 0.14) |
+
+Light match over the wall rings, L shift per still: −4.8 / −6.1 / +26.8 / −1.7 / −11.2 / −0.3. The same
+drawing of photos 6 and 7 inside the boxes: 17.1 / 17.6 levels mean difference with the global pin
+alone, 12.0 / 9.4 after the box pin and the light match. Zone 34.6 % of the canvas (the door's opening
+and closing included). Clips: `final/fabra_boxes_draw7_3s_1080x1350.mp4` md5 e7b1d005… (step peak 4.10
+at f36, the door opening; mean 1.14) · `…_6s_…` 4f6ce7dd… (peak 2.24, mean 0.64) · 1536×1920 twins
+045fd768…, 878e2518…. Dropped: the outline-edge pin (a shadow edge on photo 3 read 9 px wide and the
+affine distorted the still by 3.6 %). Ungraded as of 16:35 EEST.

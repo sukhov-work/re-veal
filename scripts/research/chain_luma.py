@@ -22,8 +22,15 @@ repaint spreads as a soft irregular front (order = the new paint's edge distance
 brightness and two scales of noise; width --front), the repaints overlapping in time by --overlap of
 a step so no boundary is synchronized across the box; no field, no swirl, no colour path. The zone
 is the union of the changed regions eroded --zone-erode px and feathered. On top of the global pin,
-each box gets a local sub-pixel pin: the ring shift measured against the last still is applied as a
-translation of the box's zone, blended over the ring (`--no-local-pin` skips it).
+each box gets a local pin (`--local-pin sift`, the default since 2026-10-09 evening): SIFT matches
+INSIDE the box between the still and the last one (the hardware and the drawing persist through the
+repaints; 75-869 inliers per box on the owner's photos) give a similarity, position AND size, applied
+to the box's zone and blended over the ring. The box stands in front of the wall, so a locked wall
+leaves the box 7-14 px off on two of the photos; this pin sees it. `--local-pin edges` fits the four
+outline edges instead (a shadow edge fooled it on photo 3); `--local-pin ring` is the wall-ring
+translation of the afternoon; `--no-local-pin` skips it. `--match-light` (on for `draw`) matches every still's Lab mean and spread
+over the wall rings to the last still's, so the same drawing does not change brightness between
+two photos.
 Not part of either tool; imports reveal and transitions (research only, as tr14_variants.py does).
 Runs in `.venv`.
 
@@ -147,6 +154,100 @@ def ring_shift(gref, g, box, shape):
     return round(float(dx), 2), round(float(dy), 2), round(float(r), 3)
 
 
+def tight_box(mask, box):
+    """The dense core of a changed-region component (its bbox may carry a cable or a shadow):
+    rows and columns whose coverage is at least half of the largest."""
+    x, y, w, h = box
+    sub = (mask[y:y + h, x:x + w] > 0)
+    rows, cols = sub.sum(1), sub.sum(0)
+    ry = np.flatnonzero(rows >= 0.5 * rows.max())
+    cx = np.flatnonzero(cols >= 0.5 * cols.max())
+    return (x + int(cx[0]), y + int(ry[0]), int(cx[-1] - cx[0] + 1), int(ry[-1] - ry[0] + 1))
+
+
+def track_edge(gray, axis, lo, hi, b0, b1, min_frac=0.3):
+    """The position of the strongest edge across [lo, hi) (columns for axis 'x', rows for 'y'),
+    tracked per row (or column) inside the band [b0, b1) and taken as the median; sub-pixel by a
+    parabola. None when fewer than min_frac of the rows hold an edge above a fifth of the band's
+    strongest."""
+    g = cv2.GaussianBlur(gray.astype(np.float32), (0, 0), 1.2)
+    if axis == "x":
+        sob = np.abs(cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3))[b0:b1, lo:hi]
+    else:
+        sob = np.abs(cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3))[lo:hi, b0:b1].T
+    if sob.size == 0:
+        return None
+    k = np.argmax(sob, axis=1)
+    peak = sob[np.arange(sob.shape[0]), k]
+    ok = (peak > 0.2 * peak.max()) & (k > 0) & (k < sob.shape[1] - 1)
+    if ok.sum() < min_frac * sob.shape[0]:
+        return None
+    rows = np.flatnonzero(ok)
+    kk = k[rows]
+    l, c, r = sob[rows, kk - 1], sob[rows, kk], sob[rows, kk + 1]
+    sub = np.clip((r - l) / (2.0 * (2.0 * c - l - r) + 1e-9), -0.5, 0.5)
+    return float(lo + np.median(kk + sub))
+
+
+def box_edges(gray, core, ref=None, win=12, search=45):
+    """(left, right, top, bottom) of a box's outline. With no reference the edges are searched from
+    the core's sides inward by `search` px; with one, within +-win of the reference's edges."""
+    x, y, w, h = core
+    bx0, bx1 = x + int(0.2 * w), x + int(0.8 * w)
+    by0, by1 = y + int(0.2 * h), y + int(0.8 * h)
+    H_, W_ = gray.shape
+    if ref is None:
+        wins = [(max(0, x - 10), x + search), (x + w - search, min(W_, x + w + 10)),
+                (max(0, y - 10), y + search), (y + h - search, min(H_, y + h + 10))]
+    else:
+        wins = [(max(0, int(round(v)) - win), min(W_ if i < 2 else H_, int(round(v)) + win + 1)) for i, v in enumerate(ref)]
+    return (track_edge(gray, "x", *wins[0], by0, by1), track_edge(gray, "x", *wins[1], by0, by1),
+            track_edge(gray, "y", *wins[2], bx0, bx1), track_edge(gray, "y", *wins[3], bx0, bx1))
+
+
+def match_light(img, ref, mask):
+    """img with its Lab mean and spread over mask matched to ref's (the wall rings: the same material
+    under different light). Returns (matched, the L shift applied at the mean)."""
+    lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB).astype(np.float32)
+    labr = cv2.cvtColor(ref, cv2.COLOR_RGB2LAB).astype(np.float32)
+    m = mask > 0
+    shift = 0.0
+    for c in range(3):
+        mu, sd = float(lab[..., c][m].mean()), float(lab[..., c][m].std())
+        mur, sdr = float(labr[..., c][m].mean()), float(labr[..., c][m].std())
+        lab[..., c] = (lab[..., c] - mu) * (sdr / max(sd, 1e-3)) + mur
+        if c == 0:
+            shift = mur - mu
+    return cv2.cvtColor(np.clip(lab + 0.5, 0, 255).astype(np.uint8), cv2.COLOR_LAB2RGB), round(shift, 2)
+
+
+def box_similarity(gref, g, core, grow=10, min_inliers=20):
+    """A similarity mapping the box of still g onto the reference's from SIFT matches inside the
+    box core grown by `grow` px. Returns (M 2x3 | None, matches, inliers, centre shift (dx, dy))."""
+    x, y, w, h = core
+    H_, W_ = gref.shape
+    m = np.zeros((H_, W_), np.uint8)
+    m[max(0, y - grow):min(H_, y + h + grow), max(0, x - grow):min(W_, x + w + grow)] = 255
+    sift = cv2.SIFT_create(contrastThreshold=0.02)
+    kr, dr = sift.detectAndCompute(gref, m)
+    kg, dg = sift.detectAndCompute(g, m)
+    if dr is None or dg is None or len(kr) < 8 or len(kg) < 8:
+        return None, 0, 0, (0.0, 0.0)
+    good = [a for a, b in cv2.BFMatcher(cv2.NORM_L2).knnMatch(dg, dr, k=2) if a.distance < 0.8 * b.distance]
+    if len(good) < 6:
+        return None, len(good), 0, (0.0, 0.0)
+    src = np.float32([kg[a.queryIdx].pt for a in good]).reshape(-1, 1, 2)
+    dst = np.float32([kr[a.trainIdx].pt for a in good]).reshape(-1, 1, 2)
+    M, inl = cv2.estimateAffinePartial2D(src, dst, method=cv2.RANSAC, ransacReprojThreshold=2.0, confidence=0.999, refineIters=10)
+    ni = int(inl.sum()) if inl is not None else 0
+    if M is None or ni < min_inliers:
+        return None, len(good), ni, (0.0, 0.0)
+    cx, cy = x + w / 2.0, y + h / 2.0
+    dx = float(M[0, 0] * cx + M[0, 1] * cy + M[0, 2] - cx)
+    dy = float(M[1, 0] * cx + M[1, 1] * cy + M[1, 2] - cy)
+    return M, len(good), ni, (dx, dy)
+
+
 def pin_to(gref, g, rmask, kind="similarity"):
     """A similarity (4 DOF) or a homography (8 DOF, MAGSAC++) mapping still g onto the reference from
     SIFT matches inside the ring mask. Returns (M 2x3 | H 3x3 | None, matches, inliers)."""
@@ -182,7 +283,10 @@ def main():
     ap.add_argument("--overlap", type=float, default=0.35, help="draw: a repaint starts this fraction of a step before its turn and ends as late")
     ap.add_argument("--front", type=float, default=0.35, help="draw: the width of a repaint's front in order units (TR14's luma uses 0.15)")
     ap.add_argument("--zone-erode", type=int, default=15, help="draw: the union changed region eroded this many px is the drawing zone")
-    ap.add_argument("--no-local-pin", action="store_true", help="skip the per-box sub-pixel pin after the global one")
+    ap.add_argument("--no-local-pin", action="store_true", help="skip the per-box pin after the global one")
+    ap.add_argument("--local-pin", default="sift", choices=("sift", "edges", "ring"), help="the per-box pin: SIFT inside the box (similarity), the outline edges (axis-aligned affine) or the wall ring's translation")
+    ap.add_argument("--pin-min-inliers", type=int, default=20, help="sift pin: below this many inliers the still keeps the global pin")
+    ap.add_argument("--match-light", default="auto", choices=("auto", "on", "off"), help="match each still's Lab statistics over the wall rings to the last still's (auto = on for draw)")
     ap.add_argument("--crop", default="none", choices=("none", "valid"), help="none = the reference's full frame (default); valid = the rectangle every warped photo covers")
     ap.add_argument("--size", default="", help="also write chain_<WxH>.mp4 scaled to this size")
     ap.add_argument("--fps", type=float, default=30.0)
@@ -296,7 +400,89 @@ def main():
     for bi, b in enumerate(boxes):
         print(f"  box {bi}: ring drift after the pin {after[bi]}", flush=True)
     local = []
-    if not a.no_local_pin:
+    cores = [tight_box(mask01, b) for b in boxes]
+    report["box_cores"] = [list(c) for c in cores]
+    ref_edges = [box_edges(grays[-1], c) for c in cores]
+    print(f"  box cores {cores}; outline edges in the last still (L, R, T, B) {[tuple(None if v is None else round(v, 1) for v in e) for e in ref_edges]}", flush=True)
+    edges_before = [[box_edges(g, c, e) for g in grays] for c, e in zip(cores, ref_edges)]
+    report["edges_before"] = edges_before
+    if not a.no_local_pin and a.local_pin == "sift":
+        for bi, ((bx, by, bw, bh), core) in enumerate(zip(boxes, cores)):
+            gx_, gy_ = int(bw * RING_GROW), int(bh * RING_GROW)
+            X0, Y0 = max(0, bx - gx_), max(0, by - gy_)
+            X1, Y1 = min(W0, bx + bw + gx_), min(H0, by + bh + gy_)
+            wgt = np.zeros((H0, W0), np.float32)
+            wgt[Y0 + 20:Y1 - 20, X0 + 20:X1 - 20] = 1.0
+            wgt = cv2.GaussianBlur(wgt, (0, 0), 8)[..., None]
+            for k in range(len(stills) - 1):
+                for pass_ in (1, 2):        # two passes: the first estimate from a few hundred matches can leave 1-2 px
+                    M, nm, ni, (dx, dy) = box_similarity(grays[-1], T.gray_of(stills[k]), core, min_inliers=a.pin_min_inliers)
+                    if M is None:
+                        if pass_ == 1:
+                            local.append({"still": photos[k].name, "box": bi, "applied": False, "matches": nm, "inliers": ni})
+                            print(f"  box {bi} {photos[k].name}: {ni} inliers of {nm} matches inside the box: no pin, kept as pinned globally", flush=True)
+                        break
+                    if pass_ == 2 and abs(dx) < 0.3 and abs(dy) < 0.3:
+                        break
+                    sc = float(np.hypot(M[0, 0], M[0, 1])); rot = float(np.degrees(np.arctan2(M[0, 1], M[0, 0])))
+                    moved = cv2.warpAffine(stills[k], M, (W0, H0), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                    stills[k] = T.to_u8(stills[k] * (1 - wgt) + moved * wgt)
+                    local.append({"still": photos[k].name, "box": bi, "pass": pass_, "applied": True, "matches": nm, "inliers": ni, "scale": round(sc, 5),
+                                  "rotation_deg": round(rot, 3), "centre_shift_px": [round(dx, 2), round(dy, 2)]})
+                    print(f"  box {bi} {photos[k].name} pass {pass_}: {ni} inliers of {nm}; the box sat ({dx:.2f}, {dy:.2f}) px off at its centre, scale {sc:.4f}, rotation {rot:.2f} deg: pinned", flush=True)
+        grays = [T.gray_of(s) for s in stills]
+        check = []
+        for bi, core in enumerate(cores):
+            row = []
+            for k in range(len(stills) - 1):
+                M, nm, ni, (dx, dy) = box_similarity(grays[-1], grays[k], core, min_inliers=a.pin_min_inliers)
+                row.append(None if M is None else [round(dx, 2), round(dy, 2), round(float(np.hypot(M[0, 0], M[0, 1])), 5), ni])
+            check.append(row)
+            print(f"  box {bi}: after the pin, per still (centre shift dx, dy, scale, inliers) {row}", flush=True)
+        report["box_pin_check"] = check
+        after_local = [drift(b)[0] for b in boxes]
+        report["local_pin"] = local
+        report["ring_drift_after_local"] = after_local
+    elif not a.no_local_pin and a.local_pin == "edges":
+        for bi, ((bx, by, bw, bh), core, e_ref) in enumerate(zip(boxes, cores, ref_edges)):
+            if any(v is None for v in e_ref):
+                print(f"  box {bi}: an outline edge was not found in the last still ({e_ref}): no edge pin", flush=True)
+                continue
+            gx_, gy_ = int(bw * RING_GROW), int(bh * RING_GROW)
+            X0, Y0 = max(0, bx - gx_), max(0, by - gy_)
+            X1, Y1 = min(W0, bx + bw + gx_), min(H0, by + bh + gy_)
+            wgt = np.zeros((H0, W0), np.float32)
+            wgt[Y0 + 20:Y1 - 20, X0 + 20:X1 - 20] = 1.0
+            wgt = cv2.GaussianBlur(wgt, (0, 0), 8)[..., None]
+            for k in range(len(stills) - 1):
+                e = edges_before[bi][k]
+                if any(v is None for v in e):
+                    local.append({"still": photos[k].name, "box": bi, "applied": False, "edges": e})
+                    print(f"  box {bi} {photos[k].name}: an outline edge was not found ({e}): left as pinned globally", flush=True)
+                    continue
+                L, R, Tp, Bt = e
+                Lr, Rr, Tr, Br = e_ref
+                sx, sy = (Rr - Lr) / max(R - L, 1e-6), (Br - Tr) / max(Bt - Tp, 1e-6)
+                tx, ty = Lr - sx * L, Tr - sy * Tp
+                M = np.float32([[sx, 0, tx], [0, sy, ty]])
+                moved = cv2.warpAffine(stills[k], M, (W0, H0), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                stills[k] = T.to_u8(stills[k] * (1 - wgt) + moved * wgt)
+                local.append({"still": photos[k].name, "box": bi, "applied": True, "scale": [round(sx, 5), round(sy, 5)], "shift": [round(tx, 2), round(ty, 2)],
+                              "edges": [round(v, 2) for v in e]})
+                print(f"  box {bi} {photos[k].name}: edges (L, R, T, B) {[round(v, 1) for v in e]} -> scale ({sx:.4f}, {sy:.4f}), shift ({tx:.1f}, {ty:.1f}) px", flush=True)
+        grays = [T.gray_of(s) for s in stills]
+        edges_after = [[box_edges(g, c, e) for g in grays] for c, e in zip(cores, ref_edges)]
+        report["edges_after"] = edges_after
+        for bi, e_ref in enumerate(ref_edges):
+            dims = [(None if (e[1] is None or e[0] is None) else round(e[1] - e[0], 1), None if (e[3] is None or e[2] is None) else round(e[3] - e[2], 1)) for e in edges_after[bi]]
+            devs = [None if any(v is None for v in e) else round(max(abs(e[i] - e_ref[i]) for i in range(4)), 2) for e in edges_after[bi]]
+            print(f"  box {bi}: after the edge pin, (width, height) per still {dims}; largest edge deviation from the last still {devs} px", flush=True)
+        after_local = [drift(b)[0] for b in boxes]
+        for bi, b in enumerate(boxes):
+            print(f"  box {bi}: ring drift after the edge pin {after_local[bi]}", flush=True)
+        report["local_pin"] = local
+        report["ring_drift_after_local"] = after_local
+    elif not a.no_local_pin:
         for bi, (bx, by, bw, bh) in enumerate(boxes):
             gx_, gy_ = int(bw * RING_GROW), int(bh * RING_GROW)
             X0, Y0 = max(0, bx - gx_), max(0, by - gy_)
@@ -323,9 +509,19 @@ def main():
     report["ring_drift"] = {"before": before, "after": after,
                             "max_abs_before_px": round(max(max(abs(r[0]), abs(r[1])) for rows in before for r in rows), 2),
                             "max_abs_after_px": round(max(max(abs(r[0]), abs(r[1])) for rows in after for r in rows), 2)}
+    if a.match_light == "on" or (a.match_light == "auto" and a.variant == "draw"):
+        shifts = []
+        for k in range(len(stills) - 1):
+            stills[k], sh = match_light(stills[k], stills[-1], rmask)
+            shifts.append(sh)
+        grays = [T.gray_of(s) for s in stills]
+        report["light_match_L_shift"] = shifts
+        print(f"  light matched over the wall rings: L shift per still {shifts}", flush=True)
     for i, (s, p) in enumerate(zip(stills, photos)):
         cv2.imwrite(str(out / "aligned" / f"{i}_{p.stem}.jpg"), cv2.cvtColor(s, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 95])
     vis = V.mask_overlay(stills[0], mask01, None)
+    for cx_, cy_, cw_, ch_ in cores:
+        cv2.rectangle(vis, (cx_, cy_), (cx_ + cw_, cy_ + ch_), (255, 255, 0), 2)
     for bx, by, bw, bh in boxes:
         cv2.rectangle(vis, (bx, by), (bx + bw, by + bh), (0, 255, 0), 3)
     vis[rmask > 0] = T.to_u8(vis[rmask > 0] * 0.6 + np.array([0, 0, 255]) * 0.4)
