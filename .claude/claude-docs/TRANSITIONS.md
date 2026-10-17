@@ -3001,7 +3001,9 @@ left. Reading: on the keyframe the base model keeps more of the frame outside th
 those pixels changed against 82 %, 10.7 levels against 18.0); the distilled model matches klein 9B
 in fidelity at 3.5× the time. Neither has a mask, so every number is "how much the model moved what
 it was told to keep", and the choice of the plate and keyframe model of record (T35) is the owner's
-by eye on the page. Not run: `--flow-shift 16`, a second reference, the prompt upsampler. Two
+by eye on the page. His choice (2026-10-17 night, verbatim): "i liked `FLUX.3 image klein, distilled,
+bf16 (16 steps, cfg 1.0)` lets stick with it for now"; the model of record from this line on (DECISIONS
+2026-10-17 ninth line); klein 9B stays on the box as the comparison. Not run: `--flow-shift 16`, a second reference, the prompt upsampler. Two
 resident `llama-server` processes restarted at 18:00 and 18:12 BST while no job of the track ran
 (a `llama-swap` model swap is likely; its log was not read). The weights on the Mac (31 GB) sit in
 the session scratchpad and are not needed again.
