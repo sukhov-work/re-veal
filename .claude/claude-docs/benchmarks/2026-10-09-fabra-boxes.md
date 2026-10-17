@@ -139,3 +139,14 @@ and closing included). Clips: `final/fabra_boxes_draw7_3s_1080x1350.mp4` md5 e7b
 at f36, the door opening; mean 1.14) · `…_6s_…` 4f6ce7dd… (peak 2.24, mean 0.64) · 1536×1920 twins
 045fd768…, 878e2518…. Dropped: the outline-edge pin (a shadow edge on photo 3 read 9 px wide and the
 affine distorted the still by 3.6 %). Ungraded as of 16:35 EEST.
+
+## Owner verdict (2026-10-17, by message, verbatim)
+"real life task experiment  is done, I  ended up not fully satisfied ,  I  liked mix of tr14_luma_3s,
+tr14_edge-grow_3s and tr14_melt-soft but none of those  was fully ideal, I wanted boxes to be
+motionless and whole scene as consistent as possible with content on boxes very subtly and naturally
+evolve to show before - after process of repainting them.  I was unpleasantly surprised how jagged
+the layered_auto_r7 version came out just wipe without respecting edges positions and not fluid at
+all ( and this is considering the photos are really close match! ). Do not redraw anything this is
+simply my feedback." Reading in `TRANSITIONS.md §12.24.9`; the stages 3b–6 clips are not named and
+stay ungraded; nothing redrawn. Next for this case: a stroke-ordered repaint over the pinned plate
+(`TRANSITIONS.md §13.4` item 3).

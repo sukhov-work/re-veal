@@ -367,6 +367,33 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
    the reference; per-pixel switches only with colour harmonisation), after 3.
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
 
+### Rank, revised 2026-10-17 — after the owner's verdicts on the box clip and on round 7 (`TRANSITIONS.md §12.24.9`, `§12.25`, `§13`)
+Owner (verbatim, 2026-10-17): "i feel like we are make small incremental fixes but we are stuck
+conceptually". His two descriptions of the transition he wants (mismatch_5: "a super out zoom …
+sun became very distant and eventually converted to galaxy core"; mismatch_3: "zoom out as if people
+from the first phote are in the window pane of the second photo") are one mechanism no round built:
+one scene inside a region of the other, revealed by one camera pulling back. Probed the same day
+(`scripts/research/nest_probe.py`, page `benchmarks/runs/2026-10-17/nest/`, ungraded).
+1. **The owner's picks on the probe page** (the two nested-camera clips) and his answers to the five
+   questions of `TRANSITIONS.md §13.8`.
+2. **The transformation inside the container** (`§13.4` item 1): the bridge onto the dust lane by
+   `morph_to` or the log-polar map, A's crowd onto B's group by `morph_to`, on the probe; the blind
+   planner's plan for mismatch_5 (`§13.6`) is the specification. The director flow's first planned
+   render follows on a held-out pair (every fixture pair carries a description by the owner; a new
+   pair is asked for), by the session's model unless the owner has said yes to the egress.
+3. **The nested camera as score keys** (`pullback` and `anchors`, the container as an `element`
+   mask rule with a role; default-off in `layered_probe.py`, rounds 1–7 byte-identical through
+   them; first the no-code test of `TRANSITIONS.md §13.6` stage 2), with parallax by the depth
+   model as a knob; the transformation inside the container (`§13.4` item 1) comes BEFORE the keys.
+4. **Bridge → arm** (`§13.4` item 2): a semantic correspondence inside label-matched elements
+   (DINOv3 or the layer source's own match), then `morph_to` or the log-polar warp.
+5. **FLUX.3 image klein on the box** (`§13.5`): after the owner accepts the gated terms and the
+   stable-diffusion.cpp container is re-pulled, one plate and one keyframe side by side with
+   FLUX.2 klein 9B; adopt only on a measured win.
+6. **The box repaint by ordered strokes** (`§13.4` item 3) over the pinned plate of `§12.24.8`.
+7. **Parked, unchanged**: `--camera` as decoration; the per-frame bridge; TR7; the keyframe chain;
+   whole-frame diffusion morphers (F3 by their own account, `§13.4`).
+
 ## H — harness before exploration (evidence: `HANDOFF.md §7`, `harness.py`, backlog T2–T5)
 | Slice | Goal (acceptance) | Seam | Revert | Gate / check | Size | Depends on |
 |---|---|---|---|---|---|---|
@@ -424,6 +451,7 @@ Open now: none from this list. Standing questions live in `NEXT_SESSION_PROMPT.m
 ## Amendments
 | Date | Change | By |
 |---|---|---|
+| 2026-10-17 | Rank revised after the owner's verdicts on the box clip and round 7 (no pick on 5 of 7 pairs; "stuck conceptually"): the nested camera probed on mismatch_5 and mismatch_3, the director flow designed (`TRANSITIONS.md §13`), FLUX.3 image klein researched; items 1–7 above | rethink session, 2026-10-17 |
 | 2026-09-13 | Drafted at bootstrap from the owner's directions and `HANDOFF.md §7/§9`; unranked | bootstrap session |
 | 2026-09-13 | Added §TR (transitions engine, six slices) from the owner's order and the Impossible research artifact; TR1 shipped the same day; E3 stays as the Reveal-side `--style` lane and is now reached through TR3. H1/H3 unchanged, still unranked | transitions session |
 | 2026-09-13 | Owner answered the five open decisions (quoted above); plan RANKED; TR7 (speed pass) added with the measured profile; TR5/TR6 carry the device rule from `HANDOFF.md §11`; design docs moved under `.claude/claude-docs/` | transitions session, evening |

@@ -2366,3 +2366,439 @@ from the four outline edges was tried and dropped (a shadow edge on photo 3 fool
 `final/fabra_boxes_draw7_{3s,6s}_1080x1350.mp4` (md5 e7b1d005…, 4f6ce7dd…). Ungraded as of
 2026-10-09 16:35 EEST. Lesson for the tool: a changed object in front of the aligned plane needs its
 own pin; the wall's registration says nothing about it.
+
+12.24.9 The owner's verdict on the box clips (2026-10-17, by message, verbatim): "real life task
+experiment  is done, I  ended up not fully satisfied ,  I  liked mix of tr14_luma_3s, tr14_edge-grow_3s
+and tr14_melt-soft but none of those  was fully ideal, I wanted boxes to be motionless and whole scene
+as consistent as possible with content on boxes very subtly and naturally evolve to show before - after
+process of repainting them.  I was unpleasantly surprised how jagged  the layered_auto_r7 version came
+out just wipe without respecting edges positions and not fluid at all ( and this is considering the
+photos are really close match! ). Do not redraw anything this is simply my feedback." Reading: of the
+fifteen approaches on the triage pair (12.24.1) the three TR14 in-mask effects (luma, edge-grow,
+melt-soft) are the closest and none is accepted; the layered automatic clip is rejected on this case
+(the boxes are no element, backlog T32, so the clip is a whole-frame morph that reads as a wipe); the
+chain, `draw` and pin clips of 12.24.5–12.24.8 are not named and stay ungraded; nothing is redrawn.
+The wish is a time-varying repaint of the box surface while the boxes stand still: §13.4 item 3.
+
+### 12.25 Owner picks on round 7 (2026-10-17, 12:15 UTC; `benchmarks/runs/2026-09-29/layered_picks_L7.json`, ingested into the page and `sheet.md` the same day; verbatim in DECISIONS 2026-10-17)
+
+Result: no clip is picked on five of the seven pairs; `auto_r7` is picked as closer on mismatch_7
+and mismatch_4; on mismatch_6 the round-5 hand clip beats it. The owner's reading of the whole
+family: "still at its core 2 separate pictures and flat 2d effect" (mismatch_1); "all variants still
+feel like very advanced crossfade" (mismatch_6); "just 2d mixup/melt  of different layers you have
+extrancted into one another without single consistent them, The feel is as if you hardcut specific
+subjects and then simply linearly move them around in 2d plane. And still do crossfade in background"
+(mismatch_3). On two pairs he describes the transition he wants, and both are a camera move that
+places one scene inside the other: mismatch_5, "a super out zoom with nice layers and stuff and make
+it like sun became very distant and eventually converted to galaxy core and the bridge super fluidly
+tranformed into part of galaxy sleeve and stars were  popping , or passing during zoom or before
+final image settles"; mismatch_3, "a would zoom out as if people from the first phote are in the
+window pane of the second photo and then finalize ttransition in some creative manner". His caveat:
+"This whole pair shows how subjective each mismatch case can be and how much artistic direction it
+requires". His message with the file: "i feel like we are make small incremental fixes but we are
+stuck conceptually".
+
+| pair | best | boxes (one picture / transforms / nothing invented) |
+|---|---|---|
+| mismatch_1 | none | auto_r6 –/yes/yes; auto_r7 –/yes/yes |
+| mismatch_7 | auto_r7 | morph_2s yes/yes/yes; auto_r6 –/yes/yes; auto_r7 –/yes/yes |
+| mismatch_6 | none | layered_r5_flow yes/yes/yes; auto_r6 yes/yes/yes; auto_r7 yes/yes/yes |
+| mismatch_4 | auto_r7 | layered_r5_stagger yes/yes/yes; auto_r6 yes/yes/yes; auto_r7 yes/yes/yes |
+| mismatch_5 | none | auto_r6 –/yes/yes; auto_r7 –/yes/yes |
+| mismatch_3 | none | auto_r6 –/yes/yes; auto_r7 –/yes/yes |
+| mismatch_2 | none | auto_r6 –/yes/yes; auto_r7 –/yes/yes |
+
+The notes, verbatim:
+- mismatch_1: "r7 is marginally smoother but they still seem like hiden wipe , just a bit fancier as you wipe along actual buidlings skyline edges and clouds so it is a bit more subtler, still at its core 2 separate pictures and flat 2d effect "
+- mismatch_7: "r7 is marginally better than morph and better than r6 but sky still seem like hiden crossfade , just a bit fancier as you wipe along actual cloud edges and clouds so it is a bit more subtler, worth than morph ( altough morph as i asaid before has really dirty clouds as well ,but at least there something happens in cloud details ) . Building do attempt to tranform , albeit quite dirty except from two main ones ( but they already did this in morph ( kept their shape correctly through transition)  so no improvement here) "
+- mismatch_6: "r7 is actually more dull and less smoother than r5_flow , more flat and more ugly edges around content (e,g bottom tree) , all variants still feel like very advanced crossfade"
+- mismatch_4: "r7 is a bit better then previous ones, but i don't like that skyline transforms in weird wavy pattern, also final sun has weird oval shape before settle, but skyline at least a bit more uniform"
+- mismatch_5: "no improvement here , the context is completely disregarded here , sun tries to become center of the galaxy in weird way dropping down. I would expect ( and i  understand that this is very specific  non -generalizable taste pick and core of the problem we are trying to solve!!!) that in this case you would do a super out zoom with nice layers and stuff and make it like sun became very distant and eventually converted to galaxy core and the bridge super fluidly tranformed into part of galaxy sleeve and stars were  popping , or passing during zoom or before final image settles. This whole pair shows how subjective each mismatch case can be and how much artistic direction it requires  "
+- mismatch_3: "both are just 2d mixup/melt  of different layers you have extrancted into one another without single consistent them, The feel is as if you hardcut specific subjects and then simply linearly move them around in 2d plane. And still do crossfade in background . Here , again , very specific art choice, a would zoom out as if people from the first phote are in the window pane of the second photo and then finalize ttransition in some creative manner "
+- mismatch_2: "similar problem to mismatch_3"
+
+Reading, pair by pair, not generalised: (1) round 7's two ground maps (the shared-keypoint
+homography on mismatch_7, the one-piece scaling on mismatch_1) lowered the measured reveal share
+(§12.21.1: 48.3 → 13.4 % and 34.3 → 21.2 %) and did not change the verdict in kind; a ground that
+follows a map is still "2 separate pictures" to him. (2) mismatch_7: the towers' kept shapes are
+credited to `morph_2s` of 2026-09-23, "so no improvement here". (3) mismatch_6: `auto_r7` loses to the
+round-5 hand clip on smoothness and on the tree's edge; the SAM 3 elements did not help this pair.
+(4) mismatch_4: the `morph_to` skyline "transforms in weird wavy pattern" (the transport field's
+bend) and the sun "has weird oval shape before settle" (the Gaussian map's anisotropy). (5)
+mismatch_5, mismatch_3 and mismatch_2: the fix he names is a camera, one scene contained in a region
+of the other and revealed by a pull-back; no layer rule of rounds 1–7 produces that. Round 8 starts
+there (§13), and the measure `change` is not a target until it is calibrated on these verdicts
+(it read `auto_r7` on mismatch_1 at 21.2 % reveal, which he still calls a wipe).
+
+## 13. The nested camera and the director: why the layered family reads as 2D, what breaks that ceiling, and a flow where a model plans each transition (2026-10-17; Deep design pass; two skeptic passes and a blind planner test applied; subagent reports under `benchmarks/runs/2026-10-17/agents/`, gitignored; probe `scripts/research/nest_probe.py`, page `benchmarks/runs/2026-10-17/nest/index.html`, sheet `benchmarks/2026-10-17-director.md`)
+
+Result: on the two pairs where the owner described the transition he wants (§12.25), both
+descriptions have the same framing, which no round built: scene A placed inside a region of scene B
+(the sun inside the galaxy's core; the bar behind the lounge's window pane) and one camera pulling
+back from "A fills the frame" to "B fills the frame". Both descriptions also have a transformation
+at their centre (the bridge becomes a galaxy arm; the people of A become the people of B), and a
+camera alone is decoration by the goal statement he confirmed (§11: "a camera move is decoration,
+not the transition"). The probe on the page renders the framing and none of the transformation, so
+by §11 its two clips are F2 until a transformation exists inside the container; the page says so,
+asks the narrower question (is the framing right?) and carries hand-written clips only. A blind
+planner test the same day (13.6) found that a vision-language model given only the photos proposes
+the owner's mismatch_5 transition in kind (the sun into the core, the bridge deck tilted into the
+streak, the glints into stars) without having read his words. Around that, this section ranks the
+techniques the repo has built by the owner's verdicts (13.3: closest picks, none accepted), names
+what is missing (13.4), reports FLUX.3 image klein (13.5) and designs the director flow (13.6), to
+be built renderer-first (13.9).
+
+### 13.1 Diagnosis, from the record
+
+1. Every mechanism of rounds 1–7 composites 2D layers under one fixed camera; the per-layer motion
+   is a transport or a map inside the picture plane (§12.1, §12.10.2, §12.21.3). In the clips the
+   owner accepted, 60–66 % of the frame change is still a mix inside a layer (§12.21.1). His words
+   on 2026-10-17 name both: "flat 2d effect", "very advanced crossfade".
+2. The automatic score decides by 18 fixed constants on label, position, area and depth
+   (§12.13.6). No model reads the pair. The owner: "how much artistic direction it requires".
+3. The three TR14 effects he picked on the boxes change the surface in place (luma, melt-soft,
+   edge-grow; §10.4, §12.24) and he still wants the content to "very subtly and naturally evolve".
+   Each of the three is an ordered reveal of B's pixels; the `draw` variant (§12.24.7–12.24.8) is
+   a per-pixel repaint front and is ungraded.
+4. The camera has been an option, never the transition: `--camera` (§2 item 3) was graded 0 of 12
+   on 2026-09-25 ("unnecessary pans and basiaclly cross fading"), §11 says "a camera move is
+   decoration, not the transition", and "the cameras as a transition" is on the parked list of the
+   handover. Those rulings stand. The owner's two descriptions of 2026-10-17 put a camera at the
+   frame of the transition and a transformation at its centre; the probe below reopens the parked
+   item for these two pairs only, and the reopening is recorded in DECISIONS 2026-10-17 (second
+   line) as pending his word on the page (13.8 question 3).
+
+### 13.2 The nested camera, probed on the two pairs (2026-10-17; the framing half; two per-pair branches of one script)
+
+Definition: a plate = B with A pasted into a container (a region of B) by one similarity S_A that
+lands A's anchor on B's anchor; camera(t) runs from S_A⁻¹ (frame 0 shows A) to the identity (the
+last frame shows B) as a zoom about the fixed point of S_A, geometric in scale under a smootherstep
+ease. Nothing slides as a layer. The camera wraps the compositor: every source is re-sampled from its
+full-resolution file at every frame, so a magnified B keeps real pixels up to its own size over the
+canvas (2× on mismatch_5, 1.33× on mismatch_3); the mattes are canvas-sized and get magnified with
+the camera (up to 3.09×). Two rims. `soft` (mismatch_5): A's sky is luma-keyed into B's sky over the
+first 45 % of the clip (its alpha falls with its darkness through a band 0.10 wide, so the matte's
+edge is an iso-line of the sun's glow); the sun's disc and the bridge band keep their own soft
+mattes, the band's ends and bottom tapered (15 % and 10 %), and the tapers fade in with the key so
+frame 1 equals A; A's sky colour statistics move toward B's sky by a Lab transfer weighted by
+darkness (the glow and the disc keep their colour). `matte` (mismatch_3): A fills the largest
+canvas-aspect rectangle of clear glass (no element in front of it), is seen only through the glass
+(the window's box minus every element in front of the glass), and B's people enter from the frame's
+edge as the camera pulls back. The finish inside the container is a dissolve ordered by A's
+brightness over the last 22 % (an existing layer of the grammar, §12.1). One canvas rule changed:
+on mismatch_5 A's cover crop is placed so A's anchor sits at B's anchor's relative height (the
+tool crops at the centre, which cuts the sun's top). The anchors on mismatch_5 are photometric
+(the brightest disc of each photo by a threshold on L), not layer-source elements: the merged source
+finds the galaxy's core as four "sun" elements and no star (§12.14 limit 3, 13.6).
+
+| pair | container and anchors | zoom | end scale | render (90 frames, 1920 px) | first / last interior step (levels) | md5, two runs |
+|---|---|---|---|---|---|---|
+| mismatch_5 | the sun's glow and disc (7.0 % of A; the glow dilated 9.3 %) and the bridge band (rows from 802); A's sky 65.4 % of A, keyed; A's sun centre (1004, 521), r 87 px → B's core (960, 521), r 28 px; zoom centre (939, 521) | 3.09× | 0.324 | 9.1–10.0 s | 0.12 / 0.01 | 74c165eb, 74c165eb |
+| mismatch_3 | the clear-glass rectangle 749×562 px at (1128, 136) inside B's window box [584, 0, 1919, 737]; the glass 26.8 % of the canvas; zoom centre (1849, 223) | 2.56× | 0.390 | 6.2 s | 0.25 / 0.02 | e5f51910, e5f51910 |
+
+The §12.4 bar for the frames beside the endpoints is 1 level; the first render of mismatch_3 had a
+20.33-level step at frame 1 (B's foreground showed at once under the matte; the frame-0 override hid
+it), found by the architecture skeptic from the decoded file. The steps inside the clips peak at 6.0
+(mismatch_5) and 38.2 levels (mismatch_3) at the zoom's fastest frames: the step measure cannot
+tell a cut from motion, and a 2.56× zoom moves every pixel. B is shown above its own resolution from
+the first frames: up to 1.92× on mismatch_3 until 1.8 s (the people enter at that magnification) and
+up to 1.54× on mismatch_5 until 1.3 s, in closed form from z(u) = z0^(1−e(u)); the canvas rule says
+"never upscaling" (§2 item 2), so this needs a dated decision or a plate at higher resolution.
+
+What the clips lack, against the owner's words and the record (the owner-lens skeptic read the
+montages frame by frame; "by my eye" marks a reading, not a measure):
+- The transformation. mismatch_5 (2026-09-27, DECISIONS archive): "sun … shrink and transform into
+  andromeda bright center in B and the bridge itself rotate and become meteor streak"; 2026-10-17:
+  "the bridge super fluidly tranformed into part of galaxy sleeve". In the clip the bridge band only
+  shrinks and the sun only shrinks. mismatch_3 (2026-09-27): "people to tranfrom into other people
+  from A group to B group … transforming and not just moving it as cheap 2d cutout!". In the clip
+  A's wall and crowd shrink as one rigid rectangle behind the glass. By §11 both clips are F2.
+- A straight edge of A's frame against B's brighter galaxy glow in the first 0.3–0.5 s of
+  mismatch_5, where A's sky is still opaque near its border (the parked failure of 2026-09-29, "the
+  carried frame stands in the sky as a rectangle"). The key runs ahead of the camera to shorten it;
+  a content-shaped matte from frame 1 would remove it and would break the 1-level bar wherever A's
+  dark sky and B's sky differ by more than a level. The two bars conflict on this pair.
+- Two objects at once: from about 2.0 s the sun's disc sits inside the core's glow until the finish
+  replaces it (by my eye F1 for about 0.6 s). The anchors lock the centres, not the look.
+- A local double exposure at the finish (the last 22 %): the bar's flag and crowd half-transparent
+  over B's trees; the sun's disc over the core. His "And still do crossfade in background".
+- No parallax (a flat zoom); on mismatch_3 A's pane may read as a poster on the glass as much as a
+  distant room (by my eye); the pane keeps A's aspect, with B's own glass beside it.
+
+### 13.3 The machinery, ranked by the owner's verdicts: closest picks, none accepted (the 52-row inventory with every quote and citation: `benchmarks/runs/2026-10-17/agents/inventory_report.md`)
+
+A pick is not acceptance (2026-09-14). Seven techniques carry a pick or a liked sentence and each
+one also carries a named defect.
+
+| rank | technique | where | the owner's words (date) | reuse in the director flow |
+|---|---|---|---|---|
+| 1 | `morph_to`, a layer carried into its counterpart by optimal transport, with the round-5 keys | §12.10.2, §12.13.2 | closer on both hand-scored pairs in rounds 4 and 5; "weird wavy pattern" (2026-10-17) | the transformation inside a container (bridge → arm, crowd → group) |
+| 2 | `move_to`, the sun's Gaussian map | §12.1 | "Only Sun movement is cool" (2026-09-27); "weird oval shape before settle" (2026-10-17) | superseded on mismatch_5 by the anchored zoom; stays for a blob with no container |
+| 3 | TR14 luma, melt-soft, edge-grow inside the changed mask on the hold field | §10.4, §12.24 | his pick on the boxes (2026-10-09, 2026-10-17: "none of those was fully ideal") | the finish inside a container |
+| 4 | the class A homography + DIS morph | §2 | mismatch_7 `morph_2s` three boxes yes (2026-10-17); "dirty clouds" | the engine for related pairs and for a related container |
+| 5 | the merged layer source with SAM 3 | §12.18, §12.22 | "really cool and accurate" (2026-09-29); no word for a utility box (T32); the galaxy's core as four suns, no star (13.6) | every element the planner names is snapped to it; the planner corrects it |
+| 6 | the in-box feature pin (position and size) | §12.24.8 | ordered twice on 2026-10-09; "boxes to be motionless" (2026-10-17) | the pin of any changed object in front of the aligned plane |
+| 7 | the score grammar and the automatic score | §12.1, §12.21 | "remotely looks like right direction" (2026-09-26); "2d mixup/melt" (2026-10-17) | the plan's output format; the pull-back and the anchors are new keys in it |
+| 8 | the depth model and the camera dolly | §2 item 3 | liked as an effect, rejected as the transition (2026-09-23/25) | parallax inside the pull-back |
+| 9 | FLUX.2 klein 9B keyframes and plates on the second machine | §12.15, §12.23 | "klein 9B looks best" (2026-09-27); every whole-frame use rejected | the helper confined to a container's finish |
+| 10 | the stars rule (materialise bright-first) | §12.1 | "i like how stars appear" (2026-09-26) | stars inside the pull-back |
+
+Measures (§12.13, §12.17, §12.21): `change` orders five graded clips as the owner did and reads
+`auto_r7` on mismatch_1 at 21.2 % reveal, which he calls a wipe; no measure reads "2d" or "advanced
+crossfade". A measure is not a target until it is calibrated on the 2026-10-17 verdicts.
+
+### 13.4 What is missing, ranked by what the owner's words demand (external candidates from `benchmarks/runs/2026-10-17/agents/frontier_report.md`, primary sources read 2026-10-17; none run)
+
+1. A transformation inside the container, which is what makes a nested camera a transition by
+   §11: the bridge carried onto B's dust lane and bent toward it (`morph_to` between the two mattes,
+   or the log-polar map w = exp(a·z), which bends straight lines into logarithmic spirals;
+   `cv2.warpPolar` / `cv2.remap`, seconds on the Mac); A's crowd carried onto B's group by
+   `morph_to` on the person elements. Nothing of this exists in the probe. The blind planner's plan
+   for mismatch_5 (13.6) is a written specification of it.
+2. A semantic correspondence across unrelated scenes, so item 1 knows what becomes what: DINOv3
+   patch features (github.com/facebookresearch/dinov3, DINOv3 licence, ViT-S 21M to ViT-L 300M)
+   inside label-matched elements, or the planner's named match snapped to the layer source. The
+   automatic score matches by label, position, area and depth only (backlog T34).
+3. Content that changes in time for a same-scene repaint, for future pairs like the boxes (the
+   box experiment is closed by the owner's word: "Do not redraw anything"): strokes fitted to the
+   finish photo inside the changed mask and drawn in painting order over the held, pinned plate
+   (Stylized Neural Painting, CPU mode, github.com/jiupinjia/stylized-neural-painting, CC BY-NC-SA 4.0
+   by its README; Paint Transformer, Apache-2.0, macOS). The existing answer to the same wish is the
+   `draw` variant of §12.24.7, ungraded. A stroke render ends on the finish photo only through a
+   last blend, which is a crossfade in those frames [INFERRED]; a ΔE test of the stroke renderer on
+   one photo alone comes before any clip.
+4. Parallax and a tilted container: the depth model's disparity per layer (holes at layer edges,
+   T18), or SHARP, Apple's one-photo Gaussian model (arXiv 2512.10685; predicts on MPS; its renderer
+   is CUDA-only, so a CPU splat renderer would be ours to write); a `quad` container (a homography
+   into a tilted pane); the crop anchor as a canvas option.
+5. A model that reads the pair and decides: 13.6, after items 1–2 exist.
+6. A generative helper held to a region rather than a whole frame: FLUX.3 klein's multi-reference
+   edit (13.5) for a container's finish; Wan VACE masked video-to-video (github.com/ali-vilab/VACE,
+   Apache-2.0, 1.3B at 81×480×832) as the only video model with a stated route onto the box
+   (stable-diffusion.cpp lists Wan2.1 VACE and a Vulkan backend; mask and control support inside
+   sd.cpp UNVERIFIED). Either one re-synthesises pixels inside its region and carries F3 there; the
+   owner's 2026-09-26 ruling ("never full video generation") makes VACE a question for him, not a
+   plan item.
+
+Also found and not ranked above: alpha matting for the "cheap 2d cutout" rim (no matting model has
+been probed; T28); a retiming of any finished clip to constant semantic speed (the Semantic Progress
+Function, arXiv 2604.22554, DINO embedding distance per frame, numpy); Framer (512×320, trajectory-
+guided inbetweening, CUDA) and Go-with-the-Flow (warped noise, CogVideoX base, "requires GPU") as
+motion-controlled video models with no Mac path and an F3 risk on every pixel; every diffusion
+morpher surveyed (AlignMorph 2026-09, FreeMorph, DiffMorpher, IMPUS) makes hybrid objects and claims
+no exact endpoints, so they are out for whole frames by the F3 rule.
+
+### 13.5 FLUX.3 image klein (research only; nothing downloaded or run; `benchmarks/runs/2026-10-17/agents/flux3_report.md`)
+
+Verdict: a plate and keyframe model with support in stable-diffusion.cpp since 2026-10-15 by that
+project's changelog (its Vulkan backend with FLUX.3 is UNVERIFIED), which brings two capabilities
+the pipeline can use (multi-reference composition up to 10 references; bounding boxes in the prompt)
+and none that answers the owner's verdicts, which are about geometry and time, not image quality.
+Adopt it only on a measured side-by-side against FLUX.2 klein 9B on one plate and one keyframe,
+after a 512² smoke test on the re-pulled container.
+
+- Sizes (Hugging Face API, 2026-10-17): the bf16 transformer 11,097,404,512 B (distilled) and
+  11,076,957,072 B (base); fp8r 6,270,949,144 B; the Qwen3-VL-4B text encoder 8.9 GB bf16; the
+  autoencoder 336 MB; the prompt upsampler `flux-3-image-klein-pup` 18,819,722,392 B (a Qwen3.5-9B
+  fine-tune, Apache-2.0, not gated). Q8_0 GGUF: `DogukanUrker/FLUX.3-Image-Klein-GGUF` 5,991,734,144 B
+  (built and tested with sd.cpp ≥ 8cd731e) and `unsloth/flux-3-image-klein-GGUF` 6,092,755,872 B
+  (LPIPS 0.006 against bf16 by unsloth's own test; its card names diffusers, sd.cpp compatibility
+  UNVERIFIED); encoder `Qwen/Qwen3-VL-4B-Instruct-GGUF` Q8_0 4,280,406,144 B. The 8-bit set is about
+  10.7 GB without the upsampler and about 20.8 GB with its Q8_0 GGUF (9.5 GB plus a 0.6 GB
+  projector), against 18.9 GB for klein 9B; the upsampler is not needed when the planner writes
+  the caption.
+- Licence, recorded: FLUX Kommunity License v1.0 (non-commercial; commercial output under US$5M
+  revenue). The distilled, base and comfy repos are click-through gated; on 2026-10-17 the owner's
+  token read the base repo and got "requires approval" on the distilled and comfy repos.
+- The box: stable-diffusion.cpp merged FLUX.3 klein support on 2026-10-15 (PR #2143, release
+  master-968-8cd731e; distilled runs at `--cfg-scale 1.0 --steps 16`); the pinned container
+  `sha256:0ab8e0e0…` predates it and needs a re-pull (backlog T35). 16 steps against klein 9B's 4:
+  a keyframe at 1344×768 would take about 120 s against 68 s if step time scales with parameters
+  [INFERRED, not measured]. ROCm 10.1 lists gfx1151 under Ubuntu 26.04 or 24.04 with kernel 7.0;
+  the box runs Ubuntu 25.10 and kernel 6.17, so the diffusers and ComfyUI paths are untested there.
+  The reference code pins CUDA 13 and vLLM and runs on neither machine as shipped.
+- The Mac (36 GB): an MLX 8-bit build (`VisualInference/FLUX-3-Image-Klein-MLX-8bit`) reports
+  115 s per image and 14.3 GB peak at 1024² on an M4 Pro; diffusers on MPS is UNVERIFIED.
+- The interface (reference code, commit bfc8889): every image starts from pure noise; references
+  steer it through a separate token stream; no mask, no inpainting, no strength; two or more
+  references are each cut to 1 MP. Boxes are text in the prompt on a 0–1000 grid ("Boxes guide
+  placement and scale; they do not constrain pixels to a hard mask"; boxes under about 40×25 px
+  often fail); the pixel restoration that keeps unedited regions exact is a BFL API step absent
+  from the open code. One third-party test (kingy.ai, upsampler off, Fal endpoints) measured 6.23 %
+  of pixels outside the edited region changing by over 8 levels (Nano Banana 1.44 %). Neither this
+  model nor klein 9B has a mask: each renders a whole frame and our code composites the region.
+- The prompt upsampler is required by BFL ("noticeably weaker" without it); since 2026-10-17 BFL
+  ships system prompts for an external vision-language model to write the caption instead, so the
+  planner model of 13.6 can write it. A network call belongs in a separate prep script with its
+  own decision line, never in `transitions.py`.
+- Quality: BFL's own +91 Elo (text-to-image) and +70 Elo (editing) over FLUX.2 klein 9B; no
+  independent leaderboard entry as of 2026-10-17. On 2026-10-17 the reference code moved its
+  sampler shift from 6.93 to 16.0 while sd.cpp and diffusers keep 6.93 (`--flow-shift` overrides).
+
+### 13.6 The director flow (design; nothing built except the probe and one blind test; built after 13.4 items 1–2)
+
+Intent in one sentence: a vision-language model reads both photos and the layer source's elements,
+proposes two transition concepts as plans in the score grammar plus two new keys, the deterministic
+engine renders each at proxy size, the owner grades and guides on a review page, and the chosen
+plan renders at full size with any generative helper confined to a named region.
+
+What it changes and what it does not: the planner chooses among the renderer's actions; if every
+action still reads as 2D to the owner, a planner changes which rule is picked, not what he sees
+(the owner-lens skeptic, 13.7). So the renderer gains the container, the pull-back and the
+transformation inside the container first (13.4 items 1–2), and the planner script is built once
+one rendered action is not called 2D. The flow is process; the answer to "stuck conceptually" is
+13.4.
+
+The blind test (2026-10-17; an Opus 5.5 subagent given only the six proxies and the element tables
+of mismatch_5, mismatch_3 and mismatch_2, with the client's rules and the renderer's actions in its
+brief and no access to the owner's words; `benchmarks/runs/2026-10-17/agents/blind_plans.md`):
+- mismatch_5, concept 1: "The sun sinks and cools into the galaxy core while the bridge deck pivots
+  −19 degrees about it and thins into the satellite streak, the dark truss below it becomes the dust
+  lane, and the orange reflection column on the water rotates up and spreads out into the inclined
+  galaxy disk, its ripple glints becoming stars." This is the owner's description of 2026-09-27 and
+  2026-10-17 in kind, unseen. Concept 2: a swirl winding A's strata into a spiral.
+- mismatch_3, concept 1: element-to-element transformations ("everything in A takes a seat": the
+  flag's blue band into the blue painting, the wheels into the pine trunks, the fence mesh into the
+  woven sofa frames, five people walking into the seated men). Concept 2: a push into A's small
+  mural, the painted hills carried onto B's real pines, then a pull-back out of B's glass wall into
+  the lounge, "so the mural turns out to be the window": the nested camera, in the other direction
+  from the owner's pane.
+- mismatch_2: a structure match (the peeking face behind the tree becomes the woman peeking in B;
+  the clasped hands rise into the hand holding the phone in the same place).
+- It corrected the layer source where it was wrong: the galaxy's four "sun" elements are one core,
+  "wall" 9 is a star, the dust lane and the disk are not detected; "fan" 3 on mismatch_3 is the two
+  cart wheels.
+Pass criterion (frontier report probe 8): the plan names the owner's own matches on 1 of the 2
+described pairs. The plans are text; none is rendered; the test says what a planner proposes, not
+what the owner will accept.
+
+Stages:
+0. Reading (exists): `layer_merge.py` (elements with label, group, box, area, depth, normals),
+   `reveal.py align` on the pair (related or refused, inliers), the canvas.
+1. Plan (new, `scripts/research/director_plan.py`): inputs are the two photos as proxies of at most
+   1024 px, the element tables, the Reveal verdict and an optional owner brief; the output is
+   `plan.json` with `reading` (one sentence per photo), `relation` (aligned, themed or unrelated)
+   and `concepts` (at most 2). Each concept: `idea` (one sentence), `container` (an `element` mask
+   rule with a role: `in` A or B, `rim` soft, matte or quad, or null), `anchors` [{a, b, how}] where
+   an anchor is an element id, a box, or a kind that needs no element (`bright_disc` in a box, a
+   point with a radius) and is snapped to the layer source by IoU ≥ 0.6 for an element or by
+   distance for a point, `pullback` {`ease`, `parallax` off or depth} with the camera derived from
+   the anchors (the fixed point and the start zoom follow from S_A; equal anchor scales give a pure
+   translation), `transform` [{a → b, by: morph_to or log-polar, window}], `end_effect` (an
+   existing dissolve or morph layer in the container's last window, or a helper), `helper` {model,
+   prompt, what it must keep} or null, `knobs` [{name, range, default}] and `risk` (F1, F2 or F3
+   named). Boxes are stated in one frame (the canvas of the pair; the proxy's scale and the crop
+   offset are written into the plan). A concept whose anchors do not snap is shown as "unplaced",
+   never rendered. The plan is frozen as a tracked input: model id, temperature 0, a hash of the
+   prompt, so a render reproduces from the file (invariant 5 of §1 does not hold for a sampled model,
+   and the file is what holds it).
+2. Draft (new keys in `layered_probe.py`, default-off, with rounds 1–7 byte-identical through them:
+   `pullback` and `anchors`; the camera wraps the compositor and re-samples sources from their files;
+   the crop anchor re-crops the element masks or is refused together with A-side element ids; the
+   probe of 13.2 is two per-pair branches, not an implementation of the keys). Before any key is
+   written, one score file with no code: `morph_to` on an `all` layer with `map: {kind: "box"}` and
+   `known_frame: true` already maps A's frame into a box of B and carries B back; if its field reads
+   as the camera does, the keys are not needed. Each concept at 960 px, with the concept's text as
+   the page's paragraph and its knobs as the question. Every page carries the automatic clip of the
+   pair-blind rule in force (the 2026-09-27 rule) or says that it does not and why.
+3. Grade: the owner's picks file, as today, with a separate "acceptable as-is" answer. His notes
+   and the plan go into the next call as examples (the picks files since 2026-09-26 are that memory).
+4. Final: the chosen plan at full size; the helper (klein 9B today, FLUX.3 klein after 13.5's
+   side-by-side) renders a whole frame on the box and our code composites the `end_effect` region
+   through the container's matte.
+
+The planner model and the network. Three options, all with multi-image input and boxes (frontier
+report family 7): Claude (the session's own model, or the Anthropic API; absolute pixel coordinates,
+"approximate" by its docs), Gemini through the API (boxes on a 0–1000 grid, polygons), Qwen3-VL on
+the box (local, boxes and points; the 4B is already FLUX.3's encoder). The owner holds an OpenRouter
+account in another project (`OPENROUTER_API_KEY` in that project's environment); this repo has no
+key. Sending a photo to an API cannot be undone, and no research script in this repo calls the
+network today (`strix_keyframe.sh` states "no network"; the layer source fetches weights once and
+runs offline, T20): the planner script needs the owner's yes on the egress and the providers, a
+dated DECISIONS line and a T20-style backlog row before it exists, and it uses the standard library
+or a scratch environment (an HTTP SDK in the shared `.venv` is a new dependency, a decision). The
+session's own model as the planner moves no photo off the machine beyond what this session already
+does. Recommendation: the session's model for the first planned renders; the script after the
+owner's yes; Qwen3-VL on the box as the offline option.
+
+Invariants kept: frame 0 is A and the last frame is B; every pixel from A or B (A re-coloured where a
+colour path says so) except the declared helper region; the renderer is offline; the planner is a
+separate script the operator runs on purpose; nothing enters `transitions.py` before the owner says
+so.
+
+The test of the flow with the owner, not run: every pair of the fixture set has a dated description
+by him (mismatch_6 in time, 2026-09-26; mismatch_1 and mismatch_4, 2026-09-27; mismatch_2 only
+"similar problem to mismatch_3"), so no pair is undescribed. The test is a new pair outside the
+seven (inventory gap 10: no held-out pair exists; the handover asks the owner for one), the blind
+planner's top concept rendered, his note. The flow is worth building as a script only if that
+concept is one he did not ask for and does not call 2D.
+
+### 13.7 Risks, and the two skeptic passes (Opus 5.5 subagents, 2026-10-17; `benchmarks/runs/2026-10-17/agents/skeptic_owner.md` and `skeptic_arch.md`; every objection rated "blocks" is answered above or named here)
+
+- The pull-back without a transformation is F2 by §11 (owner-lens, blocks): the page and 13.2 say
+  so; 13.9 builds the transformation first.
+- The two clips are hand-written for their pairs (owner-lens, blocks): per-pair branches and
+  constants in `nest_probe.py` (the key band 0.10 over 45 %, the 15 % and 10 % tapers, the 13-px
+  glow dilation, the 22 % finish), so they are tuning, not proof of a mechanism (§11 amendment); the
+  page carries no automatic clip and says so; "the primitive is general" is not claimed.
+- The carried frame as a rectangle (parked 2026-09-29): seen in the first render, shortened by the
+  key, still expected in the first 0.3–0.5 s of mismatch_5 (13.2).
+- The first-frame cut on mismatch_3 (architecture lens, blocks): 20.33 levels in the first render,
+  0.25 after the clear-glass pane; the step measure now runs in the probe on every render.
+- The schema could not express the probe (architecture lens, blocks): answered by anchor kinds
+  without element ids, one coordinate frame, the camera derived from the anchors, and the probe
+  named as two branches (13.6).
+- The egress of the owner's photos to an API (architecture lens, blocks until decided): named in
+  13.6 and 13.8 question 4; nothing is sent until he says yes.
+- B above its own resolution during the pull-back (1.92× and 1.54×, 13.2) against the canvas rule.
+- The finish is still a local dissolve inside the container (22 % of the clip); two objects at
+  once for about 0.6 s on mismatch_5.
+- A's pane keeps A's aspect inside B's window; a `quad` container needs a homography path.
+- The planner's boxes are approximate (Claude's docs say so); the snap guards it and a concept can
+  be lost by the snap; the blind planner also repaired four wrong elements by eye (13.6).
+- Where a nested camera has nothing to hold [INFERRED, none measured]: mismatch_1 and mismatch_7
+  are the same city (nesting would destroy the shared geometry he credited on mismatch_7);
+  mismatch_4 is sun to sun at similar size, so the zoom ratio falls near 1; mismatch_6 asks for a
+  vertical, in-time score; mismatch_2 shows no window or container element by the fixture
+  description (UNVERIFIED against the layer source; the blind planner proposed a structure match
+  there).
+- The planner changes the choice, not the vocabulary (owner-lens): 13.9 is renderer-first and the
+  concepts are capped at two per pair.
+- Refutation kept: the owner liked a camera once as an effect and rejected it as the transition
+  (2026-09-25). The difference here is that the camera carries A into B's geometry (the anchors
+  lock) and the transformation of 13.4 item 1 happens inside the container; whether that difference
+  is visible to him is what the page decides, and nothing on the page is a candidate.
+
+### 13.8 Questions for the owner (each with my recommended answer; also on the page)
+
+1. The two probe clips on `benchmarks/runs/2026-10-17/nest/index.html` show the framing only (the
+   camera half of your two descriptions; by §11 they are F2 until the bridge and the crowd
+   transform inside the container). Is the framing right, before the transformation is added?
+   Recommended: yes on both; 13.4 item 1 is round 8's first build.
+2. The page carries hand-written clips only and no automatic clip (the rule of 2026-09-27): waive
+   it for this page, or wait for a pair-blind rule? Recommended: waive for this page; the planner
+   is the pair-blind route.
+3. "A camera move is decoration, not the transition" (§11, 2026-09-26) and "cameras as a transition"
+   (parked): reopened for the nested camera with a transformation inside the container, or kept?
+   Recommended: reopen for that case only; DECISIONS 2026-10-17 (second line) records the
+   reopening as pending your word.
+4. The planner: the session's own model for the first planned renders, then a script against the
+   Anthropic API or OpenRouter (which model)? Sending your photos to an API cannot be undone: yes
+   or no, and which providers? And a held-out pair for the test: a new photo pair outside the
+   seven? Recommended: the session's model now; one new pair of your choice; the egress is yours
+   to decide.
+5. FLUX.3 klein: accept the click-through terms on the distilled and comfy repos, then a 512² smoke
+   test on the re-pulled container and one plate and one keyframe side-by-side against klein 9B on
+   the box? Recommended: yes, as a measured swap.
+
+### 13.9 Round 8 (renderer-first; order by the owner's answers)
+
+1. Record his picks on the probe page and his answers. 2. The transformation inside the container
+(13.4 item 1): the bridge onto the dust lane by `morph_to` or the log-polar map, A's crowd onto B's
+group by `morph_to`, on the probe; the blind plan for mismatch_5 is the specification. 3. The
+no-code test of 13.6 stage 2, then the keys `pullback` and `anchors` (default-off; rounds 1–7
+byte-identical) with parallax by depth as a knob. 4. The correspondence (13.4 item 2) for the match
+the transformation needs. 5. The planner's first planned render on a held-out pair (13.6), at most
+two concepts, by the session's model unless the owner has said yes to the egress. 6. FLUX.3 klein on
+the box after the terms and a container re-pull; the 512² smoke test; one side-by-side.
+Reversibility: every item is a research script or a default-off key; nothing in either tool.
