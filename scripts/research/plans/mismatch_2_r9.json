@@ -1,0 +1,33 @@
+{
+ "pair": "mismatch_2",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-17, round 9)", "temperature": 0, "prompt_sha256": "e1b01825cb9825291a78bbdc740c91f414afbbacf84659bc4824c8623b942fcf", "date": "2026-10-17", "brief": "owner grades of 2026-10-17 18:48 UTC"},
+ "reading": {
+  "a": "A man in a bright yellow jacket (person 3, box [103, 0, 540, 799]) peeks out from behind a tree trunk at the left (tree 1, box [0, 0, 224, 799], the nearest element, disparity 0.90), against soft green and white bokeh.",
+  "b": "A café snapshot: the man nearest the camera stands at the left holding up a phone (person 10, box [0, 268, 432, 799]), a woman in green peeks out behind his raised hand (15), a woman in black smiles at the right (11), in front of a cream brick wall (building 2) and a monstera (3)."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "With no camera move, in this order: the bokeh turns toward the café's cream wall and greenery (t 0-0.55), the tree trunk slides out of the frame to the left and fades (t 0.05-0.45), the yellow man turns from his own upright axis to the leaning axis of the man at the left and gradually becomes him, moving down and left onto his place (t 0.15-0.85), and the café takes over brightest-first, the wall and the faces before the dark clothes, so the transformed man is the last part of A to give way (t 0.65-1.0).",
+   "container": {"in": "B", "kind": "none", "spec": {}, "rim": "soft"},
+   "anchors": [
+    {"a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [10]}, "how": "The owner's pairing: the yellow man (centre (318, 432), area 0.49 of the canvas) goes to the person nearest the camera (centre (182, 569), area 0.31); the principal axes of the two masks differ by roughly 14 degrees (10.8 and 24.6 degrees from vertical, sign convention unchecked)."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "off"}, "params": {}},
+   "transforms": [
+    {"name": "tree_goes_away", "a": {"kind": "element", "ids": [1]}, "b": null, "by": "exit", "window": [0.05, 0.45], "mix": "none", "params": {"direction": "left", "fade": 0.3}, "note": "Beat 1, the owner's 'the tree from frame A go away': the nearest layer of A leaves first, opening the left side for the man to move into. It has no target in B (b null); the trunk sits on the left edge, so it leaves past it."},
+    {"name": "man_becomes_nearest_person", "a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [10]}, "by": "morph_to", "window": [0.15, 0.85], "mix": "edge", "params": {"map": "box", "rotate": true, "mass": "bright", "ot_weight": 0.5}, "note": "Beat 2, the owner's 'yellow man to rotate and gradually transform into closest to camera person from frame B': the box map moves him down-left onto person 10, rotate turns his axis to the target's, and the optimal transport at half weight moves the jacket's mass onto the man's arm, face and shirt without tearing the silhouette."},
+    {"name": "bokeh_to_cafe", "a": {"kind": "element", "ids": [2, 4, 5, 6, 7]}, "b": {"kind": "element", "ids": [2, 3]}, "by": "colour", "window": [0.0, 0.55], "mix": "none", "params": {}, "note": "Beat 3: the green and white bokeh takes the cream wall's and the monstera's colours, so the background is already the café's palette when the finish starts."}
+   ],
+   "end_effect": {"kind": "b_luma_reveal", "window": [0.65, 1.0], "params": {"band": 0.4}},
+   "helper": null,
+   "knobs": [
+    {"name": "man_becomes_nearest_person.params.ot_weight", "range": [0.2, 0.9], "default": 0.5, "what": "How far the optimal transport reshapes the man beyond the box map and the rotation; low keeps his silhouette, high moves more of his mass onto the target's shape."},
+    {"name": "tree_goes_away.window[1]", "range": [0.3, 0.6], "default": 0.45, "what": "When the trunk is gone; it should end before the man has moved halfway."},
+    {"name": "end_effect.window[0]", "range": [0.55, 0.8], "default": 0.65, "what": "When the café starts to take over; earlier shortens the time the morphed man is seen in B's place."}
+   ],
+   "risk": "F2 decoration: with no container and no camera move, the clip is the morph alone; if the morph reads as a yellow blob sliding over B it is the 'really weird' of round 8. Person 10's mask is only 1.23 times longer than wide, so its principal axis is weak and the rotation can pick a wrong angle; check the angle the renderer prints before judging. F1 double exposure: the man's face (A) and person 10's face (B) overlap near the end; the B-ordered finish brings the bright face in early, so watch t 0.65-0.8 for two faces. F3 invention: what lies behind the departing trunk and behind the moving man must be B's pixels, never filled; A is a widely shared meme of a real person, and no part of his face may be warped into another person's face, so the face region should ride the box map and give way by the reveal."
+  }
+ ]
+}

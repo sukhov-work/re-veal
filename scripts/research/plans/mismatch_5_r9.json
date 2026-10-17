@@ -1,0 +1,37 @@
+{
+ "pair": "mismatch_5",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-17, round 9)", "temperature": 0, "prompt_sha256": "e1b01825cb9825291a78bbdc740c91f414afbbacf84659bc4824c8623b942fcf", "date": "2026-10-17", "brief": "owner grades of 2026-10-17 18:48 UTC"},
+ "reading": {
+  "a": "A large orange sun sits behind a two-level road bridge at dusk: a thin dark powerline crosses the sky and the sun about 100 px above the deck (rows 149-175, falling slightly to the right), the dark deck band spans rows 250-370, the dark truss under it rows 385-586, and an orange reflection column lies on dark water.",
+  "b": "The Andromeda galaxy: an orange core at (960, 521) in a disk tilted down to the right, a dark dust lane below-left of the core, a star field, and one straight satellite streak at about -19 degrees passing 60 px below the core."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "The camera pulls back as in round 8 while, in this order, the red sky darkens and the brightest stars come through it first (from t 0.08), the powerline swings 19 degrees and stretches into the satellite streak (t 0.12-0.70), the sun falls away into the core (t 0.15-0.90), the whole bridge, deck and truss together, folds into the galaxy's dusty arm (t 0.20-0.85), the sky's background gives way to space in a slow wide crossfade (t 0.25-0.92), and the core takes over the last of the sun brightest-first (t 0.72-1.0).",
+   "container": {"in": "B", "kind": "disc", "spec": {"center": [960, 521], "radius": 110}, "rim": "soft",
+    "params": {"sky": {"stars": true, "star_window": [0.08, 0.7], "key_window": [0.25, 0.92], "key_band": 0.35}}},
+   "anchors": [
+    {"a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "how": "Unchanged from round 8: the sun's fitted centre (about (994, 102), radius about 275 px) lands on the measured core centre; at end_scale 0.4 the sun is 110 px, the glow's half-maximum radius."},
+    {"a": {"kind": "dark_line", "rows": [140, 185], "thickness": 7}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "how": "The powerline is the one thin dark straight line of A (measured on the centred crop: row 149 at x 0-160, row 165 at x 960-1120, row 175 at x 1760-1919, 4-16 levels darker than the 25-row mean around it); the streak is the one thin bright straight line of B; both run across the whole frame above the bridge or the disk."},
+    {"a": {"kind": "element", "ids": [16, 29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "how": "Deck and truss together are the bridge's dark mass under the sun; the dust lane is the darkest wide band under the core; dark mass goes to dark mass."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.35, "gain_A": 0.35}, "params": {"end_scale": 0.4}},
+   "transforms": [
+    {"name": "sky_colour_leads", "a": {"kind": "element", "ids": [1, 5, 10, 12, 36]}, "b": {"kind": "element", "ids": [1]}, "by": "colour", "window": [0.0, 0.5], "mix": "none", "params": {}, "note": "Not a beat of its own: the lead of the sky beat. The red sky and the water darken toward space's near-black before the sky key starts at t 0.25, so the key crosses two dark fields and leaves no luma border (owner: 'hard halo and luma borders around sun')."},
+    {"name": "sun_recedes", "a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "by": "recede", "window": [0.15, 0.9], "mix": "luma", "params": {"end_radius": 25, "soften": 0.6}, "note": "Beat 1, unchanged from round 8: the sun falls away until it is the 25 px core."},
+    {"name": "wire_to_streak", "a": {"kind": "dark_line", "rows": [140, 185], "thickness": 7}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "by": "line_to", "window": [0.12, 0.7], "mix": "edge", "params": {"width": 3}, "note": "Beat 2, the owner's idea: 'barely visible thin powerline which goes above the bridge transformed into that diagonal streak across galaxy'. The wire rotates about the core by -19 degrees and stretches across B; B's bright streak is revealed inside the moving band. The window is round 8's deck_to_streak window as the operator set it ([0.12, 0.75]), ended at 0.70 so the streak is in place before the sky key is half done."},
+    {"name": "bridge_to_arm", "a": {"kind": "element", "ids": [16, 29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "by": "morph_to", "window": [0.2, 0.85], "mix": "edge", "params": {"map": "box", "rotate": true, "mass": "dark"}, "note": "Beat 3: round 8's truss_to_dust_lane ('bridge trasforms into arm , nice') with the deck added to the same a-mask, so the whole bridge becomes the arm and no second dark bar is left to become the streak. rotate true is the schema's axis map, the same mapping as the operator's map=axis of round 8."}
+   ],
+   "end_effect": {"kind": "b_luma_reveal", "window": [0.72, 1.0], "params": {"band": 0.45}},
+   "helper": null,
+   "knobs": [
+    {"name": "container.params.sky.key_band", "range": [0.2, 0.6], "default": 0.35, "what": "How wide the luma band of the sky's crossfade is; round 8's key used 0.10 over the first 45 % of the clip, which the owner saw as an iris wipe."},
+    {"name": "container.params.sky.star_window[0]", "range": [0.0, 0.3], "default": 0.08, "what": "When the brightest stars start to come through A's sky; it should stay ahead of key_window[0]."},
+    {"name": "sun_recedes.params.soften", "range": [0.6, 1.0], "default": 0.6, "what": "How soft the sun's limb gets; raise it only if the halo is still hard after the sky key and the B-ordered finish."}
+   ],
+   "risk": "F1 double exposure: the powerline crosses the sun disc (x about 800-1190), so the wire's pixels there belong to both the recede layer and the line_to band; if both carry them, a dark chord stays on the sun while a second line swings away. The b_luma_reveal starts at the core, where the receded sun sits, so the sun and B's core must not both show at full strength around t 0.75-0.85. F2 decoration: the wire is 2-4 px; if dark_line's 7-row band, being horizontal, misses its ends (the wire falls 26 px across the frame), the streak starts from a fragment and reads as drawn on. F3 invention: none expected; every star is B's."
+  }
+ ]
+}

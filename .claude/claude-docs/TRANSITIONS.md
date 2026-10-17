@@ -3005,3 +3005,105 @@ by eye on the page. Not run: `--flow-shift 16`, a second reference, the prompt u
 resident `llama-server` processes restarted at 18:00 and 18:12 BST while no job of the track ran
 (a `llama-swap` model swap is likely; its log was not read). The weights on the Mac (31 GB) sit in
 the session scratchpad and are not needed again.
+
+### 13.13 The owner's grades on the director's page (2026-10-17 18:48 UTC, verbatim in the director sheet) and what round 9 builds from them
+
+Best: mismatch_5 c1 ("looks promising"), mismatch_3 c1 ("Like this one, almost acceptable"),
+mismatch_2 none. Nothing acceptable as-is. Reading, pair by pair:
+- mismatch_5: the camera and the transformations "look better", "bridge trasforms into arm , nice".
+  Three asks: the sun's "hard halo and luma borders" when it enters the galaxy; the galaxy "appears
+  too quickly and simply ( iris wipe )": he wants "brightest stars to appear first and then nice
+  gradual luma cross fade" while the sun and bridge transform; and the "barely visible thin
+  powerline which goes above the bridge" should become the diagonal streak (the deck then joins the
+  truss into the arm).
+- mismatch_3: "camera move, transition of foreground of B into frame and transformation of A is
+  really cool"; the fault is the end: A "remains 2d plane till the end and then just dissolves"; he
+  expects it "to subtly tranform into trees etc in window pane of B". c1-full is the counter-example
+  he names: "transformations for the sake of transformations, no continuity , no story , no sense";
+  c2 "crossfade hidden behind zoom in of frame B".
+- mismatch_2: both concepts "really weird"; the phone "makes zero sense"; his own concept: "yellow
+  man to rotate and gradually transform into closest to camera person from frame B and the tree from
+  frame A go away".
+Rules from it: fewer transforms with a story beat each, never a shuffle of layers; the end of a
+nested clip must be a transformation of the pane's content, not a reveal; B's brightest points
+come first and the background last when a sky gives way to a sky.
+
+### 13.14 Round 9: the three asks rendered (2026-10-17 evening, after his grades; plans `scripts/research/plans/mismatch_{5,3,2}_r9.json`, page `benchmarks/runs/2026-10-17/director_r9/index.html`, UNGRADED)
+
+What the renderer gained, one element per named fault (schema v1 "Additions of round 9"):
+`container.params.sky` for a soft rim: B's bright points (a top-hat of its luminance, ordered by
+brightness) come through A's sky first over `star_window`, A's sky background gives way to B's
+dark-first over `key_window` with a wide `key_band` (a slow luma crossfade), and the edge of A's frame
+is feathered inward by a width of min(0.35, 4 e) of the short side, so the carried frame never
+shows as a rectangle while the key is slow; the end effect `b_luma_reveal` (B's brightest first
+inside the container, band 0.4–0.5); the a-kind `dark_line` (the row inside a range with the most
+pixels darker than the rows beside it, the band grown to the neighbouring rows that also score, so a
+wire that falls 26 px across the frame is caught, its dark pixels only); the transform `exit` (a
+layer leaves the frame in a direction and fades); `gain_A` (the depth gain inside A, separate from
+B's); `morph_to` `rotate` (the axis map's turn with the box map's placement). Two fixes under them:
+A's composite is premultiplied (a layer over a covered region no longer mixes with the base's hidden
+pixels: the receding sun's rim had drawn a dark ring from A's limb), and the dark-line layers take
+their pixels before any other layer (the wire's chord across the sun belongs to the wire).
+
+The plans (the planner re-run with his notes as the brief; its notes in
+`benchmarks/runs/2026-10-17/agents/planner_r9.md`): mismatch_5 — the sky darkens and the brightest
+stars come first, the wire swings into the streak, the sun recedes, deck and truss together fold
+into the arm, the sky background crossfades slowly, the core takes the last of the sun brightest
+first; mismatch_3 — the quad, the entry and the wheels unchanged, the crowd moves against its wall
+by depth, the brick greens toward the foliage early, the pane becomes B's view brightest first over
+the last 45 %; mismatch_2 — no camera, the tree exits left, the yellow man turns to the nearest
+man's axis and morphs onto him, the bokeh takes the café's colours, the café takes over brightest
+first. The planner kept the colour path on mismatch_5 as a fourth entry that adds no motion.
+
+Operator's knobs on the renders: mismatch_5 `parallax_sources=["A"]`, `bridge_to_arm.feather=6`,
+`bridge_to_arm.mix_window=[0.15,0.85]`, `wire_to_streak.stretch=2.6`,
+`sun_recedes.mix_window=[0.2,0.95]`; mismatch_3 `front_margin=0.3`; mismatch_2
+`man_becomes_nearest_person.mix=luma`, `man_becomes_nearest_person.ot_weight=0.35`. The full-size
+numbers are in the table below.
+
+The renders (full size, 3 s at 30 fps):
+
+| Clip | Steps first / second / last, peak | Render | md5 |
+|---|---|---|---|
+| mismatch_5_r9 c1 | 0.33 / 0.03 / 0.18, 4.94 | 32 s | 27175af2… |
+| mismatch_3_r9 c1 | 0.69 / 0.70 / 0.04, 25.8 | 37 s | b40e9836… |
+| mismatch_2_r9 c1 | 0.37 / 0.04 / 0.00, 13.4 | 6 s | 34ea1312… |
+
+The wire on mismatch_5 was found at row 639 of the anchored canvas (the search rows 612–657, 4,412
+dark pixels in the band, 17.9 % of the best row's pixels darker than the rows beside it). Every
+first and last interior step is under the 1-level bar.
+
+After the skeptic's pass on round 9 (`benchmarks/runs/2026-10-17/agents/skeptic_r9.md`, on the
+first full-size render): mismatch_5 was worse than round 8 in three places and all three were
+renderer faults, fixed before the page: a second sun disc (the rim mixed into the core's glow from
+0.2 of the recede; now from 0.45, and the limb is flattened toward the disc's inner colour over its
+outer 20 % before it fades), red vertical streaks above the lamp posts (the depth map stretched the
+sky around thin near objects; the gain inside A is 0.15 and the map is blurred at σ 20), the bridge
+turning into a pale slab (the bands showed the glow under them on their way; the mix now starts at
+0.5 of their travel and their ends taper over 8 % of the width), and the wire showing the glow
+instead of the streak (a `line_to` layer now carries B's pixels from its END position with it, M(1)⁻¹
+applied to B_inA, so the mix shows the streak's own pixels). mismatch_2's black void came from a
+morph layer's working frame beyond the canvas (black border); the frame's edge is replicated now.
+mismatch_3 is rated the same as round 8 up to its end, and its end a brightness-keyed crossfade;
+the pane's left edge gained a 14 px soft rim. Not fixed and named on the page: a thin outline at
+the sun's rim for half a second; the bridge as two soft bands; the lamp posts keyed with the sky;
+the café man's head on the other man's body for about 0.15 s (a morph between two people, T39);
+the window pane's finish a dissolve ordered by B's brightness (a real transformation of the wall
+into trees needs a correspondence, T34). The re-render was not read by the skeptic again. Its
+table follows.
+
+The final round-9 renders (full size, 3 s at 30 fps; page md5 71fe5a66…):
+
+| Clip | Steps first / second / last, peak | Render | md5 |
+|---|---|---|---|
+| mismatch_5_r9 c1 | 0.57 / 0.03 / 0.03, 5.09 | 31 s | f621c9be… |
+| mismatch_3_r9 c1 | 0.83 / 0.68 / 0.03, 25.7 | 37 s | 89f65354… |
+| mismatch_2_r9 c1 | 0.36 / 0.04 / 0.00, 14.7 | 6 s | 7253f581… |
+
+Operator's knobs on the final renders: mismatch_5 `parallax_sources=["A"]`, `parallax_gain_A=0.15`,
+`parallax_blur=20`, `bridge_to_arm.feather=14`, `bridge_to_arm.mix_window=[0.5,0.95]`,
+`bridge_to_arm.end_taper=0.08`, `wire_to_streak.stretch=2.6`, `wire_to_streak.end_taper=0.02`,
+`wire_to_streak.mix_window=[0.3,0.85]`, `sun_recedes.mix_window=[0.45,0.95]`, the sky block with
+`key_window` [0.2, 0.8]; mismatch_3 `front_margin=0.3`, `cont_feather=14`; mismatch_2
+`man_becomes_nearest_person.mix=luma`, `ot_weight=0.35`, `mix_window=[0.55,0.9]`. Every first and
+last interior step is under the 1-level bar.

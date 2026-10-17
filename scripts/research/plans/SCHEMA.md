@@ -62,3 +62,27 @@ A's brightness (`luma_reveal`, bright first) or from the rim inward (`edge_revea
 Rules the renderer enforces: frame 0 is A and the last frame is B, byte-exact; every pixel comes
 from A or B (A re-coloured where a `colour` transform says so); nothing is generated unless
 `helper` names a model, a prompt and a region (not built in this round); the renderer is offline.
+
+## Additions of round 9 (2026-10-17 evening, from the owner's grades on the director's page)
+
+- End effect `b_luma_reveal` {"window", "params": {"band": 0.4}}: inside the container, B replaces
+  what remains of A in the order of B's own brightness (the brightest leaves, lights or stars first,
+  the dark background last) over a wide band, so the pane's content turns into B's content where B
+  is bright and keeps A's darkest parts longest.
+- A soft rim's sky (`container.params.sky`): {"stars": true, "star_window": [0.1, 0.9],
+  "key_window": [0.2, 0.85], "key_band": 0.3}: B's bright points (its stars, by a top-hat of its
+  luminance) come through A's sky in B's brightness order over `star_window` while A's sky background
+  gives way to B's background dark-first over `key_window` with the wide `key_band` (a slow luma
+  crossfade, not an iris); the colour path should lead it (`colour` with an early window).
+- Anchor and transform a-kind `dark_line` {"rows": [y0, y1], "thickness": 7}: the darkest thin
+  horizontal line inside the row range (a wire, a cable), a band of `thickness` rows around it
+  carrying its dark pixels only; use it with `line_to`.
+- Transform `exit` {"params": {"direction": "left | right | up | down", "fade": 0.3}}: a layer leaves
+  the frame in that direction over its window and fades over the last `fade` of it (a tree that
+  "goes away").
+- `pullback.parallax.gain_A`: the depth gain inside A (default = `gain`); a larger value makes A's
+  near layers (a crowd) move against its far ones (a wall) during the pull-back.
+- `morph_to` `params.rotate`: true turns the layer from its own axis to the target's axis (the axis
+  map) even when `map` is "box"; `params.ot_weight` 0–1 scales the optimal-transport residual.
+- Story rule (owner, 2026-10-17): at most three transforms per concept, each a beat he can name; no
+  shuffle of layers.

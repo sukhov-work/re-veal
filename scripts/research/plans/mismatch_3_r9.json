@@ -1,0 +1,34 @@
+{
+ "pair": "mismatch_3",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-17, round 9)", "temperature": 0, "prompt_sha256": "e1b01825cb9825291a78bbdc740c91f414afbbacf84659bc4824c8623b942fcf", "date": "2026-10-17", "brief": "owner grades of 2026-10-17 18:48 UTC"},
+ "reading": {
+  "a": "An evening crowd of about twenty people stands behind a chain-link fence in front of a white brick wall carrying an air-conditioner, two large wooden cart wheels, a Ukrainian flag and a painted green-hills mural.",
+  "b": "A daytime lounge under a hanging-stick ceiling: eight shirtless men on green sofas in front, two paintings on a dark wall at the left, and a glass wall at the right looking onto pine trunks, a building and green foliage."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "The camera pulls back out of the bar crowd until it stands outside the lounge's glass wall, with B's ceiling, dark wall and seated men entering over it as in round 8, and in this order: the crowd separates in depth from its brick wall as the camera moves (t 0-0.9), the white brick greens toward the foliage behind the glass (t 0.2-0.7), the cart wheels stretch into the pine trunks (t 0.4-0.8), and the pane turns into B's view brightest-first, the sky and the lit pines arriving before the shadows, until A's darkest parts give way last (t 0.55-1.0).",
+   "container": {"in": "B", "kind": "quad", "spec": {"points": [[585, 145], [1919, -152], [1919, 925], [585, 767]]}, "rim": "glass", "params": {"reflect": 0.18}},
+   "anchors": [
+    {"a": {"kind": "box", "box": [0, 0, 1919, 1439]}, "b": {"kind": "box", "box": [585, -152, 1919, 925]}, "how": "Unchanged from round 8 c1: A's whole frame goes onto the quad in the glass wall's plane, scaled 1.5x about the glass midline so A keeps 85 % of its 4:3 aspect and every edge of A lies behind a B occluder."},
+    {"a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [7, 8]}, "how": "The wheels (A element 3, as the operator set a_elements in round 8) land in the clear glass beside the pine trunks 7 and 8; dark spokes to dark trunks."},
+    {"a": {"kind": "element", "ids": [2]}, "b": {"kind": "element", "ids": [10]}, "how": "The brick wall is A's largest background; tree 10 (box [606, 165, 1303, 641], mean L 67, a -6.6, b 26) is the largest foliage mass behind the glass."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.4, "gain_A": 0.8}, "params": {}},
+   "transforms": [
+    {"name": "brick_to_foliage", "a": {"kind": "element", "ids": [2]}, "b": {"kind": "element", "ids": [10]}, "by": "colour", "window": [0.2, 0.7], "mix": "none", "params": {}, "note": "Beat 2: the white brick takes the greens of the foliage before the finish starts, so by t 0.55 the wall already looks like the trees it turns into (owner: 'i would expect it to subtly tranform into trees etc in window pane of B'). Round 8 coloured toward the whole window (element 3) over [0.3, 0.9]; the target is now the foliage and the window ends before the reveal's middle."},
+    {"name": "wheels_to_trunks", "a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [7, 8]}, "by": "morph_to", "window": [0.4, 0.8], "mix": "edge", "params": {"map": "box", "mass": "dark"}, "note": "Beat 3, kept from the rendered round-8 c1 (the 'transformation of A is really cool here'): the spokes stretch into the trunks."}
+   ],
+   "end_effect": {"kind": "b_luma_reveal", "window": [0.55, 1.0], "params": {"band": 0.5}},
+   "helper": null,
+   "knobs": [
+    {"name": "pullback.parallax.gain_A", "range": [0.4, 1.0], "default": 0.8, "what": "How far A's crowd moves against its brick wall during the pull-back; the owner's 'it remains 2d plane till the end' asks for more than round 8's single gain of 0.4."},
+    {"name": "end_effect.params.band", "range": [0.3, 0.7], "default": 0.5, "what": "How wide the B-brightness band of the finish is; wider is a slower, softer turn of the pane into B's view."},
+    {"name": "end_effect.window[0]", "range": [0.45, 0.7], "default": 0.55, "what": "When the pane starts to become B's view; earlier overlaps more of the wheels' morph."}
+   ],
+   "risk": "F1 double exposure: over a 45 % window with a wide band, A's dark crowd and B's dark sofa backs and trunks can sit at partial strength together and read as the dissolve the owner named ('cheaply dissolves'); watch t 0.75-0.9. F3 invention: gain_A 0.8 moves A's crowd against its wall and opens gaps at the crowd's edges; they must be filled from A's own pixels (stretch) or kept small, never painted. F2 decoration: if gain_A tears the crowd's outline, A reads as cut-out layers, the 'layers shuffle' of c1-full."
+  }
+ ]
+}

@@ -163,7 +163,7 @@ def element_mask_pred(photo, pred, shift=(0, 0), shape=None):
 
 
 # ----------------------------------------------------------------------------- sampling
-def sample_full(img_full, k, M3_img_to_frame, W, H, border=0, mask=None):
+def sample_full(img_full, k, M3_img_to_frame, W, H, border=0, mask=None, replicate=False):
     """Sample a full-resolution image (its canvas px = full px / k) into the frame through the 3x3
     map M (image canvas -> frame). Minification goes through a pre-resize with INTER_AREA; a
     perspective map uses warpPerspective. mask: optional (H, W) 0-1 to sample along (returns both)."""
@@ -177,9 +177,10 @@ def sample_full(img_full, k, M3_img_to_frame, W, H, border=0, mask=None):
     else:
         M = M @ np.diag([1.0 / k, 1.0 / k, 1.0])
     persp = abs(M[2, 0]) > 1e-12 or abs(M[2, 1]) > 1e-12 or abs(M[2, 2] - 1) > 1e-9
+    bm = cv2.BORDER_REPLICATE if replicate else cv2.BORDER_CONSTANT
     if persp:
-        return cv2.warpPerspective(src, M, (W, H), flags=cv2.INTER_LINEAR, borderValue=border)
-    return cv2.warpAffine(src, M[:2].astype(np.float32), (W, H), flags=cv2.INTER_LINEAR, borderValue=border)
+        return cv2.warpPerspective(src, M, (W, H), flags=cv2.INTER_LINEAR, borderMode=bm, borderValue=border)
+    return cv2.warpAffine(src, M[:2].astype(np.float32), (W, H), flags=cv2.INTER_LINEAR, borderMode=bm, borderValue=border)
 
 
 def quad_distance(quad, X, Y):
@@ -290,6 +291,8 @@ class Scene:
         self.ls_scale = W / self.lsW
         self.info = {"canvas": [W, H], "ls_canvas": [self.lsW, self.lsH], "pair": pair, "concept": concept["id"]}
         self.LB = lum(self.B)
+        self.orderB = luma_order(self.B)
+        self.sky = {}
         self.anchors = {}
         self.A = None; self.shiftA = (0, 0)
 
@@ -355,6 +358,30 @@ class Scene:
             return (xx - c[0]) ** 2 + (yy - c[1]) ** 2 <= r * r
         if k == "all":
             return np.ones((H, W), bool)
+        if k == "dark_line":
+            y0 = int(round(spec["rows"][0] * self.ls_scale + self.shiftA[1])); y1 = int(round(spec["rows"][1] * self.ls_scale + self.shiftA[1]))
+            y0, y1 = max(0, y0), min(H, y1)
+            # the row with the most pixels darker than the rows beside it (a thin wire is not the darkest row by
+            # its median: the deck is)
+            best, yl = -1.0, y0
+            for y in range(max(12, y0), min(H - 12, y1)):
+                ref_ = np.median(np.concatenate([self.LA[y - 10:y - 4], self.LA[y + 4:y + 10]], 0), axis=0)
+                sc_ = float(((ref_ - self.LA[y]) > float(spec.get("contrast", 8.0))).mean())
+                if sc_ > best:
+                    best, yl = sc_, y
+            t = int(spec.get("thickness", 7)); a, b = max(0, yl - t // 2), min(H, yl + t // 2 + 1)
+            scores = {}
+            for y in range(max(12, yl - 40), min(H - 12, yl + 41)):
+                ref_ = np.median(np.concatenate([self.LA[y - 10:y - 4], self.LA[y + 4:y + 10]], 0), axis=0)
+                scores[y] = float(((ref_ - self.LA[y]) > float(spec.get("contrast", 8.0))).mean())
+            good = [y for y, v in scores.items() if v > 0.35 * best]
+            a, b = min(a, min(good)), max(b, max(good) + 1)
+            band = np.zeros((H, W), bool); band[a:b] = True
+            above = self.LA[max(0, a - 12):max(1, a - 4)]; below = self.LA[min(H - 1, b + 4):min(H, b + 12)]
+            ref = np.median(np.concatenate([above, below], 0), axis=0)[None, :] if (len(above) + len(below)) else np.median(self.LA, axis=1)[:, None]
+            m = band & (self.LA < ref - float(spec.get("contrast", 8.0)))
+            self.info.setdefault("dark_lines", []).append({"row": int(yl), "rows_searched": [y0, y1], "pixels": int(m.sum()), "share_darker": round(best, 3)})
+            return m
         if k == "luma_above":
             return lum(self.A) >= float(spec["min_L"])
         raise ValueError(f"A mask kind {k}")
@@ -466,8 +493,10 @@ class Scene:
         if pl.get("kind") == "depth" and float(pl.get("gain", 0)) > 0:
             srcs = self.knobs.get("parallax_sources", pl.get("sources", ["A", "B"]))
             g = float(self.knobs.get("parallax_gain", pl.get("gain", 0.3)))
-            dB = cv2.GaussianBlur(T.model_disparity(self.B), (0, 0), 6.0) if "B" in srcs else None
-            dA = cv2.GaussianBlur(T.model_disparity(self.A), (0, 0), 6.0) if "A" in srcs else None
+            gA = float(self.knobs.get("parallax_gain_A", pl.get("gain_A", g)))
+            blur_d = float(self.knobs.get("parallax_blur", pl.get("blur", 6.0)))
+            dB = cv2.GaussianBlur(T.model_disparity(self.B), (0, 0), blur_d) if "B" in srcs else None
+            dA = cv2.GaussianBlur(T.model_disparity(self.A), (0, 0), blur_d) if "A" in srcs else None
             # the reference disparity: the container's (far plane) on B; the a-anchor's on A
             if dB is not None:
                 if hasattr(self, "cont_matte"):
@@ -488,7 +517,7 @@ class Scene:
                 dA_ref = 0.0
             # A's disparity expressed on the plate (for the per-frame map of A)
             push = float(self.knobs.get("parallax_push", pl.get("push", 2.5 if self.cont["kind"] in ("quad", "rect") else 0.0)))
-            self.parallax = {"gain": g, "dB": dB, "dB_ref": dB_ref, "dA": dA, "dA_ref": dA_ref, "push": push,
+            self.parallax = {"gain": g, "gain_A": gA, "dB": dB, "dB_ref": dB_ref, "dA": dA, "dA_ref": dA_ref, "push": push,
                              "push_floor": float(self.knobs.get("push_floor", pl.get("push_floor", 0.3))),
                              "front_in": float(self.knobs.get("front_in", pl.get("front_in", 0.15)))}
             if dB is not None and self.cont["kind"] in ("quad", "rect"):
@@ -586,7 +615,11 @@ class Scene:
         self.unplaced = []
         covered = np.zeros((H, W), bool)
         Si = np.linalg.inv(self.S_A3)
-        for tr in c.get("transforms", []):
+        trs = c.get("transforms", [])
+        order = sorted(range(len(trs)), key=lambda i: 0 if trs[i].get("a", {}).get("kind") == "dark_line" else 1)
+        built = {}
+        for i_tr in order:
+            tr = trs[i_tr]
             by = tr["by"]
             lay = {"name": tr["name"], "by": by, "window": tr.get("window", [0, 1]), "mix": tr.get("mix", "luma"), "params": dict(tr.get("params", {})), "depth": tr.get("depth", "inside")}
             for k, v in self.knobs.items():
@@ -594,6 +627,8 @@ class Scene:
                     key = k.split(".", 1)[1]
                     if key == "window":
                         lay["window"] = list(v)
+                    elif key == "mix":
+                        lay["mix"] = v
                     else:
                         lay["params"][key] = v
             p = lay["params"]
@@ -603,7 +638,7 @@ class Scene:
             if by == "colour":
                 lay["maskA"] = self.mask_A(tr["a"]); lay["maskB"] = self.mask_B(tr["b"])
                 lay["weight"] = p.get("weight", "dark" if (c.get("container") or {}).get("kind") == "disc" else None)
-                self.layers.append(lay); continue
+                built[i_tr] = lay; continue
             if "a_group" in p or "a_elements" in p:
                 ids = p.get("a_elements") or [e_["id"] for e_ in layer_table(self.photoA)["elements"] if e_["group"] == p["a_group"]]
                 mA = self.mask_A({"kind": "element", "ids": ids})
@@ -624,7 +659,7 @@ class Scene:
                 continue
             if by == "hold":
                 lay["alpha"] = feather(mA.astype(np.float32), float(p.get("feather", 2.0)))
-                self.layers.append(lay); continue
+                built[i_tr] = lay; continue
             if by == "recede":
                 ca, ra = self.anchors[tr["a"].get("anchor", "a0")]
                 cb, rb = self.anchors["b0"]
@@ -635,11 +670,14 @@ class Scene:
                 yy, xx = np.mgrid[0:H, 0:W]
                 rr0 = np.hypot(xx - ca[0], yy - ca[1]) / max(1.0, ra)
                 lay["rr0"] = rr0.astype(np.float32); lay["disc_f"] = disc.astype(np.float32)
+                inner = disc & (rr0 < 0.7)
+                mean_in = self.A_f[inner].mean(0) if inner.any() else self.A_f[disc].mean(0)
+                wflat = np.clip((rr0 - float(p.get("limb_flatten", 0.8))) / max(1e-3, 1.0 - float(p.get("limb_flatten", 0.8))), 0, 1)[..., None] * disc[..., None]
+                lay["content"] = (self.A_f * (1 - wflat) + mean_in[None, None, :] * wflat).astype(np.float32)
                 lay["rim_in"], lay["rim_out"] = float(p.get("rim_in", 0.9)), float(p.get("rim_out", 1.0))
                 lay["alpha0"] = feather(disc.astype(np.float32), 1.0)
-                lay["content"] = self.A_f
                 covered |= disc
-                self.layers.append(lay); continue
+                built[i_tr] = lay; continue
             if by == "line_to":
                 ca, _ = self.anchors[tr["a"].get("anchor", "a0")]
                 mB = self.mask_B(tr["b"])
@@ -665,9 +703,16 @@ class Scene:
                 taper = np.clip(np.minimum(xs_, 1 - xs_) / float(p.get("end_taper", 0.12)), 0, 1)[None, :]
                 lay["alpha0"] = lay["alpha0"] * taper
                 lay["content"] = self.A_f
-                lay["targetB"] = self.B_inA
+                # B's pixels at the band's end position, in the band's own frame: M(1)^-1 applied to B_inA
+                th1 = float(ang); off1 = off_end; sy1 = max(1e-3, lay["width_end"] / thick); sx1 = lay["stretch"]
+                Tm1 = np.array([[1, 0, 0], [0, 1, -yc], [0, 0, 1]], np.float64); S1 = np.diag([sx1, sy1, 1.0])
+                Tx1 = np.array([[1, 0, -ca[0]], [0, 1, 0], [0, 0, 1]], np.float64)
+                R1 = np.array([[math.cos(th1), -math.sin(th1), 0], [math.sin(th1), math.cos(th1), 0], [0, 0, 1]], np.float64)
+                Tp1 = np.array([[1, 0, ca[0]], [0, 1, ca[1]], [0, 0, 1]], np.float64); Off1 = np.array([[1, 0, 0], [0, 1, off1], [0, 0, 1]], np.float64)
+                M1 = Tp1 @ R1 @ Off1 @ S1 @ Tx1 @ Tm1
+                lay["targetB"] = cv2.warpAffine(self.B_inA, np.linalg.inv(M1)[:2].astype(np.float32), (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
                 covered |= mA
-                self.layers.append(lay); continue
+                built[i_tr] = lay; continue
             if by in ("morph_to", "move_to"):
                 mB = self.mask_B(tr["b"])
                 lumA_n = self.LA / 255.0
@@ -693,18 +738,18 @@ class Scene:
                 lw, lh = max(8, int(round(ew * wl))), max(8, int(round(eh * wl)))
                 # the layer's working frame: A canvas -> work: translate by -ext, scale by wl
                 Tw = np.array([[wl, 0, -ext[0] * wl], [0, wl, -ext[1] * wl], [0, 0, 1]], np.float64)
-                contentA = cv2.warpAffine(self.A_f, Tw[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_AREA if wl < 1 else cv2.INTER_LINEAR, borderValue=0)
+                contentA = cv2.warpAffine(self.A_f, Tw[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_AREA if wl < 1 else cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
                 alphaA = cv2.warpAffine(mA.astype(np.float32), Tw[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0)
                 # B's content and the target mask in the working frame: B canvas -> A canvas (Si) -> work
                 MB = Tw @ Si
-                contentB = sample_full(self.B_src, self.kB, MB, lw, lh)
+                contentB = sample_full(self.B_src, self.kB, MB, lw, lh, replicate=True)
                 alphaB = cv2.warpPerspective(mB.astype(np.float32), MB, (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0) if abs(MB[2, 0]) + abs(MB[2, 1]) > 1e-12 else cv2.warpAffine(mB.astype(np.float32), MB[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0)
                 # the affine box -> box (a similarity on the boxes' centres and the geometric-mean size)
                 bxa = box_of_mask(alphaA > 0.5); bxb = box_of_mask(alphaB > 0.5)
                 ca_ = np.array([(bxa[0] + bxa[2]) / 2, (bxa[1] + bxa[3]) / 2]); cb_ = np.array([(bxb[0] + bxb[2]) / 2, (bxb[1] + bxb[3]) / 2])
                 sx = (bxb[2] - bxb[0]) / max(1, bxa[2] - bxa[0]); sy = (bxb[3] - bxb[1]) / max(1, bxa[3] - bxa[1])
                 yy, xx = np.mgrid[0:lh, 0:lw].astype(np.float32)
-                mapmode = p.get("map", "box")
+                mapmode = "axis" if p.get("rotate") else p.get("map", "box")
                 if mapmode == "axis":
                     def pca(a):
                         ys_, xs_ = np.nonzero(a > 0.5); pts = np.stack([xs_, ys_], 1).astype(np.float64); c = pts.mean(0)
@@ -744,6 +789,10 @@ class Scene:
                 fpx_l = float(p.get("feather", 0.0))
                 if fpx_l > 0:
                     alphaA = feather(alphaA, fpx_l); alphaB = feather(alphaB, fpx_l)
+                et_ = float(p.get("end_taper", 0.0))
+                if et_ > 0:
+                    xs_t = (np.arange(lw, dtype=np.float32) - (-ext[0] * wl)) / max(1.0, W * wl)   # A's canvas x in 0..1 inside the work frame
+                    alphaA = alphaA * np.clip(np.minimum(xs_t, 1 - xs_t) / et_, 0, 1)[None, :]
                 if by == "morph_to":
                     placed = LP.warp_along(mass_a, D_aff, 1.0, exact=True)
                     f_ab, f_ba, oti = LP.ot_fields(placed, mass_b, grid=int(p.get("ot_grid", 64)), eps=float(p.get("ot_eps", 0.04)))
@@ -766,8 +815,23 @@ class Scene:
                 lay["noise"] = (lay["noise"] - lay["noise"].min()) / max(1e-6, lay["noise"].max() - lay["noise"].min())
                 lay["alpha_native"] = feather(carried.astype(np.float32), 1.0)
                 covered |= carried
-                self.layers.append(lay); continue
+                built[i_tr] = lay; continue
+            if by == "exit":
+                direction = p.get("direction", "left"); fade = float(p.get("fade", 0.3))
+                ys, xs = np.nonzero(mA)
+                margin = 24
+                dx, dy = 0.0, 0.0
+                if direction == "left": dx = -(xs.max() + margin)
+                elif direction == "right": dx = (W - xs.min()) + margin
+                elif direction == "up": dy = -(ys.max() + margin)
+                else: dy = (H - ys.min()) + margin
+                lay.update(dx=float(dx), dy=float(dy), fade=fade)
+                lay["alpha0"] = feather(mA.astype(np.float32), float(p.get("feather", 1.5)))
+                lay["content"] = self.A_f
+                covered |= mA
+                built[i_tr] = lay; continue
             raise ValueError(f"transform kind {by}")
+        self.layers = [built[i] for i in range(len(trs)) if i in built]      # the plan's order for compositing
         self.covered = covered
         self.info["unplaced"] = self.unplaced
         # the rest of A: under a soft rim it is keyed by its luma (dark first) ahead of the camera;
@@ -775,14 +839,29 @@ class Scene:
         rest = ~covered
         if self.cont["kind"] == "disc":
             pr = self.c.get("params", {})
+            sky = self.knobs.get("sky", self.cont.get("params", {}).get("sky")) or {}
+            self.sky = sky
             lumr = cv2.GaussianBlur(self.LA, (0, 0), 4.0)
             lo, hi = np.percentile(lumr[rest], [1, 99]) if rest.any() else (0, 1)
             self.rest_order = np.clip((lumr - lo) / max(1.0, hi - lo), 0, 1).astype(np.float32)
+            yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+            self.dborder = np.minimum(np.minimum(xx, W - 1 - xx), np.minimum(yy, H - 1 - yy)).astype(np.float32)
+            self.rim_frac = float(sky.get("rim_frac", 0.35))
             self.rest_mask = rest
-            self.key_window = [float(pr.get("key_start", 0.0)), float(self.knobs.get("key_end", pr.get("key_end", 0.45)))]
-            self.key_band = float(pr.get("key_band", 0.10))
+            kw = sky.get("key_window", [float(pr.get("key_start", 0.0)), float(self.knobs.get("key_end", pr.get("key_end", 0.45)))])
+            self.key_window = [float(kw[0]), float(kw[1])]
+            self.key_band = float(sky.get("key_band", pr.get("key_band", 0.10)))
+            if sky.get("stars"):
+                # B's bright points by a top-hat of its luminance, ordered by brightness (1 = the brightest)
+                LBf = self.LB
+                th = LBf - cv2.morphologyEx(LBf, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15)))
+                th = np.clip(th, 0, None); hi_t = float(np.percentile(th, 99.9)) or 1.0
+                self.star_order = np.clip(th / hi_t, 0, 1).astype(np.float32)
+                self.star_window = [float(v) for v in sky.get("star_window", [0.1, 0.9])]
+                self.info["sky"] = {"stars": True, "star_window": self.star_window, "key_window": self.key_window, "key_band": self.key_band, "star_share": round(float((self.star_order > 0.2).mean()), 4)}
         else:
             self.rest_mask = rest
+            self.sky = {}
         self.info["layers"] = [{"name": l["name"], "by": l["by"], "window": l["window"], **({"ot": l["ot"]} if "ot" in l else {}), **({"axis": l["axis"]} if "axis" in l else {}), **({"depth": l["depth"], "target_inside_share": l.get("target_inside_share")} if l["by"] in ("morph_to", "move_to") else {}),
                                 **({"k_end": round(l["k_end"], 4)} if "k_end" in l else {}),
                                 **({"theta_deg": round(math.degrees(l["theta"]), 2), "off0": round(l["off0"], 1), "off1": round(l["off1"], 1), "thick0": l["thick0"], "width_end": round(l["width_end"], 2)} if "theta" in l else {}),
@@ -792,7 +871,7 @@ class Scene:
     def compose_A(self, u):
         H, W = self.A.shape[:2]
         rgb = self.A_f.copy()
-        # colour transforms first (they re-colour the base)
+        # colour transforms first (they re-colour the base); the layers then composite premultiplied
         for lay in self.layers:
             if lay["by"] == "colour":
                 e = ease01(u, *lay["window"])
@@ -808,9 +887,14 @@ class Scene:
             es = ease01(u, *self.key_window)
             key = -self.key_band + (1.0 + self.key_band) * es
             a_rest = np.clip((self.rest_order - key) / self.key_band, 0, 1)
+            e_cam = smootherstep(u)
+            if e_cam > 0 and hasattr(self, "dborder"):
+                wpx = min(self.rim_frac, 4.0 * e_cam) * min(H, W)
+                a_rest = a_rest * np.clip(self.dborder / max(1.0, wpx), 0, 1)
             alpha = np.where(self.rest_mask, a_rest, 0.0).astype(np.float32)
         else:
             alpha = self.rest_mask.astype(np.float32)
+        rgb = rgb * alpha[..., None]                      # premultiplied from here on; un-premultiplied at the end
         front_layers = []
         for lay in self.layers:
             by = lay["by"]
@@ -818,7 +902,9 @@ class Scene:
                 continue
             e = ease01(u, *lay["window"])
             if by == "hold":
-                alpha = np.maximum(alpha, lay["alpha"])
+                a = lay["alpha"]
+                rgb = rgb * (1 - a[..., None]) + self.A_f * a[..., None]
+                alpha = alpha * (1 - a) + a
                 continue
             if by == "recede":
                 k = 1.0 + (lay["k_end"] - 1.0) * e
@@ -843,7 +929,15 @@ class Scene:
                 src = disc_rgb * (1 - a_mix[..., None]) + self.B_inA.astype(np.float32) * a_mix[..., None]
                 # the region the disc vacated shows what is under (the keyed sky -> B); the disc composites over
                 rgb = rgb * (1 - a[..., None]) + src * a[..., None]
-                alpha = np.maximum(alpha, a)
+                alpha = alpha * (1 - a) + a
+                continue
+            if by == "exit":
+                M = np.array([[1, 0, lay["dx"] * e], [0, 1, lay["dy"] * e]], np.float32)
+                src = cv2.warpAffine(lay["content"], M, (W, H), flags=cv2.INTER_LINEAR, borderValue=0)
+                a = cv2.warpAffine(lay["alpha0"], M, (W, H), flags=cv2.INTER_LINEAR, borderValue=0)
+                a = a * (1.0 - ease01(e, 1.0 - lay["fade"], 1.0))
+                rgb = rgb * (1 - a[..., None]) + src * a[..., None]
+                alpha = alpha * (1 - a) + a
                 continue
             if by == "line_to":
                 th = lay["theta"] * e
@@ -870,18 +964,21 @@ class Scene:
                 mw = lay["params"].get("mix_window", [0.3, 0.9])
                 em = ease01(e, *mw)
                 if em > 0:
-                    src = band_rgb * (1 - em) + lay["targetB"].astype(np.float32) * em
+                    tB = cv2.warpAffine(lay["targetB"], M2, (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                    src = band_rgb * (1 - em) + tB.astype(np.float32) * em
                 else:
                     src = band_rgb
                 rgb = rgb * (1 - a[..., None]) + src * a[..., None]
-                alpha = np.maximum(alpha, a)
+                alpha = alpha * (1 - a) + a
                 continue
             if by in ("morph_to", "move_to"):
                 # rendered in the layer's working frame, then placed into A's canvas (or kept for the frame when it leaves A)
                 lw, lh = lay["contentA"].shape[1], lay["contentA"].shape[0]
                 if e <= 0:
                     if lay["depth"] != "front":
-                        alpha = np.maximum(alpha, lay["alpha_native"])
+                        a = lay["alpha_native"]
+                        rgb = rgb * (1 - a[..., None]) + self.A_f * a[..., None]
+                        alpha = alpha * (1 - a) + a
                     else:
                         front_layers.append((lay, None, None))
                     continue
@@ -914,9 +1011,11 @@ class Scene:
                 rgbC = cv2.warpAffine(rgbL, Ti, (W, H), flags=cv2.INTER_LINEAR, borderValue=0)
                 aC = cv2.warpAffine(aL, Ti, (W, H), flags=cv2.INTER_LINEAR, borderValue=0)
                 rgb = rgb * (1 - aC[..., None]) + rgbC * aC[..., None]
-                alpha = np.maximum(alpha, aC)
+                alpha = alpha * (1 - aC) + aC
                 continue
-        return rgb, alpha, front_layers
+        rgb = rgb / np.maximum(alpha, 1e-3)[..., None]
+        rgb = np.where(alpha[..., None] > 1e-3, rgb, self.A_f)
+        return np.clip(rgb, 0, 255), alpha, front_layers
 
 
 # ----------------------------------------------------------------------------- the render
@@ -978,7 +1077,7 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
             if cam.kind == "homog":
                 az = (Si[2, 0] * mapx + Si[2, 1] * mapy + Si[2, 2]); ax, ay = ax / az, ay / az
             dA_plate = cv2.remap(sc.parallax["dA"], ax.astype(np.float32), ay.astype(np.float32), cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            px, py = parallax_map(mapx, mapy, e, cam, dA_plate, sc.parallax["dA_ref"], sc.parallax["gain"], iters=1)
+            px, py = parallax_map(mapx, mapy, e, cam, dA_plate, sc.parallax["dA_ref"], sc.parallax.get("gain_A", sc.parallax["gain"]), iters=1)
         else:
             px, py = mapx, mapy
         ax = (Si[0, 0] * px + Si[0, 1] * py + Si[0, 2]); ay = (Si[1, 0] * px + Si[1, 1] * py + Si[1, 2])
@@ -1009,17 +1108,27 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
             if glass and e > 0:
                 rho = reflect * smootherstep(min(1.0, e / 0.3))
                 Af = Af * (1 - rho) + Bf * rho
+        if sc.sky.get("stars") and hasattr(sc, "star_order"):
+            es_ = ease01(u, *sc.star_window)
+            if es_ > 0:
+                so = remap_img(sc.star_order, bx, by_)
+                a_star = np.clip((so - (1.0 - es_)) / 0.15, 0, 1) * (so > 0.05)
+                sky_f = remap_img(sc.rest_mask.astype(np.float32), ax, ay)
+                aA = aA * (1.0 - a_star * sky_f)
         # the end effect inside the container: B replaces what remains of A in A's brightness order
         ef = ease01(u, *end["window"])
         if ef > 0:
             of = remap_img(sc.orderA, ax, ay)
             kind_end = knobs.get("end_kind", end.get("kind"))
+            band_end = float(knobs.get("end_band", end.get("params", {}).get("band", 0.16)))
             if kind_end == "edge_reveal":
                 dist = cv2.distanceTransform((aA > 0.02).astype(np.uint8), cv2.DIST_L2, 5); of = 1.0 - np.clip(dist / max(1.0, dist.max()), 0, 1)
             elif kind_end == "radial_reveal" and "a0" in sc.anchors:
                 ca0 = sc.anchors["a0"][0]; R0 = float(knobs.get("end_radius_px", 0.6 * max(sc.A.shape[:2])))
                 of = np.clip(np.hypot(ax - ca0[0], ay - ca0[1]) / R0, 0, 1)          # far from the anchor first
-            a_fin = np.clip((of + ef * 1.3 - 1.0) / 0.16, 0, 1)
+            elif kind_end == "b_luma_reveal":
+                of = remap_img(sc.orderB, bx, by_)                                       # B's brightest first
+            a_fin = np.clip((of + ef * (1.0 + band_end) - 1.0) / band_end, 0, 1)
             a_fin = cv2.GaussianBlur(a_fin, (0, 0), 1.2)
             aA = aA * (1 - a_fin)
         frame = Bf * (1 - aA[..., None]) + Af * aA[..., None]
