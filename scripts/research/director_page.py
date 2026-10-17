@@ -4,7 +4,12 @@ plan's own words per concept, the resolved numbers, the faults to expect (from n
 by the agent after reading the frames) and the owner's grading boxes; exports director_picks.json in
 the shape of the earlier picks files.
 
-Usage: director_page.py RUN_DIR [--notes notes.json] [--title "..."] [--head head.html]
+Usage: director_page.py RUN_DIR [--notes notes.json] [--title "..."] [--head head.html] [--key director_r8]
+
+Round 10 (2026-10-17 night): a clip whose plan has a `keyframe_chain` shows its generated keyframes beside
+the player, labelled as generated (model, seed, steps from keyframes.json when present), and every clip
+lists its filled parts (the plate under A's layers, the plate under B's front, a hidden line target) with
+their shares, so the page says which parts are the photos' pixels and which are not.
 """
 import sys, json, argparse, html
 from pathlib import Path
@@ -20,8 +25,16 @@ def esc(s):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run"); ap.add_argument("--notes", default=None); ap.add_argument("--title", default="The director's first planned renders (2026-10-17)")
-    ap.add_argument("--head", default=None)
+    ap.add_argument("--head", default=None); ap.add_argument("--key", default="director_r8")
+    ap.add_argument("--keyframes", default=None, help="keyframes.json of the generated helpers (name -> model, seed, steps, size)")
     a = ap.parse_args()
+    kf_index = {}
+    if a.keyframes:
+        kj = json.load(open(a.keyframes))
+        for k in (kj if isinstance(kj, list) else kj.get("keyframes", [])):
+            for key in ("png", "path", "file", "name"):
+                if k.get(key):
+                    kf_index[Path(k[key]).name] = k
     run = Path(a.run)
     notes = json.load(open(a.notes)) if a.notes else {}
     head = Path(a.head).read_text() if a.head else ""
@@ -73,6 +86,37 @@ def main():
             out.append(f"<p><b>Knobs you can turn (say which, and which way):</b> {knobs}</p>")
             if info.get("knobs"):
                 out.append(f"<p><b>Knobs set on this render (the operator's hand):</b> <code>{esc(json.dumps(info['knobs']))}</code></p>")
+            # generated and filled parts (round 10): the owner's 2026-09-29 conditions apply to the keyframes; a fill is cv2.inpaint
+            gen = []
+            for l in info.get("layers", []):
+                ch = l.get("chain")
+                if not ch:
+                    continue
+                tiles = []
+                for kf in ch["keyframes"]:
+                    rel = Path(kf)
+                    try:
+                        rel = Path(kf).resolve().relative_to(run.resolve().parent) if Path(kf).is_absolute() else (ROOT / kf).resolve().relative_to(run.resolve().parent)
+                        src = "../" + str(rel)
+                    except ValueError:
+                        src = str(kf)
+                    meta = kf_index.get(Path(kf).name, {})
+                    cap = f"{Path(kf).name}: generated ({esc(meta.get('model', 'FLUX.3 image klein distilled bf16'))}, seed {esc(meta.get('seed', '?'))}, {esc(meta.get('steps', '?'))} steps, cfg {esc(meta.get('cfg', '?'))})"
+                    tiles.append(f"<figure style='display:inline-block;margin:4px;max-width:220px'><img src='{esc(src)}' style='max-width:220px;max-height:220px;border:2px solid #c60'><figcaption style='font-size:12px'>{cap}</figcaption></figure>")
+                gen.append(f"<p><b>Generated keyframes inside <code>{esc(l['name'])}</code> (frame {esc(ch['frame'])}, reached at {esc(ch['times'])} of the layer's window; the renderer morphs A → keyframes → B inside the matte):</b></p>{''.join(tiles)}")
+            fills = []
+            if info.get("plate_A_share"):
+                fills.append(f"A filled under its lifted layers ({info['plate_A_share'] * 100:.1f} % of A's frame; cv2.inpaint)")
+            if info.get("front_share"):
+                fills.append(f"B filled under its front layer ({info['front_share'] * 100:.1f} % of B; cv2.inpaint), seen only until the front has entered")
+            if info.get("plate_hidden_share"):
+                fills.append(f"a line target hidden in B's plate ({info['plate_hidden_share'] * 100:.2f} % of B)")
+            soft = [l["name"] for l in info.get("layers", []) if l.get("soft")]
+            hard = [l["name"] for l in info.get("layers", []) if l.get("soft") is False]
+            out.append(f"<p><b>What is not the photos' pixels:</b> {esc('; '.join(fills)) if fills else 'nothing filled'}; generated: {('the keyframes above' if gen else 'nothing')}. "
+                       f"Soft mattes (the matting model): {esc(', '.join(soft)) or 'none'}; hard masks: {esc(', '.join(hard)) or 'none'}"
+                       f"{('; matte fallbacks ' + esc(', '.join(info['matte_fallbacks']))) if info.get('matte_fallbacks') else ''}.</p>")
+            out.extend(gen)
             out.append(f"<p><b>The planner's own risk note:</b> {esc(c.get('risk', ''))}</p></div>")
             out.append(f"<p><label><input type=checkbox id='p_{tag}_one_picture'> one picture</label><label><input type=checkbox id='p_{tag}_transforms'> content transforms</label>"
                        f"<label><input type=checkbox id='p_{tag}_not_invented'> nothing invented</label><label><input type=checkbox id='ok_{tag}'> acceptable as-is</label></p>"
@@ -84,9 +128,9 @@ def main():
     out.append("<script>const TAGS=" + json.dumps(tags) + ";const PAIRS=" + json.dumps(list(pairs.keys())) + ";const PROPS=['one_picture','transforms','not_invented'];"
                "function state(){const clips={};for(const t of TAGS){const props={};for(const k of PROPS)props[k]=document.getElementById(`p_${t}_${k}`).checked;"
                "clips[t]={acceptable:document.getElementById(`ok_${t}`).checked,note:document.getElementById(`note_${t}`).value,props};}"
-               "const best={};for(const p of PAIRS)best[p]=document.getElementById(`best_${p}`).value;return {date:new Date().toISOString(),page:'director_r8',best,clips};}"
-               "function save(){try{localStorage.setItem('director_picks_r8',JSON.stringify(state()));}catch(e){}}"
-               "function load(){try{const s=JSON.parse(localStorage.getItem('director_picks_r8')||'null');if(!s)return;for(const t of TAGS){const v=s.clips[t];if(!v)continue;"
+               "const best={};for(const p of PAIRS)best[p]=document.getElementById(`best_${p}`).value;return {date:new Date().toISOString(),page:'" + a.key + "',best,clips};}"
+               "function save(){try{localStorage.setItem('director_picks_" + a.key + "',JSON.stringify(state()));}catch(e){}}"
+               "function load(){try{const s=JSON.parse(localStorage.getItem('director_picks_" + a.key + "')||'null');if(!s)return;for(const t of TAGS){const v=s.clips[t];if(!v)continue;"
                "document.getElementById(`ok_${t}`).checked=!!v.acceptable;document.getElementById(`note_${t}`).value=v.note;for(const k of PROPS)document.getElementById(`p_${t}_${k}`).checked=!!v.props[k];}"
                "for(const p of PAIRS){if(s.best&&s.best[p])document.getElementById(`best_${p}`).value=s.best[p];}}catch(e){}}"
                "function exportPicks(){const s=JSON.stringify(state(),null,1);document.getElementById('out').textContent=s;const a=document.createElement('a');"

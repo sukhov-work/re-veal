@@ -33,6 +33,8 @@ import layered_probe as LP
 from nest_probe import smootherstep, cover_anchored, lab_transfer, luma_order, bright_disc
 
 LAYERS = ROOT / "benchmarks/runs/2026-09-28/layers_v3"
+MATTES = ROOT / "benchmarks/runs/2026-10-17/mattes"          # round 10: the matting model's alpha per element (matte_source.py)
+MATTE_FALLBACKS = []
 PHOTO = {"S": "_S", "F": "_F"}
 
 
@@ -160,6 +162,67 @@ def element_mask_ids(photo, ids, shift=(0, 0), shape=None):
 def element_mask_pred(photo, pred, shift=(0, 0), shape=None):
     ids = [e["id"] for e in layer_table(photo)["elements"] if pred(e)]
     return element_mask_ids(photo, ids, shift, shape)
+
+
+def element_alpha_ids(photo, ids, shift=(0, 0), shape=None):
+    """Round 10: the soft matte (float 0..1) of the union of elements (ids): the matting model's alpha
+    (`MATTES/<photo>/el_<id>.png`, uint8 at the layer source's canvas, written by matte_source.py) where
+    it exists, the hard element mask where it does not (recorded in MATTE_FALLBACKS, printed once as an
+    INFO line). Shifted into another crop of the same scale like element_mask_ids."""
+    z = np.load(LAYERS / photo / "layers.npz")["element"]
+    a = np.zeros(z.shape, np.float32)
+    for i in ids:
+        f = MATTES / photo / f"el_{int(i)}.png"
+        m = cv2.imread(str(f), cv2.IMREAD_GRAYSCALE) if f.exists() else None
+        if m is not None and m.shape == z.shape:
+            a = np.maximum(a, m.astype(np.float32) / 255.0)
+            continue
+        key = (photo, int(i))
+        if key not in MATTE_FALLBACKS:
+            MATTE_FALLBACKS.append(key)
+            print(f"INFO matte: no soft matte for {photo} element {i} ({f.name}); the hard mask is used", file=sys.stderr)
+        a = np.maximum(a, (z == i).astype(np.float32))
+    if shift == (0, 0) and (shape is None or shape == a.shape):
+        return a
+    H, W = shape if shape else a.shape
+    out = np.zeros((H, W), np.float32)
+    dx, dy = shift
+    ys0, ys1 = max(0, -dy), min(a.shape[0], H - dy); xs0, xs1 = max(0, -dx), min(a.shape[1], W - dx)
+    if ys1 > ys0 and xs1 > xs0:
+        out[ys0 + dy:ys1 + dy, xs0 + dx:xs1 + dx] = a[ys0:ys1, xs0:xs1]
+    if dy > 0 and a[0].mean() > 0.5:           # the crop extends above what the source saw: the sky continues
+        row = a[0] if a.shape[1] == W else cv2.resize(a[0:1], (W, 1), interpolation=cv2.INTER_LINEAR)[0]
+        out[:dy] = row[None, :]
+    if dy < 0 and a[-1].mean() > 0.5:
+        row = a[-1] if a.shape[1] == W else cv2.resize(a[-1:], (W, 1), interpolation=cv2.INTER_LINEAR)[0]
+        out[H + dy:] = row[None, :]
+    return out
+
+
+def pull_push_fill(img, hole):
+    """Fill `hole` (bool, True = unknown) of an RGB image by a pull-push pyramid: each level averages the known
+    pixels under it, the coarsest fills the rest, and the way up keeps every known pixel and takes the coarser
+    average where nothing is known. A smooth blend of the hole's surround with no direction of its own
+    (cv2.inpaint's Telea marched a bow-tie into a 250 px sun disc from the dark deck below and the red sky above).
+    A fill, not a generation."""
+    w = (~hole).astype(np.float32)
+    im = img.astype(np.float32) * w[..., None]
+    ims, ws = [im], [w]
+    while min(ims[-1].shape[:2]) > 4:
+        ims.append(cv2.pyrDown(ims[-1])); ws.append(cv2.pyrDown(ws[-1]))
+    up = ims[-1] / np.maximum(ws[-1], 1e-6)[..., None]
+    for lvl in range(len(ims) - 2, -1, -1):
+        up = cv2.resize(up, (ims[lvl].shape[1], ims[lvl].shape[0]), interpolation=cv2.INTER_LINEAR)
+        wl = np.clip(ws[lvl], 0, 1)[..., None]
+        known = ims[lvl] / np.maximum(ws[lvl], 1e-6)[..., None]
+        up = known * wl + up * (1.0 - wl)
+    out = img.astype(np.float32).copy(); out[hole] = up[hole]
+    return out
+
+
+def is_soft(a):
+    """True when an alpha carries a real edge band (more than 0.1 % of its pixels strictly between 0.02 and 0.98)."""
+    return float(((a > 0.02) & (a < 0.98)).mean()) > 0.001
 
 
 # ----------------------------------------------------------------------------- sampling
@@ -295,6 +358,7 @@ class Scene:
         self.sky = {}
         self.anchors = {}
         self.A = None; self.shiftA = (0, 0)
+        self.dark_alpha = None
 
     # --- coordinates of the plan (the layer source's canvas) -> this canvas
     def sc(self, v):
@@ -379,12 +443,32 @@ class Scene:
             band = np.zeros((H, W), bool); band[a:b] = True
             above = self.LA[max(0, a - 12):max(1, a - 4)]; below = self.LA[min(H - 1, b + 4):min(H, b + 12)]
             ref = np.median(np.concatenate([above, below], 0), axis=0)[None, :] if (len(above) + len(below)) else np.median(self.LA, axis=1)[:, None]
-            m = band & (self.LA < ref - float(spec.get("contrast", 8.0)))
+            c_ = float(spec.get("contrast", 8.0))
+            m = band & (self.LA < ref - c_)
+            # round 10: the wire's alpha from its own pixels (how much darker than the rows beside it), not a band
+            self.dark_alpha = (np.clip((ref - self.LA) / (2.0 * c_), 0, 1) * band).astype(np.float32)
             self.info.setdefault("dark_lines", []).append({"row": int(yl), "rows_searched": [y0, y1], "pixels": int(m.sum()), "share_darker": round(best, 3)})
             return m
         if k == "luma_above":
             return lum(self.A) >= float(spec["min_L"])
         raise ValueError(f"A mask kind {k}")
+
+    def soft_A(self, spec):
+        """Round 10: the soft matte (float 0..1) of an A-side spec on A's crop: the matting model's alpha for
+        element kinds (the hard mask where no matte file exists), the hard mask as float for geometric kinds."""
+        H, W = self.A.shape[:2]
+        if spec.get("kind") == "element":
+            if self.ls_scale == 1.0:
+                return element_alpha_ids(self.photoA, spec["ids"], self.shiftA, (H, W))
+            a = element_alpha_ids(self.photoA, spec["ids"], self.shiftA_ls, (self.lsH, self.lsW))
+            return cv2.resize(a, (W, H), interpolation=cv2.INTER_LINEAR)
+        return self.mask_A(spec).astype(np.float32)
+
+    def soft_B(self, spec):
+        if spec.get("kind") == "element":
+            a = element_alpha_ids(self.photoB, spec["ids"])
+            return cv2.resize(a, (self.W, self.H), interpolation=cv2.INTER_LINEAR) if a.shape != (self.H, self.W) else a
+        return self.mask_B(spec).astype(np.float32)
 
     def resolve_A_anchor(self, spec, occluder_row=None):
         k = spec["kind"]
@@ -450,6 +534,13 @@ class Scene:
             # B's front (what stands before the glass): by group, then kept only where it is nearer than
             # the container (the depth layer below); it becomes a layer of its own over an inpainted plate
             front = self.front_mask_B()
+            # round 10: elements forced into B's front (the ceiling the depth margin dropped: "obscures part of the ceiling")
+            self.front_ids = [int(v) for v in self.knobs.get("front_ids", cont.get("spec", {}).get("front_ids", []))]
+            if self.front_ids:
+                fm_ = element_mask_ids(self.photoB, self.front_ids)
+                if fm_.shape != (H, W):
+                    fm_ = cv2.resize(fm_.astype(np.uint8), (W, H), interpolation=cv2.INTER_NEAREST).astype(bool)
+                front = front | fm_
             self.front = front
             # A's frame corners -> the quad: a homography (quad) or the similarity that fits the box
             src = np.array([[0, 0], [W, 0], [W, H], [0, H]], np.float32)
@@ -515,6 +606,13 @@ class Scene:
                 dA_ref = float(dA[refa].mean()) if refa.any() else float(dA.mean())
             else:
                 dA_ref = 0.0
+            # round 10: the parallax inside A confined to named elements (the bridge), the rest of A (the sky) at
+            # the reference disparity, so no sky pixel is remapped ("vertical bands above the lamp posts")
+            ae = self.knobs.get("parallax_A_elements", pl.get("a_elements"))
+            if dA is not None and ae:
+                wA_ = feather(self.soft_A({"kind": "element", "ids": [int(v) for v in ae]}), 8.0)
+                dA = (dA_ref + (dA - dA_ref) * np.clip(wA_, 0, 1)).astype(np.float32)
+                self.info["parallax_A_elements"] = [int(v) for v in ae]
             # A's disparity expressed on the plate (for the per-frame map of A)
             push = float(self.knobs.get("parallax_push", pl.get("push", 2.5 if self.cont["kind"] in ("quad", "rect") else 0.0)))
             self.parallax = {"gain": g, "gain_A": gA, "dB": dB, "dB_ref": dB_ref, "dA": dA, "dA_ref": dA_ref, "push": push,
@@ -532,14 +630,17 @@ class Scene:
                     if m.sum() < 50:
                         continue
                     dm = float(dB[m].mean())
-                    if dm > dB_ref + margin:
+                    if int(eid) in getattr(self, "front_ids", []):
+                        dm = max(dm, dB_ref + margin + 0.05)          # forced in front: it moves as the nearest of the far plane
+                        keepf |= m; kept.append([int(eid), round(dm, 3), "forced"])
+                    elif dm > dB_ref + margin:
                         keepf |= m; kept.append([int(eid), round(dm, 3)])
                 self.front = keepf
                 self.info["front_elements"] = kept
                 # the front's disparity map: one value per element (the nearer wins at a border), so each
                 # element moves as one piece and nothing inside it stretches
                 dF = dB.copy()
-                for eid, dm in sorted(kept, key=lambda t: t[1]):
+                for eid, dm, *_ in sorted(kept, key=lambda t: t[1]):
                     m = cv2.dilate(((z == eid) & self.front).astype(np.uint8), np.ones((9, 9), np.uint8)).astype(bool)
                     dF[m] = dm
                 self.parallax["dF"] = dF
@@ -577,9 +678,19 @@ class Scene:
             return
         fm = self.front.astype(np.uint8)
         fm = cv2.morphologyEx(fm, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
-        holes = fm.copy(); ff = np.zeros((fm.shape[0] + 2, fm.shape[1] + 2), np.uint8)
-        cv2.floodFill(holes, ff, (0, 0), 1)                      # the outside; what stays 0 is an enclosed hole
-        fm = (fm | (holes == 0).astype(np.uint8)).astype(np.uint8)
+        holes = np.pad(fm, 1); ff = np.zeros((holes.shape[0] + 2, holes.shape[1] + 2), np.uint8)
+        cv2.floodFill(holes, ff, (0, 0), 1)                      # the outside, seeded in the zero padding; what stays 0 is an enclosed hole
+        enclosed = (holes[1:-1, 1:-1] == 0).astype(np.uint8)
+        # only small holes are filled (a gap between a hand and a sofa); a large enclosed region is the glass view
+        # between the ceiling and the sofas, and it is not in front (round 10: it entered over A as B's bushes)
+        n_h, lab_h, st_h, _ = cv2.connectedComponentsWithStats(enclosed, 8)
+        max_hole = float(self.knobs.get("front_hole_max", 0.005)) * H * W
+        small = np.zeros_like(enclosed)
+        for k_ in range(1, n_h):
+            if st_h[k_, cv2.CC_STAT_AREA] <= max_hole:
+                small[lab_h == k_] = 1
+        self.info["front_holes"] = {"enclosed_share": round(float(enclosed.mean()), 4), "filled_share": round(float(small.mean()), 4)}
+        fm = (fm | small).astype(np.uint8)
         self.front = fm.astype(bool)
         k = self.kB
         if k != 1.0:
@@ -598,8 +709,20 @@ class Scene:
         plate = self.B_src.copy(); plate[grow.astype(bool)] = filled[grow.astype(bool)]
         self.B_plate = plate
         self.front_rgb = self.B_src
-        self.front_alpha = cv2.GaussianBlur(fm_src.astype(np.float32), (0, 0), 1.5)
+        # round 10: the front's alpha is the soft matte of its elements (the matting model), with the closing's and
+        # the hole fill's additions kept as before, so a man's hair and a sofa's edge are not a cutout
+        z = np.load(LAYERS / self.photoB / "layers.npz")["element"]
+        zc = z if z.shape == (H, W) else cv2.resize(z.astype(np.int32), (W, H), interpolation=cv2.INTER_NEAREST)
+        ids = [int(i) for i in np.unique(zc[self.front]) if i > 0 and ((zc == i) & self.front).sum() >= max(50, 0.5 * (zc == i).sum())]
+        soft = element_alpha_ids(self.photoB, ids) if ids else np.zeros(z.shape, np.float32)
+        if soft.shape != (H, W):
+            soft = cv2.resize(soft, (W, H), interpolation=cv2.INTER_LINEAR)
+        extra = (fm.astype(bool) & ~(np.isin(zc, ids) if ids else np.zeros((H, W), bool))).astype(np.float32)
+        fa = np.maximum(soft, cv2.GaussianBlur(extra, (0, 0), 1.5))
+        fa = np.clip(fa, 0, 1).astype(np.float32)
+        self.front_alpha = cv2.resize(fa, (self.B_src.shape[1], self.B_src.shape[0]), interpolation=cv2.INTER_LINEAR) if k != 1.0 else fa
         self.info["front_share"] = round(float(self.front.mean()), 4)
+        self.info["front_soft"] = bool(is_soft(fa))
 
     def front_mask_B(self):
         groups = self.cont.get("spec", {}).get("front_groups", ["person", "furniture", "ceiling", "wall", "object"]) if hasattr(self, "cont") else self.c.get("container", {}).get("spec", {}).get("front_groups", ["person", "furniture", "ceiling", "wall", "object"])
@@ -614,6 +737,9 @@ class Scene:
         self.layers = []
         self.unplaced = []
         covered = np.zeros((H, W), bool)
+        covered_soft = np.zeros((H, W), np.float32)
+        plate_union = np.zeros((H, W), np.uint8)              # round 10: what A is filled under (the lifted layers' footprints)
+        use_plate = bool(self.knobs.get("plate", True))
         Si = np.linalg.inv(self.S_A3)
         trs = c.get("transforms", [])
         order = sorted(range(len(trs)), key=lambda i: 0 if trs[i].get("a", {}).get("kind") == "dark_line" else 1)
@@ -637,6 +763,7 @@ class Scene:
                 continue
             if by == "colour":
                 lay["maskA"] = self.mask_A(tr["a"]); lay["maskB"] = self.mask_B(tr["b"])
+                lay["wsoft"] = feather(self.soft_A(tr["a"]), float(p.get("feather", 3.0)))      # round 10: a soft weight
                 lay["weight"] = p.get("weight", "dark" if (c.get("container") or {}).get("kind") == "disc" else None)
                 built[i_tr] = lay; continue
             if "a_group" in p or "a_elements" in p:
@@ -651,14 +778,26 @@ class Scene:
                 mA = ((xx - ca[0]) ** 2 + (yy - ca[1]) ** 2 <= (ra * float(p.get("disc_scale", 1.02))) ** 2) & (self.LA >= float(p.get("min_L", 60)))
             else:
                 mA = self.mask_A(tr["a"])
+            # round 10: the layer's soft matte (the matting model's alpha for element kinds; the wire's own darkness)
+            if "a_override" in lay:
+                sA = self.soft_A({"kind": "element", "ids": lay["a_override"]["ids"]})
+            elif tr["a"]["kind"] == "circle_fit":
+                sA = mA.astype(np.float32)
+            elif tr["a"]["kind"] == "dark_line" and self.dark_alpha is not None:
+                sA = self.dark_alpha
+            else:
+                sA = self.soft_A(tr["a"])
             if tr["a"].get("exclude_covered", True):
                 mA &= ~covered
+                sA = (sA * (1.0 - covered_soft)).astype(np.float32)
+            lay["soft"] = bool(is_soft(sA))
+            plated = use_plate and bool(p.get("plate", True))
             if mA.sum() < 64:
                 lay["unplaced"] = "the a-mask is empty on this crop"
                 self.unplaced.append({"name": tr["name"], "why": lay["unplaced"]})
                 continue
             if by == "hold":
-                lay["alpha"] = feather(mA.astype(np.float32), float(p.get("feather", 2.0)))
+                lay["alpha"] = sA if lay["soft"] else feather(mA.astype(np.float32), float(p.get("feather", 2.0)))
                 built[i_tr] = lay; continue
             if by == "recede":
                 ca, ra = self.anchors[tr["a"].get("anchor", "a0")]
@@ -672,11 +811,37 @@ class Scene:
                 lay["rr0"] = rr0.astype(np.float32); lay["disc_f"] = disc.astype(np.float32)
                 inner = disc & (rr0 < 0.7)
                 mean_in = self.A_f[inner].mean(0) if inner.any() else self.A_f[disc].mean(0)
-                wflat = np.clip((rr0 - float(p.get("limb_flatten", 0.8))) / max(1e-3, 1.0 - float(p.get("limb_flatten", 0.8))), 0, 1)[..., None] * disc[..., None]
+                lf = float(p.get("limb_flatten", 1.0))          # round 10: no limb flatten by default (it drew a paler inner disc)
+                wflat = (np.clip((rr0 - lf) / max(1e-3, 1.0 - lf), 0, 1) if lf < 1.0 else np.zeros_like(rr0))[..., None] * disc[..., None]
                 lay["content"] = (self.A_f * (1 - wflat) + mean_in[None, None, :] * wflat).astype(np.float32)
-                lay["rim_in"], lay["rim_out"] = float(p.get("rim_in", 0.9)), float(p.get("rim_out", 1.0))
+                # round 10: a wide soft rim (alpha falls from rim_in to rim_out of the radius once the recede has started)
+                lay["rim_in"], lay["rim_out"] = float(p.get("rim_in", 0.55)), float(p.get("rim_out", 1.0))
                 lay["alpha0"] = feather(disc.astype(np.float32), 1.0)
-                covered |= disc
+                disc_full = rr0 <= float(p.get("disc_scale", 1.02))
+                # the fitted circle plus the sun's own bright blob around it (an oblate sun is wider than its circle: the
+                # left and right limbs outside the circle stayed in the base as bright crescents in round 9)
+                blob = ((self.LA >= float(p.get("blob_L", 110))) & (rr0 <= float(p.get("blob_reach", 1.35)))).astype(np.uint8)
+                n_, lab_, st_, _ = cv2.connectedComponentsWithStats(blob, 8)
+                if n_ > 1:
+                    kb = 1 + int(np.argmax(st_[1:, cv2.CC_STAT_AREA]))
+                    bright = (lab_ == kb).astype(np.uint8)
+                    # bridge the bright parts across the dark silhouettes between them (a vertical kernel of half the
+                    # radius): the deck's chord joins the dome to the sliver under it; the truss below stays out
+                    kh = max(3, int(0.5 * ra)) | 1; kw = max(3, int(0.08 * ra)) | 1
+                    closed = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kw, kh)))
+                    closed = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+                    blob = cv2.dilate(closed, np.ones((5, 5), np.uint8)).astype(bool) & (rr0 <= float(p.get("blob_reach", 1.35)))
+                    circle_only = disc_full & ~blob
+                    disc_full = blob if plated else (disc_full | blob)
+                    lay["blob_share"] = round(float(blob.sum()) / max(1.0, float((rr0 <= 1.0).sum())), 4)
+                    lay["circle_dropped_share"] = round(float(circle_only.sum()) / max(1.0, float((rr0 <= 1.0).sum())), 4)
+                if plated:
+                    lay["rr0"] = np.where(disc_full & (rr0 > 1.0), 1.0, rr0).astype(np.float32)     # the limb outside the circle counts as the limb
+                covered |= disc_full if plated else disc           # with a plate the whole disc is the sun's (the chords fade into its fill)
+                covered_soft = np.maximum(covered_soft, lay["alpha0"])
+                if plated:
+                    lay["foot_hard"] = cv2.dilate((disc_full | (rr0 <= float(p.get("plate_reach", 1.18)))).astype(np.uint8), np.ones((5, 5), np.uint8))
+                    plate_union |= lay["foot_hard"]
                 built[i_tr] = lay; continue
             if by == "line_to":
                 ca, _ = self.anchors[tr["a"].get("anchor", "a0")]
@@ -698,10 +863,13 @@ class Scene:
                 off_end = float(np.dot(foot - np.array([ca[0], ca[1]]), n))
                 lay.update(pivot=ca, theta=float(ang), off0=float(yc - ca[1]), off1=off_end, thick0=thick,
                            width_end=float(p.get("width", 4.0)) * self.ls_scale / float(self.S_A3[0, 0]), stretch=float(p.get("stretch", 1.0)), band_rows=band_rows)
-                lay["alpha0"] = feather(mA.astype(np.float32), 1.0)
-                xs_ = np.arange(W, dtype=np.float32) / (W - 1)
-                taper = np.clip(np.minimum(xs_, 1 - xs_) / float(p.get("end_taper", 0.12)), 0, 1)[None, :]
-                lay["alpha0"] = lay["alpha0"] * taper
+                dark_wire = tr["a"]["kind"] == "dark_line" and self.dark_alpha is not None
+                lay["alpha0"] = sA if dark_wire else feather(mA.astype(np.float32), 1.0)
+                et_l = float(p.get("end_taper", 0.0 if dark_wire else 0.12))      # round 10: a wire keeps its ends (no taper band)
+                if et_l > 0:
+                    xs_ = np.arange(W, dtype=np.float32) / (W - 1)
+                    taper = np.clip(np.minimum(xs_, 1 - xs_) / et_l, 0, 1)[None, :]
+                    lay["alpha0"] = lay["alpha0"] * taper
                 lay["content"] = self.A_f
                 # B's pixels at the band's end position, in the band's own frame: M(1)^-1 applied to B_inA
                 th1 = float(ang); off1 = off_end; sy1 = max(1e-3, lay["width_end"] / thick); sx1 = lay["stretch"]
@@ -712,6 +880,10 @@ class Scene:
                 M1 = Tp1 @ R1 @ Off1 @ S1 @ Tx1 @ Tm1
                 lay["targetB"] = cv2.warpAffine(self.B_inA, np.linalg.inv(M1)[:2].astype(np.float32), (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
                 covered |= mA
+                covered_soft = np.maximum(covered_soft, lay["alpha0"])
+                if plated:
+                    lay["foot_hard"] = cv2.dilate(mA.astype(np.uint8), np.ones((5, 5), np.uint8))
+                    plate_union |= lay["foot_hard"]
                 built[i_tr] = lay; continue
             if by in ("morph_to", "move_to"):
                 mB = self.mask_B(tr["b"])
@@ -739,11 +911,13 @@ class Scene:
                 # the layer's working frame: A canvas -> work: translate by -ext, scale by wl
                 Tw = np.array([[wl, 0, -ext[0] * wl], [0, wl, -ext[1] * wl], [0, 0, 1]], np.float64)
                 contentA = cv2.warpAffine(self.A_f, Tw[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_AREA if wl < 1 else cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-                alphaA = cv2.warpAffine(mA.astype(np.float32), Tw[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0)
-                # B's content and the target mask in the working frame: B canvas -> A canvas (Si) -> work
+                alphaA = cv2.warpAffine(sA, Tw[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0)
+                # B's content and the target matte in the working frame: B canvas -> A canvas (Si) -> work
                 MB = Tw @ Si
                 contentB = sample_full(self.B_src, self.kB, MB, lw, lh, replicate=True)
-                alphaB = cv2.warpPerspective(mB.astype(np.float32), MB, (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0) if abs(MB[2, 0]) + abs(MB[2, 1]) > 1e-12 else cv2.warpAffine(mB.astype(np.float32), MB[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0)
+                sB = self.soft_B(tr["b"]) if tr["b"].get("kind") == "element" else mB.astype(np.float32)
+                lay["soft_b"] = bool(is_soft(sB))
+                alphaB = cv2.warpPerspective(sB, MB, (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0) if abs(MB[2, 0]) + abs(MB[2, 1]) > 1e-12 else cv2.warpAffine(sB, MB[:2].astype(np.float32), (lw, lh), flags=cv2.INTER_LINEAR, borderValue=0)
                 # the affine box -> box (a similarity on the boxes' centres and the geometric-mean size)
                 bxa = box_of_mask(alphaA > 0.5); bxb = box_of_mask(alphaB > 0.5)
                 ca_ = np.array([(bxa[0] + bxa[2]) / 2, (bxa[1] + bxa[3]) / 2]); cb_ = np.array([(bxb[0] + bxb[2]) / 2, (bxb[1] + bxb[3]) / 2])
@@ -787,8 +961,9 @@ class Scene:
                     wB = np.clip((hi - lumB) / (hi - lo), 0, 1) if massmode == "dark" else np.clip((lumB - lo) / (hi - lo), 0, 1)
                     alphaB = (alphaB * cv2.GaussianBlur(wB, (0, 0), 1.0)).astype(np.float32)
                 fpx_l = float(p.get("feather", 0.0))
-                if fpx_l > 0:
-                    alphaA = feather(alphaA, fpx_l); alphaB = feather(alphaB, fpx_l)
+                if fpx_l > 0:                                   # the operator's feather, on top of a hard mask only
+                    alphaA = alphaA if lay["soft"] else feather(alphaA, fpx_l)
+                    alphaB = alphaB if lay.get("soft_b") else feather(alphaB, fpx_l)
                 et_ = float(p.get("end_taper", 0.0))
                 if et_ > 0:
                     xs_t = (np.arange(lw, dtype=np.float32) - (-ext[0] * wl)) / max(1.0, W * wl)   # A's canvas x in 0..1 inside the work frame
@@ -813,8 +988,15 @@ class Scene:
                 lay["edge"] = (1.0 - np.clip(dist / max(1.0, float(dist.max())), 0, 1)).astype(np.float32)   # the rim first
                 lay["noise"] = cv2.GaussianBlur(np.random.RandomState(int(p.get("seed", 7))).rand(lh, lw).astype(np.float32), (0, 0), float(p.get("noise_px", 24)))
                 lay["noise"] = (lay["noise"] - lay["noise"].min()) / max(1e-6, lay["noise"].max() - lay["noise"].min())
-                lay["alpha_native"] = feather(carried.astype(np.float32), 1.0)
+                if p.get("alpha", "mass" if massmode_n == "dark" else "mask") == "mass":
+                    lay["alpha_native"] = (sA * cv2.GaussianBlur(wA_n.astype(np.float32), (0, 0), 1.0)).astype(np.float32)
+                else:
+                    lay["alpha_native"] = sA if lay["soft"] else feather(carried.astype(np.float32), 1.0)
                 covered |= carried
+                covered_soft = np.maximum(covered_soft, lay["alpha_native"])
+                if plated:
+                    lay["foot_hard"] = cv2.dilate(carried.astype(np.uint8), np.ones((5, 5), np.uint8))
+                    plate_union |= lay["foot_hard"]
                 built[i_tr] = lay; continue
             if by == "exit":
                 direction = p.get("direction", "left"); fade = float(p.get("fade", 0.3))
@@ -826,14 +1008,148 @@ class Scene:
                 elif direction == "up": dy = -(ys.max() + margin)
                 else: dy = (H - ys.min()) + margin
                 lay.update(dx=float(dx), dy=float(dy), fade=fade)
-                lay["alpha0"] = feather(mA.astype(np.float32), float(p.get("feather", 1.5)))
+                lay["alpha0"] = sA if lay["soft"] else feather(mA.astype(np.float32), float(p.get("feather", 1.5)))
                 lay["content"] = self.A_f
                 covered |= mA
+                covered_soft = np.maximum(covered_soft, lay["alpha0"])
+                if plated:
+                    lay["foot_hard"] = cv2.dilate(mA.astype(np.uint8), np.ones((5, 5), np.uint8))
+                    plate_union |= lay["foot_hard"]
+                built[i_tr] = lay; continue
+            if by == "keyframe_chain":
+                # round 10 (items 3-4): generated keyframes inside the layer's matte. The chain A -> k_1 .. k_n -> B is
+                # rendered by the tool's own morph between consecutive pictures (a box affine as the guide on the first
+                # segment, DIS flow for the rest, forward splats with consistency weights, a linear mix), inside a matte
+                # that travels with the content from A's soft matte to B's. The keyframes are helpers under the owner's
+                # 2026-09-29 conditions; the page says they are generated.
+                kfs = p.get("keyframes", [])
+                if not kfs:
+                    lay["unplaced"] = "no keyframes named"; self.unplaced.append({"name": tr["name"], "why": lay["unplaced"]}); continue
+                frame_kind = p.get("frame", "canvas")
+                imgs = [self.A_f]
+                for kf in kfs:
+                    path = (ROOT / kf) if not str(kf).startswith("/") else Path(kf)
+                    kimg = T.load_image_rgb(str(path))
+                    if frame_kind == "A":                     # the keyframe is in A's own geometry (the pane)
+                        kimg = cv2.resize(kimg, (W, H), interpolation=cv2.INTER_AREA if kimg.shape[1] > W else cv2.INTER_LINEAR)
+                        imgs.append(kimg.astype(np.float32))
+                    else:                                     # the keyframe is the pair's canvas (B's layout): into A's coordinates like B_inA
+                        kimg = cv2.resize(kimg, (self.W, self.H), interpolation=cv2.INTER_AREA if kimg.shape[1] > self.W else cv2.INTER_LINEAR)
+                        imgs.append(sample_full(kimg, 1.0, Si, W, H, replicate=True).astype(np.float32))
+                imgs.append(self.B_inA.astype(np.float32))
+                whole = tr["a"]["kind"] == "all"
+                sB_full = self.soft_B(tr["b"]) if tr.get("b") else np.ones((self.H, self.W), np.float32)
+                sB_inA = np.ones((H, W), np.float32) if whole else np.clip(sample_full(sB_full, 1.0, Si, W, H), 0, 1)
+                # the guide of the first segment: A's matte box -> B's matte box (a similarity on the boxes' centres and the
+                # geometric-mean size); the identity when the layer is the whole frame
+                if whole or (sB_inA > 0.5).sum() < 64:
+                    Mg = np.eye(3)
+                else:
+                    bxa = box_of_mask(sA > 0.5); bxb = box_of_mask(sB_inA > 0.5)
+                    sg = math.sqrt(((bxb[2] - bxb[0]) / max(1, bxa[2] - bxa[0])) * ((bxb[3] - bxb[1]) / max(1, bxa[3] - bxa[1])))
+                    ca_ = np.array([(bxa[0] + bxa[2]) / 2, (bxa[1] + bxa[3]) / 2]); cb_ = np.array([(bxb[0] + bxb[2]) / 2, (bxb[1] + bxb[3]) / 2])
+                    Mg = np.array([[sg, 0, cb_[0] - sg * ca_[0]], [0, sg, cb_[1] - sg * ca_[1]], [0, 0, 1]], np.float64)
+                segs = []
+                mattes = [sA]
+                lead = bool(p.get("lead", True)) and not whole and not np.allclose(Mg, np.eye(3))
+                if lead:
+                    # segment 0: A's layer moved by the guide (the renderer's own rigid move, exact field, no residual, no mix)
+                    gx_, gy_ = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32))
+                    Dg = np.stack([(Mg[0, 0] * gx_ + Mg[0, 1] * gy_ + Mg[0, 2]) - gx_, (Mg[1, 0] * gx_ + Mg[1, 1] * gy_ + Mg[1, 2]) - gy_], -1).astype(np.float32)
+                    Mi_ = np.linalg.inv(Mg)
+                    Dgi = np.stack([(Mi_[0, 0] * gx_ + Mi_[0, 1] * gy_ + Mi_[0, 2]) - gx_, (Mi_[1, 0] * gx_ + Mi_[1, 1] * gy_ + Mi_[1, 2]) - gy_], -1).astype(np.float32)
+                    moved = cv2.warpAffine(self.A_f, Mg[:2].astype(np.float32), (W, H), flags=cv2.INTER_AREA if Mg[0, 0] < 1 else cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                    moved_m = np.clip(cv2.warpAffine(sA, Mg[:2].astype(np.float32), (W, H), flags=cv2.INTER_LINEAR), 0, 1)
+                    imgs.insert(1, moved.astype(np.float32)); mattes.append(moved_m)
+                    segs.append({"dAB": Dg, "dBA": Dgi, "wA": np.ones((H, W), np.float32), "wB": np.ones((H, W), np.float32), "lead": True,
+                                 "disp_median_px": round(float(np.median(np.linalg.norm(Dg, axis=2)[sA > 0.5])) if (sA > 0.5).any() else 0.0, 1)})
+                for j in range(1 if lead else 0, len(imgs) - 1):
+                    gP = T.gray_of(np.clip(imgs[j], 0, 255).astype(np.uint8)); gQ = T.gray_of(np.clip(imgs[j + 1], 0, 255).astype(np.uint8))
+                    Hg = Mg if (j == 0 and not whole and bool(p.get("guide", True))) else np.eye(3)
+                    dPQ = T._homography_guided(gP, gQ, np.linalg.inv(Hg)); dQP = T._homography_guided(gQ, gP, Hg)
+                    wPQ = T.consistency_weight(dPQ, dQP); wQP = T.consistency_weight(dQP, dPQ)
+                    damp = float(p.get("damp", 1.0))
+                    if damp > 0:
+                        sPQ = cv2.GaussianBlur(wPQ, (0, 0), 12.0); sQP = cv2.GaussianBlur(wQP, (0, 0), 12.0)
+                        dPQ = (dPQ * (1.0 - damp * (1.0 - sPQ))[..., None]).astype(np.float32)
+                        dQP = (dQP * (1.0 - damp * (1.0 - sQP))[..., None]).astype(np.float32)
+                    m_here = mattes[-1] if lead or j > 0 else sA
+                    segs.append({"dAB": dPQ, "dBA": dQP, "wA": wPQ, "wB": wQP,
+                                 "disp_median_px": round(float(np.median(np.linalg.norm(dPQ, axis=2)[m_here > 0.5])) if (m_here > 0.5).any() else 0.0, 1)})
+                # the matte at every node: A's, then carried forward along each segment; B's at the end
+                for j in range(1 if lead else 0, len(segs) - 1):
+                    mw_, cov_ = T.forward_splat(mattes[-1], segs[j]["dAB"], 1.0, segs[j]["wA"])
+                    mw_ = T.fill_holes(mw_, cov_, T.backward_warp(mattes[-1], -segs[j]["dAB"]).astype(np.float32), T.TCFG["hole_thresh"])
+                    mattes.append(np.clip(cv2.GaussianBlur(mw_, (0, 0), 1.0), 0, 1).astype(np.float32))
+                mattes.append(sB_inA)
+                n_seg = len(segs)
+                times = [float(t) for t in (p.get("times") or [(j + 1) / n_seg for j in range(n_seg - 1)])]
+                if len(times) != n_seg - 1:
+                    times = [(j + 1) / n_seg for j in range(n_seg - 1)]
+                    print(f"INFO chain: {tr['name']} has {n_seg} segments; the plan's times do not fit and were spaced evenly", file=sys.stderr)
+                lay.update(imgs=imgs, segs=segs, mattes=mattes, times=times, keyframes=[str(k) for k in kfs], frame_kind=frame_kind,
+                           alpha_native=sA, whole=whole)
+                lay["chain"] = {"keyframes": [str(k) for k in kfs], "frame": frame_kind, "times": times, "lead": lead, "guide": [[round(float(v), 3) for v in r] for r in Mg[:2]],
+                                "segments": [{"disp_median_px": sg_["disp_median_px"], "lead": bool(sg_.get("lead", False)),
+                                              "consistency_mean": round(float(sg_["wA"][mattes[min(i_, len(mattes) - 1)] > 0.5].mean()) if (mattes[min(i_, len(mattes) - 1)] > 0.5).any() else 0.0, 3)} for i_, sg_ in enumerate(segs)]}
+                covered |= sA > 0.5
+                covered_soft = np.maximum(covered_soft, sA)
+                if plated and not whole:
+                    lay["foot_hard"] = cv2.dilate((sA > 0.5).astype(np.uint8), np.ones((5, 5), np.uint8))
+                    plate_union |= lay["foot_hard"]
                 built[i_tr] = lay; continue
             raise ValueError(f"transform kind {by}")
         self.layers = [built[i] for i in range(len(trs)) if i in built]      # the plan's order for compositing
         self.covered = covered
         self.info["unplaced"] = self.unplaced
+        # round 10: A is filled under the lifted layers' footprints (cv2.inpaint, Telea, at <= 1280 px; a fill, not a
+        # generation), so a layer that moves away uncovers A's own surround and not a hard-cut silhouette of B; the
+        # rest's alpha is 1 there. A layer rendered without a plate (name.plate=false) keeps the hole.
+        self.A_base = self.A_f
+        self.rest_soft = np.ones((H, W), np.float32)
+        for lay in self.layers:
+            if lay["by"] == "colour":
+                continue
+            if not (use_plate and bool(lay["params"].get("plate", True))):
+                nat = lay.get("alpha_native", lay.get("alpha0", lay.get("alpha")))
+                if nat is not None:
+                    self.rest_soft = self.rest_soft * (1.0 - np.clip(nat, 0, 1))
+        if plate_union.any():
+            A8 = np.clip(self.A_f, 0, 255).astype(np.uint8)
+            grow = cv2.dilate(plate_union, np.ones((7, 7), np.uint8))
+            gb = grow.astype(bool)
+            self.A_base = pull_push_fill(A8, gb)
+            self.info["plate_A_share"] = round(float(gb.mean()), 4)
+            for lay in self.layers:
+                if lay["by"] == "colour" or not (use_plate and bool(lay["params"].get("plate", True))):
+                    continue
+                # under a soft rim (a disc container) the keyed sky already gives way to B dark-first, so a departed layer's
+                # footprint keys with it; a separate hole reveal there cut a dark slot into the glow
+                lay["hole_reveal"] = bool(lay["params"].get("hole_reveal", (lay["by"] in ("exit", "morph_to", "move_to", "keyframe_chain") and self.cont["kind"] != "disc") or lay["by"] == "recede"))
+                if lay["by"] == "recede":
+                    # the whole disc, silhouettes included: the OTHER layers' chords across it (the deck, the wire) are
+                    # filled from the disc's own pixels (the deck layer still carries the chord's dark pixels over it)
+                    disc_full = lay["rr0"] <= float(lay["params"].get("disc_scale", 1.02))
+                    lay["disc_f"] = disc_full.astype(np.float32); lay["alpha0"] = feather(lay["disc_f"], 1.0)
+                    others = (plate_union & ~lay.get("foot_hard", np.zeros_like(plate_union))).astype(np.uint8)
+                    chord = (others.astype(bool) & cv2.dilate(disc_full.astype(np.uint8), np.ones((9, 9), np.uint8)).astype(bool)).astype(np.uint8)
+                    # the silhouettes across the disc that no other layer carries (the deck's chord): filled from the disc's
+                    # own pixels, blended in over the first part of the recede (content0 -> content), so frame 1 is A
+                    dark_in = disc_full & (self.LA < float(lay["params"].get("min_L", 60)))
+                    chord = (chord.astype(bool) | dark_in).astype(np.uint8)
+                    content = A8.copy()
+                    if chord.any():
+                        cb = cv2.dilate(chord, np.ones((5, 5), np.uint8)).astype(bool)
+                        content_f = cv2.inpaint(A8, cb.astype(np.uint8), 7, cv2.INPAINT_TELEA)
+                        content[cb] = content_f[cb]
+                        lay["chord_share"] = round(float(cb.mean()), 5)
+                    lay["content0"] = self.A_f.copy()
+                    lay["content"] = content.astype(np.float32)
+                    lay["fill_in"] = float(lay["params"].get("fill_in", 0.3))
+                    lay["foot"] = feather(lay["foot_hard"].astype(np.float32), max(2.0, 0.08 * float(lay["r"])))   # a wide edge: the plate's circle must not show
+                else:
+                    nat = lay.get("alpha_native", lay.get("alpha0", lay.get("alpha")))
+                    lay["foot"] = feather(cv2.dilate((nat > 0.02).astype(np.uint8), np.ones((11, 11), np.uint8)).astype(np.float32), 2.0)
         # the rest of A: under a soft rim it is keyed by its luma (dark first) ahead of the camera;
         # under a matte or glass rim it holds inside the container until the end effect
         rest = ~covered
@@ -841,7 +1157,7 @@ class Scene:
             pr = self.c.get("params", {})
             sky = self.knobs.get("sky", self.cont.get("params", {}).get("sky")) or {}
             self.sky = sky
-            lumr = cv2.GaussianBlur(self.LA, (0, 0), 4.0)
+            lumr = cv2.GaussianBlur(self.LA, (0, 0), 4.0)          # the key's order is A's own brightness (a filled footprint keys as what stood there)
             lo, hi = np.percentile(lumr[rest], [1, 99]) if rest.any() else (0, 1)
             self.rest_order = np.clip((lumr - lo) / max(1.0, hi - lo), 0, 1).astype(np.float32)
             yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
@@ -862,7 +1178,8 @@ class Scene:
         else:
             self.rest_mask = rest
             self.sky = {}
-        self.info["layers"] = [{"name": l["name"], "by": l["by"], "window": l["window"], **({"ot": l["ot"]} if "ot" in l else {}), **({"axis": l["axis"]} if "axis" in l else {}), **({"depth": l["depth"], "target_inside_share": l.get("target_inside_share")} if l["by"] in ("morph_to", "move_to") else {}),
+        self.info["matte_fallbacks"] = [f"{ph}:{i}" for ph, i in MATTE_FALLBACKS]
+        self.info["layers"] = [{"name": l["name"], "by": l["by"], "window": l["window"], **({"soft": l["soft"]} if "soft" in l else {}), **({"chain": l["chain"]} if "chain" in l else {}), **({"ot": l["ot"]} if "ot" in l else {}), **({"axis": l["axis"]} if "axis" in l else {}), **({"depth": l["depth"], "target_inside_share": l.get("target_inside_share")} if l["by"] in ("morph_to", "move_to") else {}),
                                 **({"k_end": round(l["k_end"], 4)} if "k_end" in l else {}),
                                 **({"theta_deg": round(math.degrees(l["theta"]), 2), "off0": round(l["off0"], 1), "off1": round(l["off1"], 1), "thick0": l["thick0"], "width_end": round(l["width_end"], 2)} if "theta" in l else {}),
                                 **({"ext": l["ext"], "work_scale": round(l["wl"], 3)} if "ext" in l else {})} for l in self.layers]
@@ -870,13 +1187,33 @@ class Scene:
     # --- per-frame composite of A's layers in A's canvas (rgb float, alpha float)
     def compose_A(self, u):
         H, W = self.A.shape[:2]
+        # the base: A, turning into the plate under each layer's footprint as that layer departs (over the first
+        # quarter of its window), so frame 1 is still A and a vacated footprint shows A's own surround
         rgb = self.A_f.copy()
+        v = None; hole = None
+        h0, h1 = float(self.knobs.get("hole_reveal_from", 0.1)), float(self.knobs.get("hole_reveal_over", 0.35))
+        for lay in self.layers:
+            if "foot" in lay:
+                e_l = ease01(u, *lay["window"])
+                ei = min(1.0, 30.0 * e_l)                            # the plate is under the layer as soon as it moves
+                if ei > 0:
+                    vi = lay["foot"] * ei
+                    v = vi if v is None else np.maximum(v, vi)
+                if lay.get("hole_reveal") and e_l > h0:   # the recede included: the ring the sun vacates shows the core's glow, not a fill
+                    # round 10: the footprint a layer has left gives way to B over a short ramp (the layer's own soft
+                    # matte is the edge), so the fill is a passing moment and not a pale silhouette
+                    hi = lay["foot"] * min(1.0, (e_l - h0) / max(1e-6, h1))
+                    hole = hi if hole is None else np.maximum(hole, hi)
+        self.v_last = v
+        self.hole_last = hole
+        if v is not None:
+            rgb = rgb * (1 - v[..., None]) + self.A_base * v[..., None]
         # colour transforms first (they re-colour the base); the layers then composite premultiplied
         for lay in self.layers:
             if lay["by"] == "colour":
                 e = ease01(u, *lay["window"])
                 if e > 0:
-                    w = lay["maskA"].astype(np.float32)
+                    w = lay.get("wsoft", lay["maskA"].astype(np.float32))
                     if lay.get("weight") == "dark":
                         w = w * np.clip(1.0 - self.rest_order, 0, 1) if hasattr(self, "rest_order") else w
                     rgb = lab_transfer(np.clip(rgb, 0, 255).astype(np.uint8), self.B, lay["maskB"], float(lay["params"].get("strength", 0.85)) * e, weight=w)
@@ -891,9 +1228,11 @@ class Scene:
             if e_cam > 0 and hasattr(self, "dborder"):
                 wpx = min(self.rim_frac, 4.0 * e_cam) * min(H, W)
                 a_rest = a_rest * np.clip(self.dborder / max(1.0, wpx), 0, 1)
-            alpha = np.where(self.rest_mask, a_rest, 0.0).astype(np.float32)
+            alpha = (a_rest * self.rest_soft).astype(np.float32)
         else:
-            alpha = self.rest_mask.astype(np.float32)
+            alpha = self.rest_soft.copy()
+        if hole is not None:
+            alpha = (alpha * (1.0 - np.clip(hole, 0, 1))).astype(np.float32)
         rgb = rgb * alpha[..., None]                      # premultiplied from here on; un-premultiplied at the end
         front_layers = []
         for lay in self.layers:
@@ -910,22 +1249,29 @@ class Scene:
                 k = 1.0 + (lay["k_end"] - 1.0) * e
                 ca = lay["centre"]
                 M = sim_about(k, ca[0], ca[1])[:2].astype(np.float32)
-                disc_rgb = cv2.warpAffine(lay["content"], M, (W, H), flags=cv2.INTER_AREA if k < 1 else cv2.INTER_LINEAR, borderValue=0)
+                content = lay["content"]
+                if "content0" in lay:
+                    wf = smootherstep(min(1.0, e / max(1e-6, lay["fill_in"])))
+                    content = lay["content0"] * (1 - wf) + lay["content"] * wf if wf < 1.0 else lay["content"]
+                disc_rgb = cv2.warpAffine(content, M, (W, H), flags=cv2.INTER_AREA if k < 1 else cv2.INTER_LINEAR, borderValue=0)
                 # the rim ramp opens with the recede: hard at e = 0 (frame 1 equals A), rim_in..rim_out of the radius later
                 rim_in_e = 1.0 + (lay["rim_in"] - 1.0) * min(1.0, 4.0 * e)
-                ramp = np.clip((lay["rim_out"] - lay["rr0"]) / max(1e-3, lay["rim_out"] - rim_in_e), 0, 1).astype(np.float32)
+                ramp = np.clip((lay["rim_out"] - lay["rr0"]) / max(1e-3, lay["rim_out"] - rim_in_e), 0, 1)
+                ramp = (ramp * ramp * (3.0 - 2.0 * ramp)).astype(np.float32)        # a smooth start of the rim (a linear ramp read as a ring at rim_in)
                 a_src0 = feather(lay["disc_f"] * ramp, float(lay["params"].get("feather", 2.0))) if e > 0 else lay["alpha0"]
                 a0 = cv2.warpAffine(a_src0, M, (W, H), flags=cv2.INTER_LINEAR, borderValue=0)
                 # the limb softens: the matte's edge width grows with e
                 sig = 1.0 + lay["soften"] * lay["r"] * k * e
                 a = feather(a0, sig) if sig > 1.5 else a0
                 # the mix: the disc's content gives way to B's core inside the shrinking disc, centre last
-                mw = lay["params"].get("mix_window", [0.45, 0.95])
+                # round 10: the rim mixes into the core's glow from the start of the recede over a wide ramp (limb first,
+                # centre last), so no ring and no second disc
+                mw = lay["params"].get("mix_window", [0.55, 0.95]); ramp = float(lay["params"].get("mix_ramp", 0.5))
                 em = ease01(e, *mw)
                 yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
                 rr = np.hypot(xx - ca[0], yy - ca[1]) / max(1.0, lay["r"] * k)
                 order = np.clip(rr, 0, 1)                         # 0 centre .. 1 limb
-                a_mix = np.clip((em * 1.3 - (1 - order)) / 0.25, 0, 1) if em > 0 else np.zeros((H, W), np.float32)
+                a_mix = np.clip((em * (1.0 + ramp) - (1 - order)) / ramp, 0, 1) if em > 0 else np.zeros((H, W), np.float32)
                 src = disc_rgb * (1 - a_mix[..., None]) + self.B_inA.astype(np.float32) * a_mix[..., None]
                 # the region the disc vacated shows what is under (the keyed sky -> B); the disc composites over
                 rgb = rgb * (1 - a[..., None]) + src * a[..., None]
@@ -968,6 +1314,33 @@ class Scene:
                     src = band_rgb * (1 - em) + tB.astype(np.float32) * em
                 else:
                     src = band_rgb
+                rgb = rgb * (1 - a[..., None]) + src * a[..., None]
+                alpha = alpha * (1 - a) + a
+                continue
+            if by == "keyframe_chain":
+                if e <= 0:
+                    a = lay["alpha_native"]
+                    rgb = rgb * (1 - a[..., None]) + self.A_f * a[..., None]
+                    alpha = alpha * (1 - a) + a
+                    continue
+                knots = [0.0] + list(lay["times"]) + [1.0]
+                j = max(0, min(len(lay["segs"]) - 1, int(np.searchsorted(np.array(knots), e, side="right") - 1)))
+                s = (e - knots[j]) / max(1e-6, knots[j + 1] - knots[j])
+                s = float(np.clip(s, 0.0, 1.0))
+                P, Q = lay["imgs"][j], lay["imgs"][j + 1]
+                mP, mQ = lay["mattes"][j], lay["mattes"][j + 1]
+                if s <= 0.0:
+                    src, a = P, mP
+                elif s >= 1.0:
+                    src, a = Q, mQ
+                else:
+                    sg = lay["segs"][j]
+                    src = T.morph_frame(P, Q, sg, s, smootherstep(s)).astype(np.float32)
+                    th = T.TCFG["hole_thresh"]
+                    aP, cP = T.forward_splat(mP, sg["dAB"], s, sg["wA"]); aP = T.fill_holes(aP, cP, T.backward_warp(mP, -s * sg["dAB"]).astype(np.float32), th)
+                    aQ, cQ = T.forward_splat(mQ, sg["dBA"], 1.0 - s, sg["wB"]); aQ = T.fill_holes(aQ, cQ, T.backward_warp(mQ, -(1.0 - s) * sg["dBA"]).astype(np.float32), th)
+                    ms = smootherstep(s)
+                    a = np.clip(aP * (1 - ms) + aQ * ms, 0, 1).astype(np.float32)
                 rgb = rgb * (1 - a[..., None]) + src * a[..., None]
                 alpha = alpha * (1 - a) + a
                 continue
@@ -1027,7 +1400,9 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
     n = int(round(seconds * fps))
     cam = sc.cam
     S_A3 = sc.S_A3
-    end = concept.get("end_effect") or {"kind": "luma_reveal", "window": [0.78, 1.0]}
+    end = dict(concept.get("end_effect") or {"kind": "luma_reveal", "window": [0.78, 1.0]})
+    if "end_window" in knobs:
+        end["window"] = [float(v) for v in knobs["end_window"]]
     glass = sc.cont.get("rim") == "glass"
     reflect = float(knobs.get("reflect", sc.cont.get("params", {}).get("reflect", sc.cont.get("spec", {}).get("reflect", 0.18))))
     enc = T.FrameEncoder(out / "transition.mp4", W, H, fps)
@@ -1128,6 +1503,9 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
                 of = np.clip(np.hypot(ax - ca0[0], ay - ca0[1]) / R0, 0, 1)          # far from the anchor first
             elif kind_end == "b_luma_reveal":
                 of = remap_img(sc.orderB, bx, by_)                                       # B's brightest first
+            vac = float(knobs.get("vacated_first", end.get("params", {}).get("vacated_first", 0.35)))
+            if vac > 0 and getattr(sc, "v_last", None) is not None:
+                of = np.clip(of + vac * remap_img(sc.v_last, ax, ay), 0, 1)   # round 10: where A's layer has left, B comes first (a higher order reveals earlier; 0..1 kept, so the end stays exact)
             a_fin = np.clip((of + ef * (1.0 + band_end) - 1.0) / band_end, 0, 1)
             a_fin = cv2.GaussianBlur(a_fin, (0, 0), 1.2)
             aA = aA * (1 - a_fin)

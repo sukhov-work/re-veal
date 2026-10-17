@@ -1,0 +1,36 @@
+{
+ "pair": "mismatch_5",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-18, round 10)", "temperature": 0, "prompt_sha256": "512dc0e2c55cdf569b749d98d7c98cfbb26d4b319ca7c498f8c654c0713472ef", "date": "2026-10-18", "brief": "owner grades of 2026-10-17 19:42 UTC"},
+ "reading": {
+  "a": "A large orange sun sits behind a two-level road bridge at dusk: a thin dark powerline crosses the sky and the sun about 100 px above the deck (rows 149-175, falling slightly to the right), the dark deck (element 16) and the truss under it (element 29), and an orange reflection column on dark water.",
+  "b": "The Andromeda galaxy: an orange core at (960, 521) in a disk tilted down to the right, a dark dust lane below-left of the core, a star field, and one straight satellite streak at about -19 degrees passing 60 px below the core."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "The camera pulls back as in rounds 8 and 9 while, in this order, the brightest stars come through the red sky first (from t 0.08), the powerline swings 19 degrees and stretches into the satellite streak as a thin line (t 0.12-0.70), the sun falls away into the core with its rim melting into the core's glow from the first frame of the recede (t 0.15-0.90), the whole bridge, deck and truss with soft edges, folds into the galaxy's dusty arm with only the bridge moving in depth (t 0.20-0.85), the sky gives way to space in the slow wide crossfade (t 0.25-0.92), and the core takes over the last of the sun brightest-first (t 0.72-1.0).",
+   "container": {"in": "B", "kind": "disc", "spec": {"center": [960, 521], "radius": 110}, "rim": "soft",
+    "params": {"sky": {"stars": true, "star_window": [0.08, 0.7], "key_window": [0.25, 0.92], "key_band": 0.35}}},
+   "anchors": [
+    {"a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "how": "Unchanged from rounds 8 and 9: the sun's fitted centre (about (994, 102), radius about 275 px) lands on the measured core centre; at end_scale 0.4 the sun is 110 px, the glow's half-maximum radius."},
+    {"a": {"kind": "dark_line", "rows": [140, 185], "thickness": 7}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "how": "Unchanged from round 9: the powerline (row 149 at the left edge, 165 in the middle, 175 at the right edge) is A's one thin dark straight line; the streak is B's one thin bright straight line."},
+    {"a": {"kind": "element", "ids": [16, 29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "how": "Unchanged from round 9: deck and truss together are the bridge's dark mass; the dust lane is the darkest wide band under the core."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.35, "gain_A": 0.35, "a_elements": [16, 29]}, "params": {"end_scale": 0.4}},
+   "transforms": [
+    {"name": "sun_recedes", "a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "by": "recede", "window": [0.15, 0.9], "mix": "luma", "params": {"end_radius": 25, "soften": 0.6, "limb_flatten": 1.0, "mix_window": [0.0, 0.95], "mix_ramp": 0.6}, "note": "Beat 1, the sun falls away into the core, unchanged in path and size. Answers 'still some hard edges around sun' (his frame: a bright ring and a dark gap at the rim): the limb mixes into the core's glow from the recede's first frame (mix_window [0.0, 0.95]) over the wide ramp 0.6, and limb_flatten 1.0 keeps the paler inner disc that drew the ring out."},
+    {"name": "wire_to_streak", "a": {"kind": "dark_line", "rows": [140, 185], "thickness": 7}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "by": "line_to", "window": [0.12, 0.7], "mix": "edge", "params": {"width": 3, "end_taper": 0.0}, "note": "Beat 2, his idea of round 8 ('barely visible thin powerline ... transformed into that diagonal streak'), unchanged window. Answers the wire's 'tilted bar' in his round-9 frame: the band's alpha is now the wire's own darkness (the round-10 dark_line rule), so the 7-row band carries the line and not the sky around it; end_taper 0 says so explicitly."},
+    {"name": "bridge_to_arm", "a": {"kind": "element", "ids": [16, 29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "by": "morph_to", "window": [0.2, 0.85], "mix": "edge", "params": {"map": "box", "rotate": true, "mass": "dark"}, "note": "Beat 3, kept ('bridge trasforms into arm , nice', round 8). Answers 'hard edges around ... bridge' (the deck as a hard-edged bar with a grey band, and the vertical bands above the lamp posts): elements 16 and 29 now composite with their soft mattes, A's plate fills under them, and pullback.parallax.a_elements [16, 29] confines the depth remap to the bridge so no sky pixel is remapped."}
+   ],
+   "end_effect": {"kind": "b_luma_reveal", "window": [0.72, 1.0], "params": {"band": 0.45}},
+   "helper": null,
+   "knobs": [
+    {"name": "sun_recedes.params.mix_ramp", "range": [0.4, 0.9], "default": 0.6, "what": "How wide the limb-first mix of the sun into the core's glow is; wider leaves less of a rim at any moment."},
+    {"name": "parallax_A_elements", "range": [[16, 29], [16, 29]], "default": [16, 29], "what": "The A elements the depth parallax acts on; an empty list turns A's parallax off entirely if the bridge's own remap still tears its edge."},
+    {"name": "container.params.sky.key_band", "range": [0.3, 0.6], "default": 0.35, "what": "How wide the sky's luma crossfade band is; raise it if the red sky still leaves a luma border at the disc now that the early colour lead is gone."}
+   ],
+   "risk": "F1 double exposure: the sky_colour_leads transform of round 9 is dropped to meet the three-transform rule, so the slow key now crosses an undarkened red sky; watch t 0.3-0.6 for a red-to-black luma border around the receding sun (the knob is key_band). The wire crosses the sun disc at x about 800-1190, so the recede layer and the line_to band both carry its pixels there; a dark chord on the sun during t 0.15-0.4 is that. F2 decoration: if the bridge's soft matte is wider than the deck, the plate's fill shows as a blurred band along the deck's top edge (the grey band of round 9 in another form). F3 invention: none expected; every star is B's, the plate is a fill of A's own pixels."
+  }
+ ]
+}

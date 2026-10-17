@@ -1,0 +1,33 @@
+{
+ "pair": "mismatch_2",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-18, round 10)", "temperature": 0, "prompt_sha256": "512dc0e2c55cdf569b749d98d7c98cfbb26d4b319ca7c498f8c654c0713472ef", "date": "2026-10-18", "brief": "owner grades of 2026-10-17 19:42 UTC"},
+ "reading": {
+  "a": "A man in a bright yellow jacket (element 3, box [103, 0, 540, 799]) peeks out from behind a tree trunk at the left (element 1, box [0, 0, 224, 799], the nearest element), against soft green and white bokeh.",
+  "b": "A café snapshot: the man nearest the camera stands at the left holding up a phone (element 10, box [0, 268, 432, 799]), a woman in green behind his raised hand, a woman in black smiling at the right, in front of a cream brick wall and a monstera."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "With no camera move, in this order: the bokeh turns toward the café's palette (t 0-0.55), the tree trunk slides out to the left with a soft edge (t 0.05-0.45), the yellow man glides down and left onto the nearest man's place (t 0.22-0.40), turns toward the camera as himself (by t 0.51), takes the nearest man's pose and raised phone with his own face (by t 0.64), becomes the nearest man in a yellow shirt (by t 0.82) and then the nearest man as he is (t 0.92), while from t 0.45 the café takes over the background, the footprints the man and the tree left first.",
+   "container": {"in": "B", "kind": "none", "spec": {}, "rim": "soft"},
+   "anchors": [
+    {"a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [10]}, "how": "His pairing, unchanged: the yellow man goes to the person nearest the camera."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "off"}, "params": {}},
+   "transforms": [
+    {"name": "tree_goes_away", "a": {"kind": "element", "ids": [1]}, "b": null, "by": "exit", "window": [0.05, 0.45], "mix": "none", "params": {"direction": "left", "fade": 0.3}, "note": "Beat 1, his 'the tree from frame A go away', unchanged window. Answers 'rest of frame A is just left with hard cut silhuette revealing B underneath': the trunk now leaves with its soft matte and A's plate fills where it stood, so what it uncovers is A's own bokeh, not a cut-out of B."},
+    {"name": "man_becomes_nearest_man", "a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [10]}, "by": "keyframe_chain", "window": [0.22, 0.92], "mix": "none", "params": {"keyframes": ["benchmarks/runs/2026-10-17/keyframes_r10/out/r10_m2_k1.png", "benchmarks/runs/2026-10-17/keyframes_r10/out/r10_m2_k3.png", "benchmarks/runs/2026-10-17/keyframes_r10/out/r10_m2_k2.png"], "frame": "canvas", "times": [0.25, 0.42, 0.6, 0.86], "guide": true}, "note": "Beat 2, his 'yellow man to rotate and gradually transform into closest to camera person'. Answers 'rough cutout of man from A is just moved and then hard crossfaded onto man from B': he moves with a soft matte (the renderer's rigid segment, chain 0-0.25, clip t 0.22-0.40), then passes through three generated in-betweens (k1 himself turned at B's man's place, k3 B's pose with his face, k2 B's face in a yellow shirt), so no frame mixes his face with the other man's at half strength except inside one keyframe-to-keyframe segment. The identity change k1 to k2 takes chain 0.42-0.86 (clip t 0.51-0.82), the longest span; the last segment only turns the shirt dark. The end effect starts at t 0.45 so his vacated footprint, which shows A's fill from about t 0.25 and is widest at t 0.40, is replaced by the café in about half a second (estimate, UNVERIFIED until rendered)."},
+    {"name": "bokeh_to_cafe", "a": {"kind": "element", "ids": [2, 4, 5, 6, 7]}, "b": {"kind": "element", "ids": [2, 3]}, "by": "colour", "window": [0.0, 0.55], "mix": "none", "params": {}, "note": "Beat 3, unchanged from round 9: the green and white bokeh takes the café wall's and the monstera's colours, so A's fill in the footprints already carries the café's palette when the café replaces it."}
+   ],
+   "end_effect": {"kind": "b_luma_reveal", "window": [0.45, 1.0], "params": {"band": 0.4, "vacated_first": 0.35}},
+   "helper": {"model": "FLUX.3 image klein distilled bf16", "keyframes": ["benchmarks/runs/2026-10-17/keyframes_r10/out/r10_m2_k1.png", "benchmarks/runs/2026-10-17/keyframes_r10/out/r10_m2_k3.png", "benchmarks/runs/2026-10-17/keyframes_r10/out/r10_m2_k2.png"], "what": "Three generated in-betweens of the man only, used inside his matte: A's man turned at B's man's place, A's face on B's man's pose and phone, and B's man in a yellow shirt; the café, the two women, the tree and the bokeh come from the two photos, and both end frames are original."},
+   "knobs": [
+    {"name": "end_effect.window[0]", "range": [0.35, 0.6], "default": 0.45, "what": "When the café starts to take over; earlier shortens how long A's fill shows in the vacated footprints, later keeps B's face out of the frame until the chain has reached k3."},
+    {"name": "vacated_first", "range": [0.0, 1.0], "default": 0.35, "what": "How far ahead of the rest of the background the café arrives in the footprints the man and the tree left."},
+    {"name": "man_becomes_nearest_man.params.times", "range": [[0.2, 0.4, 0.58, 0.86], [0.3, 0.45, 0.62, 0.86]], "default": [0.25, 0.42, 0.6, 0.86], "what": "When the moved picture, k1, k3 and k2 are reached in the chain; the first value is the rigid glide's share."}
+   ],
+   "risk": "F1 double exposure: the b_luma_reveal runs over the whole frame from t 0.45, the man's region included; B's face (mid luma) arrives near t 0.65-0.7 while the chain sits between k3 (his face on B's body) and k2 (B's face), so watch t 0.6-0.75 for two faces; if seen, move end_effect.window[0] later. Also check the sign of vacated_first in the renderer: as read, it subtracts from B's brightness order, which with this reveal's rule (high order first) delays the footprints instead of bringing them first. F3 invention: the keyframes are generated (screened: no added faces or hands); A's face is a widely shared photo of a real person, carried by k1 and k3 only inside his own matte, and the page must say so. F2 decoration: the rigid glide (t 0.22-0.40) is a moved cut-out if the soft matte is missing (the renderer prints 'INFO matte: no soft matte'); the matte for A element 3 exists."
+  }
+ ]
+}

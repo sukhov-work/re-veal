@@ -86,3 +86,46 @@ from A or B (A re-coloured where a `colour` transform says so); nothing is gener
   map) even when `map` is "box"; `params.ot_weight` 0–1 scales the optimal-transport residual.
 - Story rule (owner, 2026-10-17): at most three transforms per concept, each a beat he can name; no
   shuffle of layers.
+
+## Additions of round 10 (2026-10-17 night, from the owner's grades on round 9: `TRANSITIONS.md §13.15`)
+
+- Soft mattes. Every layer whose `a` (or `b`) is an `element` kind composites with the matting
+  model's alpha (`benchmarks/runs/2026-10-17/mattes/<photo>/el_<id>.png`, written by
+  `scripts/research/matte_source.py`), not the hard element mask; where no matte file exists the
+  renderer falls back to the hard mask and prints `INFO matte: no soft matte for <photo> element <id>`
+  (also listed in `info.json` under `matte_fallbacks`). B's front layer uses the same mattes. A
+  `dark_line` layer's alpha is the wire's own darkness (how much darker than the rows beside it),
+  and a `line_to` from a `dark_line` has no end taper unless `params.end_taper` says so.
+- The plate under A's layers (`params.plate`, default true; the knob `plate=false` turns it off for
+  the whole render). A is filled under every lifted layer's footprint (`cv2.inpaint`, Telea, at
+  1280 px or less; a fill, not a generation), so a layer that moves away uncovers A's own surround
+  instead of a hard-cut silhouette of B; `info.json` reports `plate_A_share`. A layer with
+  `plate: false` keeps the hole (B shows through where it was).
+- `recede` params: `limb_flatten` defaults to 1.0 (off; it drew a paler inner disc); the disc is
+  the fitted circle plus the sun's connected bright blob (`blob_L` 110, `blob_reach` 1.35 radii; an
+  oblate sun's left and right limbs lay outside the circle and stayed in the base as bright
+  crescents in round 9); the alpha falls over a smooth ramp from `rim_in` (default 0.55) to
+  `rim_out` (1.0) of the radius once the recede has started; `mix_window` (default [0.55, 0.95])
+  and `mix_ramp` (default 0.5) set when and how widely the disc's colour mixes into the core's glow,
+  limb first, centre last (an early mix at the limb drew a second, darker disc in the drafts of
+  2026-10-18, so the default mix is late); the other layers' silhouettes across the disc (the deck's
+  chord) are filled from the disc's own pixels and blended in over the first `fill_in` (0.3) of the
+  recede.
+- `pullback.parallax.a_elements` (list of A element ids; knob `parallax_A_elements`): the depth
+  parallax inside A acts on those elements only; the rest of A (a sky) stays at the reference
+  disparity, so no sky pixel is remapped.
+- `container.spec.front_ids` (list of B element ids; knob `front_ids`): elements forced into B's
+  front layer whatever their depth (the ceiling that "should have been in foreground").
+- Transform `by: "keyframe_chain"` {"a": an element or `all`, "b": an element or null (= the whole
+  of B), "params": {"keyframes": [paths relative to the repo], "frame": "canvas" | "A", "times":
+  [t_1, ..., t_{n-1}] (optional; the chain's progress at which each keyframe is reached, evenly
+  spaced by default), "guide": true}}: generated keyframes inside the layer's matte. The chain
+  A → k_1 → … → k_n → B is rendered by the tool's own morph between consecutive pictures
+  (`transitions.morph_frame`: a box similarity A-matte → B-matte as the guide of the first segment,
+  DIS flow with consistency weights, forward splats, a linear mix), inside a matte that travels
+  with the content from A's soft matte to B's. `frame: "canvas"` means the keyframe is the pair's
+  canvas in B's layout (the café: the man already at B's place); `frame: "A"` means the keyframe
+  is in A's own geometry (the view through the pane). The keyframes are helpers under the owner's
+  2026-09-29 conditions (realistic, at least half of the objects original and consistent, no new
+  objects); the page shows them beside the clip and says they are generated. `info.json` reports
+  the chain's segments (median displacement, mean consistency inside the matte).

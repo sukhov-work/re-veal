@@ -368,6 +368,7 @@ which is what the owner grades; the basket could not see it (AUC 0.46–0.48 aga
 6. **Parked**: `--camera` stays an option (not a default); the per-frame generative bridge; TR7.
 
 ### Rank, revised 2026-10-17 — after the owner's verdicts on the box clip and on round 7 (`TRANSITIONS.md §12.24.9`, `§12.25`, `§13`)
+Note of 2026-10-18 (round 10, `TRANSITIONS.md §13.17`): items 1–3 below ran through rounds 8–10; after his grades on round 9 (none on all three pairs) round 10 added soft mattes from a matting model, a fill and a soft reveal under a lifted layer, the sunset's finishing, and generated FLUX.3 keyframes inside a layer's matte bridged by the tool's own morph; three clips are on the round-10 page for his grades (ungraded as of 2026-10-18 01:00). Open rows from the round: T40–T44.
 Owner (verbatim, 2026-10-17): "i feel like we are make small incremental fixes but we are stuck
 conceptually". His two descriptions of the transition he wants (mismatch_5: "a super out zoom …
 sun became very distant and eventually converted to galaxy core"; mismatch_3: "zoom out as if people
