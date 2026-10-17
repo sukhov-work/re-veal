@@ -1,0 +1,92 @@
+# The director's tooling list (living document; seeded 2026-10-17 from `research/2026-10-17/inventory_report.md` and the round-8/9 renderer; owner's order of 2026-10-17: "inventory report ( + any future additions ) may become ( obviously in some other form ) a nice tooling list for final director that we will adopt")
+
+What this is: every reader, camera, transform, reveal, helper and measure the director (a planner
+model writing a plan, and the renderer executing it) can pick, one row each, with where it lives,
+what it needs, what it costs, and the owner's verdict on it so far. The verdict column is his word
+or "ungraded"; a technique he rejected stays in the list with the reason, because the director must
+know what not to pick. Status: `tool` = shipped in `transitions.py` or `reveal.py`; `renderer` = a
+kind of `scripts/research/director_render.py` (plan grammar `scripts/research/plans/SCHEMA.md`);
+`probe` = a research script; `box` = runs on the Strix Halo machine; `rejected` = by his verdict
+or by measurement; `candidate` = not built. Rulings that bind every row: every pixel from the two
+photos unless a helper is declared (his 2026-09-29 conditions: realistic, at least half of the
+objects original and consistent, no new objects); frame 0 is A and the last frame is B; nothing
+enters `transitions.py` before he says so; never full video generation; no 4-bit quants. Update
+rule: a row changes only with a dated verdict or a dated measurement; new rows go under their
+section with the date.
+
+## 1. Readers (what the director knows about the two photos)
+
+| Tool | Where | Gives | Cost | Owner's verdict / status |
+|---|---|---|---|---|
+| Layer source with SAM 3 (elements with label, group, box, area, depth, normals; the element map on the centred cover crop) | `scripts/research/layer_merge.py`; outputs `benchmarks/runs/2026-09-28/layers_v3/<photo>/layers.{npz,json}` | the element masks every mask rule and anchor resolves against | once per photo, a scratch environment | chosen by him 2026-09-29 ("SAM 3 source"); its masks are hard: he calls a moved element a "rough cutout" (2026-10-17 r9). Soft mattes are round 10 item 1 |
+| Depth (Depth Anything V2 Small, offline behind `transitions.py warmup`) | `transitions.py model_disparity`; the renderer's parallax | disparity 0 far .. 1 near per pixel; per-element means for the front layer | about 1 s per image on the CPU | the TR10 camera move was "liked" 2026-09-23; on a galaxy photo the reading is not depth (keep `parallax_sources=["A"]`) |
+| Reveal alignment (SIFT/ORB, MAGSAC++, ECC; DISK+LightGlue fallback) | `reveal.py align` | related or refused, inliers, the homography | about 8 s per pair | `tool`; the director reads it as the relation (aligned / themed / unrelated) |
+| Luminary by a circle fit to the limb | `director_render.circle_fit` (`circle_fit` anchor) | centre and radius of a disc partly behind an object | ms | r8: "sun correspondence to galaxy center is the right direction"; the brightest-blob rule of the probe sat 130 px off ("a bit off center") |
+| Bright disc (the largest blob over a fraction of the maximum) | `nest_probe.bright_disc` (`bright_disc` anchor) | a core, a sun | ms | used for the galaxy's core; a 0.995 quantile picks edge pixels (trap) |
+| Line by principal axis; dark band by a difference of Gaussians; dark line (a wire) by the rows darker than their neighbours | `director_render.line_fit`, `dark_band`, `mask_A("dark_line")` | the streak, the dust lane, the powerline | ms | r9: "would be cool if … powerline … transformed into that diagonal streak" (the ask); the render he graded "hard edges" (the line's band) |
+| Changed-region mask (per-channel Otsu, 21 px dilation) | `reveal.py` (`HANDOFF.md §3.4`); reimplemented in `tr14_variants.py` | where a repaint happened on a re-shot | in align | gates the TR14 effects he picked on the boxes |
+| Auto anchors (DINOv2 mutual NN, brightest blob, horizon, faces); RoMa dense field | `auto_anchors.py`, `roma_probe.py` | correspondences on unrelated pairs | 35–55 s, 1.7 GB (RoMa) | `rejected` by measurement (0–6 matches; false suns); the semantic correspondence is backlog T34 (DINOv3 candidate) |
+
+## 2. Cameras (how the frame moves)
+
+| Tool | Where | What it does | Owner's verdict / status |
+|---|---|---|---|
+| The nested camera: A attached to a region of B (disc, rect, quad) by one similarity or homography, one pull-back from "A fills the frame" to B | `director_render.Camera`; containers in the schema | his own framing for mismatch_5 and mismatch_3 | r8 (on the probe): "framing not bad", "zoom out is cool"; r8 page: "camera move … is really cool here" (mismatch_3); his rule 2026-10-17: a camera whose direction carries the idea is the transition's spine (§11 amendment) |
+| B's foreground as a depth layer over a filled plate, entering from the frame's edges (push + fade-in) | `director_render.build_front_layer`, `parallax_map` | the lounge's men and sofas close in front of the pane | r8: "transition of foreground of B into frame … is really cool"; r9: "obscures part of the ceiling of B which should have been in foreground" (the depth margin dropped the ceiling: force it with a front list) |
+| Parallax by depth inside A and B (e_p = e + g (d − d_ref) e (1 − e)) | `parallax_map`; `pullback.parallax` | near content eases ahead of far | r8/r9: "missing Z depth / parallax" (asked), then the sky's bands from the remap on mismatch_5 (r9 frame): keep it off the sky, on the bridge layers only |
+| Class B saliency pan-and-zoom; `--camera` depth dolly | `transitions.py` (`panzoom_field`, `--camera`, `--zoom`) | one pan-zoom or a depth dolly over a dissolve | "naive cross-dissolves" 2026-09-13; the depth move "liked" 2026-09-23; by §11 a camera alone is decoration |
+| Theme anchors by MLS (`--anchors`) | `transitions.py`, `theme_anchors.py` | hand anchor pairs warp the whole frame | 2026-09-26: "one picture rotates", "image plane 3d flip" (F2) |
+
+## 3. Transforms of content (what happens inside the frame)
+
+| Tool | Where | What it does | Owner's verdict / status |
+|---|---|---|---|
+| `recede` (a disc contracts about its centre, its rim mixing into the target's glow) | renderer | the sun becomes the core | r8: "still too large at the end", then r8 page "looks promising"; r9: "still some hard edges around sun" (the rim ring: round 10 item 2) |
+| `line_to` (a band rotates about an anchor, thins and stretches into a line, carrying the line's pixels from its end position) | renderer | the deck or the wire into the streak | r8 (the deck): part of "bridge trasforms into arm , nice"; r9 (the wire): in the frame he called "dirty" |
+| `morph_to` (a box or axis map plus an optimal-transport residual; the target's pixels revealed inside the moving matte by luma, edge or noise order; `rotate`, `ot_weight`, `feather`, `end_taper`) | renderer; the OT from `layered_probe.ot_fields` | the truss into the dust lane; a crowd onto a group; a man onto a man | the truss: "bridge trasforms into arm , nice" (r8); a crowd onto men: blobs and voids (skeptic r8), cut by the operator; a man onto a man: "rough cutout … hard crossfaded" (r9). Rule: a band onto a band works; two different subjects do not (T39) |
+| `move_to` (the rigid version) | renderer | a flag onto a painting | r8 c1-full: "aimless layers shuffle" |
+| `exit` (a layer leaves the frame and fades) | renderer | the tree goes away | r9: it leaves "a hard cut silhuette revealing B underneath" (needs a soft matte and a plate behind it) |
+| `colour` (Lab statistics of a region toward a target region, weighted by darkness under a soft rim) | renderer (`nest_probe.lab_transfer`) | the sky toward space; the brick toward foliage | ungraded on its own; it leads the sky key (r9) |
+| `hold` (a layer keeps its matte and rides the camera) | renderer | the sun before it recedes | ungraded |
+| TR14 in-mask effects on a re-shot: `luma`, `melt-soft`, `edge-grow` (`draw` ungraded) | `scripts/research/tr14_variants.py`; `chain_luma.py` for several photos pinned into one frame | the repainted boxes change inside the changed-region mask | 2026-10-09/17: "liked mix of tr14_luma_3s, tr14_edge-grow_3s and tr14_melt-soft but none of those was fully ideal"; the experiment is closed |
+| Class A homography + DIS morph (forward splat, certainty weights) | `transitions.py pair --preset morph` | the default for related pairs | match_4/5 picked 2026-09-14 "very far from perfect"; mismatch_7 "idea was right"; kept |
+| The layered probe's score grammar (layers × mask rule × action × window; `morph_to`, `move_to`, backdrops, automatic scores `--auto…--auto4`) | `scripts/research/layered_probe.py` (3,711 lines), measures in `layered_diag.py` | rounds 1–7 of the layered family | r7: "still at its core 2 separate pictures and flat 2d effect", "very advanced crossfade"; the automatic clip on the boxes "just wipe"; the primitives live on inside the renderer |
+
+## 4. Reveals and ends (how the last of A gives way)
+
+| Tool | Where | What it does | Owner's verdict / status |
+|---|---|---|---|
+| `luma_reveal` (A's brightness order), `edge_reveal` (rim inward), `radial_reveal` (toward an anchor), `b_luma_reveal` (B's brightest first) | renderer `end_effect` | the pane clears | every kind is "crossfade" or "dissolves" to him (r8 "simply crossfades out", r9 "still crossfades , just less obviously"); use only where the content has already transformed |
+| The sky block (B's stars first by a top-hat order, a slow wide luma key, the frame's edge feathered by the camera) | renderer `container.params.sky` | a sky gives way to a sky | r9 ask "brightest stars to appear first and then nice gradual luma cross fade"; the render: "dirty" (the key over a depth-remapped sky; fixed in round 10 item 2) |
+| Dissolve, portal, luma presets | `transitions.py` presets | the shipped styles | 0 of 12 picks 2026-09-26 on unrelated pairs |
+
+## 5. Helpers (generated content under his 2026-09-29 conditions)
+
+| Tool | Where | What it gives | Cost | Owner's verdict / status |
+|---|---|---|---|---|
+| FLUX.2 klein 9B Q8_0 on the box (one or two references, 4 steps) | `scripts/research/strix_keyframe.sh MODEL=klein`; `keyframe_prompt.py`, `keyframe_screen.py` | a plate or a keyframe at 1344×768 | 68 s per image | the image model of record (2026-09-27); plates and keyframes on the boxes rendered, ungraded as helpers |
+| FLUX.3 image klein bf16 on the box (distilled 16 steps, base 50 steps; up to 10 references; boxes as text; no mask, no strength) | `strix_keyframe.sh MODEL=flux3`; `research/2026-10-17/flux3_run.md` | the same, at 3.5–3.9× (distilled) or 8.8–10.4× (base) the time; the base keeps more of the frame outside the box zone | 312–923 s per image at 1024×1280 | his eye on `benchmarks/runs/2026-10-17/flux3/index.html` decides (T35) |
+| Qwen-Image-Edit-2511 Q4 on the box | `strix_keyframe.sh MODEL=qwen` | keyframes on mismatch_4 (kf_01–kf_16) | 18–32 min per image | superseded by klein (speed); its quant is below his 8-bit rule |
+| A fill by `cv2.inpaint` behind a lifted foreground or a hidden line | renderer `build_front_layer`, `hide_targets_in_plate` | the plate where B's front or the streak was | ms | "a fill, not a generation"; visible for a few frames beside a pane (T37); not yet accepted or rejected by him |
+| Keyframes inside a container's matte (A → k1 → k2 → B by the renderer's morph) | not built; round 10 items 3–4 | the in-between of a subject becoming another subject | box time per keyframe | the only route his words leave open for mismatch_2 and the window pane (§13.15) |
+| Whole-frame diffusion morphers, full video generation | — | — | — | `rejected` by §11 (F3; "never full video generation") |
+
+## 6. Measures (what the director reads back)
+
+| Measure | Where | What it says | Calibration against his verdicts |
+|---|---|---|---|
+| First / second / last interior step and the peak (decoded mp4, mean abs difference per frame) | the renderer's `info.json`; `nest_probe.py` | a cut at either end (the 1-level bar of §12.4) or at a layer's start | reads cuts, not looks; a 30-level peak is a camera move, not a fault |
+| md5 of the clip, two runs | the sheets | determinism | a rule, not a look |
+| `layered_diag.py` (end, rest, outline, contrast, step, seam, layers, fields, rim, holes, change, edge) | `scripts/research/layered_diag.py` | the layered family's measures | `change` is not a target until calibrated (it read a wipe he rejected as 21 % reveal) |
+| Goal numbers (feat_floor, laplace_floor, contrast_floor, local_share, dissolve_fit) | `transitions.py` quality section; `verdict_metrics.py` | screens defects | AUC 0.46–0.48 against his picks: does not separate "crossfade" from the closest picks |
+| A skeptic subagent with the frames | `research/2026-10-17/skeptic_r8.md`, `skeptic_r9.md` | faults by frame number in his terms | the only measure that predicted his verdict (r9: "worse than round 8" on mismatch_5, and he graded none) |
+
+## 7. The director's loop (the flow itself)
+
+| Step | Where | Status |
+|---|---|---|
+| Reading: the layer source, depth, the relation | §1 | runs |
+| Plan: a model writes `plan.json` in the grammar (model id, temperature 0, the prompt's sha256, the brief: blind or his notes) | `scripts/research/plans/SCHEMA.md`; the planner is an Opus 5.5 subagent of the Claude Code session (his choice 2026-10-17); OpenRouter later (T36) | runs; three rounds of plans exist |
+| Draft and final renders by the renderer, the operator's knobs on the command line and listed on the page | `director_render.py --set`, `director_page.py` | runs |
+| A skeptic pass on the full-size render before the page, a re-render after it | `research/2026-10-17/skeptic_r8.md`, `skeptic_r9.md` | adopted (r9 showed why) |
+| His grades (best, the three boxes, acceptable as-is, a note, the knobs) → the next plan's brief | `director_picks*.json` beside each page | runs |

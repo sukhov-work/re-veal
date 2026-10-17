@@ -3175,3 +3175,21 @@ the helper itself is allowed by his 2026-09-29 answer):
    than round 8 on his own pair until the skeptic caught it).
 Not proposed: more rendering mechanics on the current primitives (rounds 8 and 9 show their limit),
 a second blind pair before items 1–4 land, FLUX.3 as the planner.
+
+### 13.16 The research of 2026-10-17 kept as tracked documents, and the director's tooling list (owner's order, 2026-10-17 night)
+
+Owner (verbatim): "before we wrap the session record useful researches from
+benchmarks/runs/2026-10-17/agents as persistent documents . e.g
+benchmarks/runs/2026-10-17/agents/inventory_report.md or
+benchmarks/runs/2026-10-17/agents/frontier_report.md, i believe inventory report ( + any future
+additions ) may become ( obviously in some other form ) a nice tooling list for final director that
+we will adopt". Done: the eleven reports of the day (the inventory, the frontier survey, the FLUX.3
+reading and its run, the blind plans, the two planners' notes, the four skeptic passes) are copied
+verbatim with a provenance header into `.claude/claude-docs/research/2026-10-17/` (index
+`README.md` with the prose rule's detect counts per file; the compaction log was not copied), and
+`.claude/claude-docs/research/director-tooling.md` is the living tooling list: every reader,
+camera, transform, reveal, helper and measure the director can pick, one row each with where it
+lives, what it costs and the owner's verdict on it, seeded from the inventory's rows and the
+renderer's kinds. Rule from now on: a research report a subagent writes under `benchmarks/runs/`
+is copied to `research/<date>/` with its header before the session's commit, and the tooling list
+gains or changes a row with every dated verdict or measurement.
