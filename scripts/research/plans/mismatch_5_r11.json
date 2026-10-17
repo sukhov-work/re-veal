@@ -1,0 +1,37 @@
+{
+ "pair": "mismatch_5",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-18, round 11)", "temperature": 0, "prompt_sha256": "6406cc1b6e759f9e46bd6c5c5db784ef4f255e09867c36e35f54aa6c494ffb88", "date": "2026-10-18", "brief": "owner grades of 2026-10-17 22:42 UTC"},
+ "reading": {
+  "a": "A large orange sun sits behind a two-level road bridge at dusk: a thin dark powerline crosses the sky and the sun about 100 px above the deck (rows 149-175, falling slightly to the right), the dark deck (element 16) and the truss under it (element 29), the red glow of the sky around the sun (elements 1, 5, 10, 12) and an orange reflection column on dark water (element 36).",
+  "b": "The Andromeda galaxy: an orange core at (960, 521) in a disk tilted down to the right (element 1, the galaxy's glow), a dark dust lane below-left of the core, a star field, and one straight satellite streak at about -19 degrees passing 60 px below the core."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "The camera pulls back as in rounds 8-10 while, in this order, the red glow around the sun starts turning into the galaxy's orange-brown glow from the first frame (t 0-0.6), the brightest stars come through the sky (from t 0.08), the powerline swings 19 degrees and stretches into the satellite streak (t 0.12-0.70), the sun falls away into the core as one disc with one soft rim (t 0.15-0.90), the bridge folds into the dusty arm with only the bridge moving in depth (t 0.20-0.85), what is left of A's sky closes in a circle around the sun and fades into space (t 0.25-0.92, never a rectangle), and the core takes over the last of the sun brightest-first (t 0.72-1.0).",
+   "container": {"in": "B", "kind": "disc", "spec": {"center": [960, 521], "radius": 110}, "rim": "soft",
+    "params": {"sky": {"stars": true, "star_window": [0.08, 0.7], "key_window": [0.25, 0.92], "key_band": 0.35, "shape": "radial", "radial_end": 1.6, "radial_width": 0.35, "radial_near_at": 0.25, "radial_end_at": 0.9}}},
+   "anchors": [
+    {"a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "how": "Unchanged from rounds 8-10: the sun's fitted centre (about (994, 102), radius about 275 px) lands on the measured core centre; at end_scale 0.4 the sun is 110 px, the glow's half-maximum radius."},
+    {"a": {"kind": "dark_line", "rows": [140, 185], "thickness": 7}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "how": "Unchanged from rounds 9 and 10: the powerline is A's one thin dark straight line; the streak is B's one thin bright straight line."},
+    {"a": {"kind": "element", "ids": [16, 29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "how": "Unchanged from rounds 9 and 10: deck and truss together are the bridge's dark mass; the dust lane is the darkest wide band under the core."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.35, "gain_A": 0.35, "a_elements": [16, 29]}, "params": {"end_scale": 0.4}},
+   "transforms": [
+    {"name": "glow_to_galaxy_colour", "a": {"kind": "element", "ids": [1, 5, 10, 12, 36]}, "b": {"kind": "element", "ids": [1]}, "by": "colour", "window": [0.0, 0.6], "mix": "none", "params": {}, "note": "The lead, not a beat (round-11 rule: a colour transform counts as a lead). Answers 'or transform color into galaxy that surrounds core': A's red glow around the sun and the water move in Lab statistics toward the galaxy's glow (B element 1) from the first frame, so by the time the radial sky window closes (t 0.25 onward) the sky that remains is already near the galaxy's colour and the key crosses two close fields. Restores round 9's sky_colour_leads with the window [0.0, 0.6] of tonight's test."},
+    {"name": "sun_recedes", "a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "by": "recede", "window": [0.15, 0.9], "mix": "luma", "params": {"end_radius": 25, "soften": 0.0, "limb_flatten": 0.55, "mix_window": [0.55, 0.95], "mix_ramp": 0.5}, "note": "Beat 1, the sun falls away into the core, path and size unchanged. Answers 'sun itself has some residual concentric bands ... as if several different radius images of sun + galaxy center overlap': soften 0 removes the growing blur (one of the four radii), the rim ramp from 0.55 r is the sun's only radius, limb_flatten 0.55 levels the limb with the smooth weight, and the late mix (mix_window [0.55, 0.95], mix_ramp 0.5, the renderer's defaults written out) replaces round 10's early mix [0.0, 0.95] that drew a second, darker disc. The plate's edge over half the radius and the vacated ring keeping A's re-coloured glow are renderer rules of round 11, not plan fields."},
+    {"name": "wire_to_streak", "a": {"kind": "dark_line", "rows": [140, 185], "thickness": 7}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "by": "line_to", "window": [0.12, 0.7], "mix": "edge", "params": {"width": 3, "end_taper": 0.0}, "note": "Beat 2, his round-8 idea, unchanged from round 10 (he named no fault in it)."},
+    {"name": "bridge_to_arm", "a": {"kind": "element", "ids": [16, 29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "by": "morph_to", "window": [0.2, 0.85], "mix": "edge", "params": {"map": "box", "rotate": true, "mass": "dark"}, "note": "Beat 3, kept from rounds 8-10 ('bridge trasforms into arm , nice'); unchanged."}
+   ],
+   "end_effect": {"kind": "b_luma_reveal", "window": [0.72, 1.0], "params": {"band": 0.45}},
+   "helper": null,
+   "knobs": [
+    {"name": "container.params.sky.radial_end", "range": [1.2, 2.2], "default": 1.6, "what": "How many sun radii the radial window around the sun has left at t 0.9; smaller closes A's sky tighter on the sun, larger keeps more of the re-coloured glow into the end."},
+    {"name": "glow_to_galaxy_colour.window[1]", "range": [0.45, 0.8], "default": 0.6, "what": "When A's glow reaches the galaxy's colour; earlier makes the closing sky window cross a field already the galaxy's colour, later keeps the sunset red longer."},
+    {"name": "sun_recedes.params.mix_ramp", "range": [0.35, 0.7], "default": 0.5, "what": "How wide the limb-first mix of the sun into the core's glow is; raise it if one ring is still visible at the rim, lower it if the disc reads as blurred."}
+   ],
+   "risk": "F1 double exposure: the radial sky window (from the far corner at t 0 to 1.6 sun radii at t 0.9) and the slow key (t 0.25-0.92) both act on what remains of A's sky; if the window's edge (0.35 of its radius) runs ahead of the key, watch t 0.3-0.6 for a soft circle of red sky shrinking in steps around the sun, the circular form of his 'shrinks in two distinct steps'. The colour lead re-colours A's water (element 36) as well; if the reflection column turns brown against B's star field before t 0.25, it reads as a stain. F2 decoration: the late mix (from 0.55 of the recede, clip t about 0.56) keeps the sun's own orange disc over the core until then; if the disc's brightness at the rim still steps between the ramp and the core's glow, a single ring remains (the knob is mix_ramp). F3 invention: none; every star is B's, the plate is a fill of A's own pixels, the colour lead moves A's own colours."
+  }
+ ]
+}

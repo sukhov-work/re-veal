@@ -129,3 +129,51 @@ from A or B (A re-coloured where a `colour` transform says so); nothing is gener
   2026-09-29 conditions (realistic, at least half of the objects original and consistent, no new
   objects); the page shows them beside the clip and says they are generated. `info.json` reports
   the chain's segments (median displacement, mean consistency inside the matte).
+
+## Additions of round 11 (2026-10-18, from the owner's grades on round 10: `TRANSITIONS.md §13.18`)
+
+- A `keyframe_chain` runs linear in its window and mixes linearly inside each segment (`params.ease`:
+  "linear" by default for a chain, "smootherstep" for every other kind); round 10 eased twice and
+  packed the pane's crowd dissolve into 0.24 s of a 0.75 s segment. Its `times` therefore map to
+  clip time by the window alone.
+- `keyframe_chain` with `"depth": "front"` composites after the end effect, like a morph layer that
+  leaves the container: the base can become B behind the man while he stays, then he moves over B
+  (no vacated footprint, nothing shows "through a cut"). After the rigid lead the chain's matte is
+  the moved matte joined with B's matte and dilated by `params.matte_grow` (0.03 of the width), so
+  a keyframe's wider shoulders or a turned head are never cut by the matte's edge; the frames the
+  chain shows inside that matte are the keyframes themselves.
+- `params.face_guide` (default true when the chain is not the whole frame): before the flow of each
+  segment between keyframes the renderer aligns the two faces by a similarity from the face box of
+  one to the face box of the other (OpenCV's bundled frontal-face Haar cascade, the largest face
+  inside the matte); `params.damp` defaults to 0.5 with a face guide (the flow halved where it is
+  unreliable) and 1.0 without. `info.json` lists the face boxes per segment under `chain.faces`.
+- Under a soft rim (a disc container) what remains of A's sky is keyed inside a radial window
+  around the sun that shrinks with the pull-back (`container.params.sky.shape`: "radial", the
+  default; "frame" is the round-9 border feather): the window's radius runs from the far corner of
+  A's frame to `sky.radial_end` (1.6) sun radii, its edge `sky.radial_width` (0.35) of the radius.
+  No rectangle of A's sky remains ("preserving blurred square shape").
+- `recede`: `soften` defaults to 0 (the rim ramp is the sun's only radius; a growing blur was a
+  second one), the plate under the sun blends in over half the radius (its circle was a third), and
+  the ring the recede vacates no longer shows B (a fourth); A's glow around the sun is re-coloured
+  toward the galaxy around the core by a `colour` transform, which is a lead and not one of the
+  three beats.
+- B's front: one layer per front element in depth order, each with its own matte and its own depth
+  move (knob `front_per_element=false` restores the single layer); the owner's frame of round 10
+  showed B's men cut by a blurred band where the shared alpha met a neighbour.
+- The chain's lead moves the layer by its FACE when both A's layer and the first keyframe show one (a
+  similarity from the five landmarks, its rotation dropped; `lead_guide: "faces"` in `info.json`),
+  else by the matte boxes; the box guide had left A's man's face 95 px right of k1's at 960 px.
+- The radial sky window runs in clip time, not the camera's ease: fully open at 0, at the nearest
+  frame edge of A by `sky.radial_near_at` (0.25), at `radial_end` sun radii by `radial_end_at`
+  (0.9). Before 0.25 A's corners fade out radially; after it no rectangle can show.
+- `recede`: `limb_flatten` defaults to 0.55 with a smooth weight (the limb levelled toward the
+  disc's inner colour from the rim's start), so the rim ramp does not read as a second ring.
+- The face model: `benchmarks/runs/2026-10-18/face/face_detection_yunet_2023mar.onnx` (YuNet,
+  OpenCV's `FaceDetectorYN`; fetched once on 2026-10-18, sha256 in `FACE_MANIFEST.json` beside it,
+  read offline); without the file the chain runs without a face guide and prints an INFO line.
+- The chain's lead segment eases in and out (a rigid move at constant speed "stops dead", the
+  skeptic's first pass on round 11); the keyframe segments stay linear.
+- B's plate under its front is filled by the pull-push pyramid (knob `plate_fill=telea` restores
+  cv2.inpaint): Telea's fill of a body was a flesh-coloured smear that showed below the pane before
+  the man's layer arrived. The operator's `parallax_push` (default 2.5) sets how far B's front
+  starts beyond the frame; 1.5 brings it in sooner.

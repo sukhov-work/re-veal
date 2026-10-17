@@ -39,10 +39,18 @@ PHOTO = {"S": "_S", "F": "_F"}
 
 
 # ----------------------------------------------------------------------------- small helpers
-def ease01(u, t0, t1):
+def ease01(u, t0, t1, kind="smootherstep"):
     if t1 <= t0:
         return 1.0 if u >= t1 else 0.0
-    return smootherstep((u - t0) / (t1 - t0))
+    x = (u - t0) / (t1 - t0)
+    if kind == "linear":
+        return float(min(1.0, max(0.0, x)))
+    return smootherstep(x)
+
+
+def layer_e(u, lay):
+    """A layer's progress in its window: smootherstep, or linear for a keyframe chain (round 11)."""
+    return ease01(u, *lay["window"], kind=lay.get("ease", "smootherstep"))
 
 
 def to3(M):
@@ -218,6 +226,39 @@ def pull_push_fill(img, hole):
         up = known * wl + up * (1.0 - wl)
     out = img.astype(np.float32).copy(); out[hole] = up[hole]
     return out
+
+
+FACE_MODEL = ROOT / "benchmarks/runs/2026-10-18/face/face_detection_yunet_2023mar.onnx"   # fetched once 2026-10-18; FACE_MANIFEST.json beside it
+_FACE_DET = {"det": None, "missing": False}
+
+
+def face_box(rgb, region=None):
+    """The largest face YuNet (OpenCV's FaceDetectorYN, the model read offline from FACE_MODEL) finds, as
+    (x, y, w, h, landmarks) with the five landmarks (eyes, nose, mouth corners) as an (5, 2) array; restricted to
+    `region` (bool) when given; None when there is none or the model file is absent (an INFO line once).
+    Used to align two faces before the flow of a keyframe chain. Deterministic."""
+    if _FACE_DET["missing"]:
+        return None
+    if _FACE_DET["det"] is None:
+        if not FACE_MODEL.exists():
+            _FACE_DET["missing"] = True
+            print(f"INFO face: no face model at {FACE_MODEL}; the chain runs without a face guide", file=sys.stderr)
+            return None
+        _FACE_DET["det"] = cv2.FaceDetectorYN.create(str(FACE_MODEL), "", (320, 320), 0.6, 0.3, 5000)
+    det = _FACE_DET["det"]
+    bgr = cv2.cvtColor(np.ascontiguousarray(rgb), cv2.COLOR_RGB2BGR)
+    det.setInputSize((bgr.shape[1], bgr.shape[0]))
+    _, faces = det.detect(bgr)
+    best = None
+    for f in (faces if faces is not None else []):
+        x, y, w, h = [int(v) for v in f[:4]]
+        if region is not None:
+            cx, cy = min(region.shape[1] - 1, max(0, x + w // 2)), min(region.shape[0] - 1, max(0, y + h // 2))
+            if not region[cy, cx]:
+                continue
+        if best is None or w * h > best[2] * best[3]:
+            best = (x, y, w, h, np.array(f[4:14], np.float32).reshape(5, 2))
+    return best
 
 
 def is_soft(a):
@@ -698,15 +739,19 @@ class Scene:
         else:
             fm_src = fm
         grow = cv2.dilate(fm_src, np.ones((int(6 * k) | 1, int(6 * k) | 1), np.uint8))
-        small_k = max(1.0, self.B_src.shape[1] / 1280.0)          # inpaint at <= 1280 px wide, then upsample the fill
-        if small_k > 1.0:
-            bs = cv2.resize(self.B_src, (int(round(self.B_src.shape[1] / small_k)), int(round(self.B_src.shape[0] / small_k))), interpolation=cv2.INTER_AREA)
-            gs = cv2.resize(grow, (bs.shape[1], bs.shape[0]), interpolation=cv2.INTER_NEAREST)
-            filled = cv2.inpaint(bs, gs, 7, cv2.INPAINT_TELEA)
-            filled = cv2.resize(filled, (self.B_src.shape[1], self.B_src.shape[0]), interpolation=cv2.INTER_LINEAR)
+        if str(self.knobs.get("plate_fill", "pullpush")) == "telea":
+            small_k = max(1.0, self.B_src.shape[1] / 1280.0)          # inpaint at <= 1280 px wide, then upsample the fill
+            if small_k > 1.0:
+                bs = cv2.resize(self.B_src, (int(round(self.B_src.shape[1] / small_k)), int(round(self.B_src.shape[0] / small_k))), interpolation=cv2.INTER_AREA)
+                gs = cv2.resize(grow, (bs.shape[1], bs.shape[0]), interpolation=cv2.INTER_NEAREST)
+                filled = cv2.inpaint(bs, gs, 7, cv2.INPAINT_TELEA)
+                filled = cv2.resize(filled, (self.B_src.shape[1], self.B_src.shape[0]), interpolation=cv2.INTER_LINEAR)
+            else:
+                filled = cv2.inpaint(self.B_src, grow, 7, cv2.INPAINT_TELEA)
+            plate = self.B_src.copy(); plate[grow.astype(bool)] = filled[grow.astype(bool)]
         else:
-            filled = cv2.inpaint(self.B_src, grow, 7, cv2.INPAINT_TELEA)
-        plate = self.B_src.copy(); plate[grow.astype(bool)] = filled[grow.astype(bool)]
+            # round 11: a pull-push fill (smooth, no direction of its own); Telea's fill of a body was a flesh smear
+            plate = np.clip(pull_push_fill(self.B_src, grow.astype(bool)), 0, 255).astype(np.uint8)
         self.B_plate = plate
         self.front_rgb = self.B_src
         # round 10: the front's alpha is the soft matte of its elements (the matting model), with the closing's and
@@ -723,6 +768,37 @@ class Scene:
         self.front_alpha = cv2.resize(fa, (self.B_src.shape[1], self.B_src.shape[0]), interpolation=cv2.INTER_LINEAR) if k != 1.0 else fa
         self.info["front_share"] = round(float(self.front.mean()), 4)
         self.info["front_soft"] = bool(is_soft(fa))
+        # round 11: one layer per front element (far to near), each with its own matte and its own depth, at the canvas
+        if bool(self.knobs.get("front_per_element", True)) and ids:
+            dmap = {int(e_[0]): float(e_[1]) for e_ in self.info.get("front_elements", [])}
+            per = []
+            for i in ids:
+                a_i = element_alpha_ids(self.photoB, [i])
+                if a_i.shape != (H, W):
+                    a_i = cv2.resize(a_i, (W, H), interpolation=cv2.INTER_LINEAR)
+                a_i = np.clip(a_i, 0, 1).astype(np.float32)
+                if a_i.max() <= 0:
+                    continue
+                per.append({"id": int(i), "alpha": a_i, "d": dmap.get(int(i), float(self.parallax["dB"][zc == i].mean()) if self.parallax and self.parallax.get("dB") is not None else 0.0)})
+            per.sort(key=lambda t: t["d"])          # far first, near last (composited last = on top)
+            self.front_elements_layers = per
+            self.info["front_per_element"] = len(per)
+
+    def front_element_map(self, lay, e, cam, mapx, mapy):
+        """The plate coordinates a front element samples from: the camera's map scaled about the zoom centre by this
+        element's own depth (the same bump and push as parallax_map, with one disparity for the whole element)."""
+        if self.parallax is None:
+            return mapx, mapy
+        d = lay["d"]; d_ref = self.parallax["dB_ref"]; gain = self.parallax["gain"]
+        push = self.parallax["push"]; push_floor = self.parallax["push_floor"]
+        z = cam.zoom(e)
+        ep = min(1.0, max(0.0, e + gain * (d - d_ref) * e * (1.0 - e)))
+        zp = math.exp(math.log(cam.z0) * (1.0 - ep)) if cam.z0 != 1.0 else 1.0
+        if push > 0.0:
+            zp = zp * math.exp(push * max(d - d_ref, push_floor) * (1.0 - e) ** 2)
+        f = z / zp
+        qx, qy = float(cam.q[0]), float(cam.q[1])
+        return (qx + (mapx - qx) * f).astype(np.float32), (qy + (mapy - qy) * f).astype(np.float32)
 
     def front_mask_B(self):
         groups = self.cont.get("spec", {}).get("front_groups", ["person", "furniture", "ceiling", "wall", "object"]) if hasattr(self, "cont") else self.c.get("container", {}).get("spec", {}).get("front_groups", ["person", "furniture", "ceiling", "wall", "object"])
@@ -748,6 +824,7 @@ class Scene:
             tr = trs[i_tr]
             by = tr["by"]
             lay = {"name": tr["name"], "by": by, "window": tr.get("window", [0, 1]), "mix": tr.get("mix", "luma"), "params": dict(tr.get("params", {})), "depth": tr.get("depth", "inside")}
+            lay["ease"] = tr.get("params", {}).get("ease", "linear" if by == "keyframe_chain" else "smootherstep")
             for k, v in self.knobs.items():
                 if k.startswith(tr["name"] + "."):
                     key = k.split(".", 1)[1]
@@ -804,15 +881,16 @@ class Scene:
                 cb, rb = self.anchors["b0"]
                 s1 = float(self.S_A3[0, 0])
                 end_r_A = float(p.get("end_radius", 30.0)) * self.ls_scale / s1       # B px -> A canvas px
-                lay.update(centre=ca, r=ra, k_end=min(1.0, end_r_A / ra), soften=float(p.get("soften", 0.5)))
+                lay.update(centre=ca, r=ra, k_end=min(1.0, end_r_A / ra), soften=float(p.get("soften", 0.0)))   # round 11: the ramp is the only radius
                 disc = mA
                 yy, xx = np.mgrid[0:H, 0:W]
                 rr0 = np.hypot(xx - ca[0], yy - ca[1]) / max(1.0, ra)
                 lay["rr0"] = rr0.astype(np.float32); lay["disc_f"] = disc.astype(np.float32)
                 inner = disc & (rr0 < 0.7)
                 mean_in = self.A_f[inner].mean(0) if inner.any() else self.A_f[disc].mean(0)
-                lf = float(p.get("limb_flatten", 1.0))          # round 10: no limb flatten by default (it drew a paler inner disc)
-                wflat = (np.clip((rr0 - lf) / max(1e-3, 1.0 - lf), 0, 1) if lf < 1.0 else np.zeros_like(rr0))[..., None] * disc[..., None]
+                lf = float(p.get("limb_flatten", 0.55))          # round 11: the limb levelled from the rim's start with a smooth weight (a linear one from 0.8 drew a paler inner disc in round 9)
+                wflat = (np.clip((rr0 - lf) / max(1e-3, 1.0 - lf), 0, 1) if lf < 1.0 else np.zeros_like(rr0))
+                wflat = (wflat * wflat * (3.0 - 2.0 * wflat))[..., None] * disc[..., None]
                 lay["content"] = (self.A_f * (1 - wflat) + mean_in[None, None, :] * wflat).astype(np.float32)
                 # round 10: a wide soft rim (alpha falls from rim_in to rim_out of the radius once the recede has started)
                 lay["rim_in"], lay["rim_out"] = float(p.get("rim_in", 0.55)), float(p.get("rim_out", 1.0))
@@ -840,7 +918,7 @@ class Scene:
                 covered |= disc_full if plated else disc           # with a plate the whole disc is the sun's (the chords fade into its fill)
                 covered_soft = np.maximum(covered_soft, lay["alpha0"])
                 if plated:
-                    lay["foot_hard"] = cv2.dilate((disc_full | (rr0 <= float(p.get("plate_reach", 1.18)))).astype(np.uint8), np.ones((5, 5), np.uint8))
+                    lay["foot_hard"] = cv2.dilate((disc_full | (rr0 <= float(p.get("plate_reach", 1.6)))).astype(np.uint8), np.ones((5, 5), np.uint8))   # the fill drawn from the glow at 1.6 r (the sky right at the limb is a dark red ring in A: a fill from 1.18 r was a dark trough)
                     plate_union |= lay["foot_hard"]
                 built[i_tr] = lay; continue
             if by == "line_to":
@@ -1052,6 +1130,16 @@ class Scene:
                 segs = []
                 mattes = [sA]
                 lead = bool(p.get("lead", True)) and not whole and not np.allclose(Mg, np.eye(3))
+                if lead and bool(p.get("face_guide", True)) and len(imgs) > 2:
+                    fA = face_box(np.clip(imgs[0], 0, 255).astype(np.uint8), sA > 0.5)
+                    fK = face_box(np.clip(imgs[1], 0, 255).astype(np.uint8), cv2.dilate((sB_inA > 0.3).astype(np.uint8), np.ones((int(0.1 * W) | 1,) * 2, np.uint8)).astype(bool))
+                    if fA is not None and fK is not None:
+                        M2, _ = cv2.estimateAffinePartial2D(fA[4], fK[4], method=cv2.LMEDS)
+                        if M2 is not None and np.isfinite(M2).all() and 0.3 < math.hypot(M2[0, 0], M2[1, 0]) < 3.0:
+                            # keep the similarity's scale and translation, drop its rotation (a head tilt must not tilt the body)
+                            sc_ = math.hypot(M2[0, 0], M2[1, 0]); cA_ = fA[4].mean(0); cK_ = fK[4].mean(0)
+                            Mg = np.array([[sc_, 0, cK_[0] - sc_ * cA_[0]], [0, sc_, cK_[1] - sc_ * cA_[1]], [0, 0, 1]], np.float64)
+                            lay["lead_guide"] = "faces"
                 if lead:
                     # segment 0: A's layer moved by the guide (the renderer's own rigid move, exact field, no residual, no mix)
                     gx_, gy_ = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32))
@@ -1061,14 +1149,38 @@ class Scene:
                     moved = cv2.warpAffine(self.A_f, Mg[:2].astype(np.float32), (W, H), flags=cv2.INTER_AREA if Mg[0, 0] < 1 else cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
                     moved_m = np.clip(cv2.warpAffine(sA, Mg[:2].astype(np.float32), (W, H), flags=cv2.INTER_LINEAR), 0, 1)
                     imgs.insert(1, moved.astype(np.float32)); mattes.append(moved_m)
+                    # the matte of every later node: the moved man joined with B's man, dilated by `matte_grow` of the
+                    # width, so a keyframe's wider shoulders or a turned head are never cut by the matte's edge
+                    g_ = int(round(float(p.get("matte_grow", 0.03)) * W)) | 1
+                    union = np.maximum(moved_m, sB_inA)
+                    union = cv2.dilate((union > 0.3).astype(np.uint8), np.ones((g_, g_), np.uint8)).astype(np.float32)
+                    union = feather(union, max(1.0, 0.3 * g_))
+                    chain_matte = np.clip(union, 0, 1).astype(np.float32)
                     segs.append({"dAB": Dg, "dBA": Dgi, "wA": np.ones((H, W), np.float32), "wB": np.ones((H, W), np.float32), "lead": True,
                                  "disp_median_px": round(float(np.median(np.linalg.norm(Dg, axis=2)[sA > 0.5])) if (sA > 0.5).any() else 0.0, 1)})
+                face_guide = bool(p.get("face_guide", not whole))
+                faces = []
                 for j in range(1 if lead else 0, len(imgs) - 1):
                     gP = T.gray_of(np.clip(imgs[j], 0, 255).astype(np.uint8)); gQ = T.gray_of(np.clip(imgs[j + 1], 0, 255).astype(np.uint8))
                     Hg = Mg if (j == 0 and not whole and bool(p.get("guide", True))) else np.eye(3)
+                    if face_guide and j >= (1 if lead else 0):
+                        # round 11: align the faces before the flow (a similarity from the face box of P to the face box of Q,
+                        # found by OpenCV's bundled Haar cascade inside the chain's matte); without it two faces dissolve unaligned
+                        region = (chain_matte if lead else sA) > 0.5
+                        fP = face_box(np.clip(imgs[j], 0, 255).astype(np.uint8), region); fQ = face_box(np.clip(imgs[j + 1], 0, 255).astype(np.uint8), region)
+                        if fP is not None and fQ is not None:
+                            # a similarity from the five landmarks of P to those of Q (the box's centre and size as the fallback)
+                            M2, _ = cv2.estimateAffinePartial2D(fP[4], fQ[4], method=cv2.LMEDS)
+                            if M2 is not None and np.isfinite(M2).all() and 0.5 < math.hypot(M2[0, 0], M2[1, 0]) < 2.0:
+                                Hg = np.vstack([M2, [0, 0, 1]]).astype(np.float64)
+                            else:
+                                sgf = fQ[2] / max(1.0, fP[2])
+                                cPx, cPy = fP[0] + fP[2] / 2, fP[1] + fP[3] / 2; cQx, cQy = fQ[0] + fQ[2] / 2, fQ[1] + fQ[3] / 2
+                                Hg = np.array([[sgf, 0, cQx - sgf * cPx], [0, sgf, cQy - sgf * cPy], [0, 0, 1]], np.float64)
+                        faces.append({"segment": j, "P": [int(v) for v in fP[:4]] if fP else None, "Q": [int(v) for v in fQ[:4]] if fQ else None})
                     dPQ = T._homography_guided(gP, gQ, np.linalg.inv(Hg)); dQP = T._homography_guided(gQ, gP, Hg)
                     wPQ = T.consistency_weight(dPQ, dQP); wQP = T.consistency_weight(dQP, dPQ)
-                    damp = float(p.get("damp", 1.0))
+                    damp = float(p.get("damp", 0.5 if face_guide else 1.0))
                     if damp > 0:
                         sPQ = cv2.GaussianBlur(wPQ, (0, 0), 12.0); sQP = cv2.GaussianBlur(wQP, (0, 0), 12.0)
                         dPQ = (dPQ * (1.0 - damp * (1.0 - sPQ))[..., None]).astype(np.float32)
@@ -1076,12 +1188,17 @@ class Scene:
                     m_here = mattes[-1] if lead or j > 0 else sA
                     segs.append({"dAB": dPQ, "dBA": dQP, "wA": wPQ, "wB": wQP,
                                  "disp_median_px": round(float(np.median(np.linalg.norm(dPQ, axis=2)[m_here > 0.5])) if (m_here > 0.5).any() else 0.0, 1)})
-                # the matte at every node: A's, then carried forward along each segment; B's at the end
-                for j in range(1 if lead else 0, len(segs) - 1):
-                    mw_, cov_ = T.forward_splat(mattes[-1], segs[j]["dAB"], 1.0, segs[j]["wA"])
-                    mw_ = T.fill_holes(mw_, cov_, T.backward_warp(mattes[-1], -segs[j]["dAB"]).astype(np.float32), T.TCFG["hole_thresh"])
-                    mattes.append(np.clip(cv2.GaussianBlur(mw_, (0, 0), 1.0), 0, 1).astype(np.float32))
-                mattes.append(sB_inA)
+                # the matte at every node: A's, then (after a lead) the union matte for every keyframe and B; without a lead
+                # the matte is carried forward along each segment and B's matte closes the chain
+                if lead:
+                    while len(mattes) < len(imgs):
+                        mattes.append(chain_matte)
+                else:
+                    for j in range(0, len(segs) - 1):
+                        mw_, cov_ = T.forward_splat(mattes[-1], segs[j]["dAB"], 1.0, segs[j]["wA"])
+                        mw_ = T.fill_holes(mw_, cov_, T.backward_warp(mattes[-1], -segs[j]["dAB"]).astype(np.float32), T.TCFG["hole_thresh"])
+                        mattes.append(np.clip(cv2.GaussianBlur(mw_, (0, 0), 1.0), 0, 1).astype(np.float32))
+                    mattes.append(sB_inA)
                 n_seg = len(segs)
                 times = [float(t) for t in (p.get("times") or [(j + 1) / n_seg for j in range(n_seg - 1)])]
                 if len(times) != n_seg - 1:
@@ -1089,7 +1206,7 @@ class Scene:
                     print(f"INFO chain: {tr['name']} has {n_seg} segments; the plan's times do not fit and were spaced evenly", file=sys.stderr)
                 lay.update(imgs=imgs, segs=segs, mattes=mattes, times=times, keyframes=[str(k) for k in kfs], frame_kind=frame_kind,
                            alpha_native=sA, whole=whole)
-                lay["chain"] = {"keyframes": [str(k) for k in kfs], "frame": frame_kind, "times": times, "lead": lead, "guide": [[round(float(v), 3) for v in r] for r in Mg[:2]],
+                lay["chain"] = {"keyframes": [str(k) for k in kfs], "frame": frame_kind, "times": times, "lead": lead, "lead_guide": lay.get("lead_guide", "boxes"), "depth": lay["depth"], "faces": faces, "guide": [[round(float(v), 3) for v in r] for r in Mg[:2]],
                                 "segments": [{"disp_median_px": sg_["disp_median_px"], "lead": bool(sg_.get("lead", False)),
                                               "consistency_mean": round(float(sg_["wA"][mattes[min(i_, len(mattes) - 1)] > 0.5].mean()) if (mattes[min(i_, len(mattes) - 1)] > 0.5).any() else 0.0, 3)} for i_, sg_ in enumerate(segs)]}
                 covered |= sA > 0.5
@@ -1126,6 +1243,10 @@ class Scene:
                 # under a soft rim (a disc container) the keyed sky already gives way to B dark-first, so a departed layer's
                 # footprint keys with it; a separate hole reveal there cut a dark slot into the glow
                 lay["hole_reveal"] = bool(lay["params"].get("hole_reveal", (lay["by"] in ("exit", "morph_to", "move_to", "keyframe_chain") and self.cont["kind"] != "disc") or lay["by"] == "recede"))
+                # the recede's vacated ring shows the core's glow at once (A's sky right at the limb is a dark red halo, so any
+                # fill of it is a dark ring); other layers' holes open after a tenth of their window
+                lay["hole_from"] = float(lay["params"].get("hole_from", 0.0 if lay["by"] == "recede" else 0.1))
+                lay["hole_over"] = float(lay["params"].get("hole_over", 0.15 if lay["by"] == "recede" else 0.35))
                 if lay["by"] == "recede":
                     # the whole disc, silhouettes included: the OTHER layers' chords across it (the deck, the wire) are
                     # filled from the disc's own pixels (the deck layer still carries the chord's dark pixels over it)
@@ -1146,7 +1267,7 @@ class Scene:
                     lay["content0"] = self.A_f.copy()
                     lay["content"] = content.astype(np.float32)
                     lay["fill_in"] = float(lay["params"].get("fill_in", 0.3))
-                    lay["foot"] = feather(lay["foot_hard"].astype(np.float32), max(2.0, 0.08 * float(lay["r"])))   # a wide edge: the plate's circle must not show
+                    lay["foot"] = feather(lay["foot_hard"].astype(np.float32), max(2.0, 0.5 * float(lay["r"])))    # the plate's circle must not show (0.08 r still did)
                 else:
                     nat = lay.get("alpha_native", lay.get("alpha0", lay.get("alpha")))
                     lay["foot"] = feather(cv2.dilate((nat > 0.02).astype(np.uint8), np.ones((11, 11), np.uint8)).astype(np.float32), 2.0)
@@ -1157,7 +1278,7 @@ class Scene:
             pr = self.c.get("params", {})
             sky = self.knobs.get("sky", self.cont.get("params", {}).get("sky")) or {}
             self.sky = sky
-            lumr = cv2.GaussianBlur(self.LA, (0, 0), 4.0)          # the key's order is A's own brightness (a filled footprint keys as what stood there)
+            lumr = cv2.GaussianBlur(lum(np.clip(self.A_base, 0, 255).astype(np.uint8)), (0, 0), 4.0)   # the key's order is the brightness of what is shown (the fill where a layer has left)
             lo, hi = np.percentile(lumr[rest], [1, 99]) if rest.any() else (0, 1)
             self.rest_order = np.clip((lumr - lo) / max(1.0, hi - lo), 0, 1).astype(np.float32)
             yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
@@ -1194,15 +1315,16 @@ class Scene:
         h0, h1 = float(self.knobs.get("hole_reveal_from", 0.1)), float(self.knobs.get("hole_reveal_over", 0.35))
         for lay in self.layers:
             if "foot" in lay:
-                e_l = ease01(u, *lay["window"])
+                e_l = layer_e(u, lay)
                 ei = min(1.0, 30.0 * e_l)                            # the plate is under the layer as soon as it moves
                 if ei > 0:
                     vi = lay["foot"] * ei
                     v = vi if v is None else np.maximum(v, vi)
-                if lay.get("hole_reveal") and e_l > h0:   # the recede included: the ring the sun vacates shows the core's glow, not a fill
+                h0l, h1l = lay.get("hole_from", h0), lay.get("hole_over", h1)
+                if lay.get("hole_reveal") and e_l > h0l:
                     # round 10: the footprint a layer has left gives way to B over a short ramp (the layer's own soft
                     # matte is the edge), so the fill is a passing moment and not a pale silhouette
-                    hi = lay["foot"] * min(1.0, (e_l - h0) / max(1e-6, h1))
+                    hi = lay["foot"] * min(1.0, (e_l - h0l) / max(1e-6, h1l))
                     hole = hi if hole is None else np.maximum(hole, hi)
         self.v_last = v
         self.hole_last = hole
@@ -1225,7 +1347,27 @@ class Scene:
             key = -self.key_band + (1.0 + self.key_band) * es
             a_rest = np.clip((self.rest_order - key) / self.key_band, 0, 1)
             e_cam = smootherstep(u)
-            if e_cam > 0 and hasattr(self, "dborder"):
+            if self.sky.get("shape", "radial") == "radial" and "a0" in self.anchors and e_cam > 0:
+                # round 11: what remains of A's sky is a soft disc around the sun that shrinks with the pull-back
+                # (the border feather left "a blurred square shape" that shrank in steps)
+                ca0, ra0 = self.anchors["a0"]
+                if not hasattr(self, "r_anchor"):
+                    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+                    self.r_anchor = np.hypot(xx - ca0[0], yy - ca0[1]).astype(np.float32)
+                    self.r_far = float(max(np.hypot(ca0[0], ca0[1]), np.hypot(W - ca0[0], ca0[1]), np.hypot(ca0[0], H - ca0[1]), np.hypot(W - ca0[0], H - ca0[1])))
+                r_end = float(self.sky.get("radial_end", 1.6)) * ra0
+                wfrac = float(self.sky.get("radial_width", 0.35))
+                R0 = self.r_far / max(0.05, 1.0 - wfrac)          # fully open at the start: the ramp begins beyond the far corner
+                r_near = float(min(ca0[0], W - ca0[0], ca0[1], H - ca0[1]))   # the nearest frame edge: inside it no rectangle can show
+                t_near = float(self.sky.get("radial_near_at", 0.25)); t_end = float(self.sky.get("radial_end_at", 0.9))
+                if u <= t_near:
+                    R = R0 + (r_near - R0) * smootherstep(u / max(1e-6, t_near))
+                else:
+                    R = r_near + (r_end - r_near) * min(1.0, (u - t_near) / max(1e-6, t_end - t_near))
+                wr = wfrac * R
+                x_ = np.clip((R - self.r_anchor) / max(1.0, wr), 0, 1)
+                a_rest = a_rest * (x_ * x_ * (3.0 - 2.0 * x_))
+            elif e_cam > 0 and hasattr(self, "dborder"):
                 wpx = min(self.rim_frac, 4.0 * e_cam) * min(H, W)
                 a_rest = a_rest * np.clip(self.dborder / max(1.0, wpx), 0, 1)
             alpha = (a_rest * self.rest_soft).astype(np.float32)
@@ -1239,7 +1381,7 @@ class Scene:
             by = lay["by"]
             if by == "colour":
                 continue
-            e = ease01(u, *lay["window"])
+            e = layer_e(u, lay)
             if by == "hold":
                 a = lay["alpha"]
                 rgb = rgb * (1 - a[..., None]) + self.A_f * a[..., None]
@@ -1319,6 +1461,8 @@ class Scene:
                 continue
             if by == "keyframe_chain":
                 if e <= 0:
+                    if lay["depth"] == "front":
+                        front_layers.append((lay, None, None)); continue
                     a = lay["alpha_native"]
                     rgb = rgb * (1 - a[..., None]) + self.A_f * a[..., None]
                     alpha = alpha * (1 - a) + a
@@ -1329,18 +1473,21 @@ class Scene:
                 s = float(np.clip(s, 0.0, 1.0))
                 P, Q = lay["imgs"][j], lay["imgs"][j + 1]
                 mP, mQ = lay["mattes"][j], lay["mattes"][j + 1]
+                if lay["segs"][j].get("lead"):
+                    s = smootherstep(s)                      # the rigid move eases in and out; the keyframe segments stay linear
                 if s <= 0.0:
                     src, a = P, mP
                 elif s >= 1.0:
                     src, a = Q, mQ
                 else:
                     sg = lay["segs"][j]
-                    src = T.morph_frame(P, Q, sg, s, smootherstep(s)).astype(np.float32)
+                    src = T.morph_frame(P, Q, sg, s, s).astype(np.float32)
                     th = T.TCFG["hole_thresh"]
                     aP, cP = T.forward_splat(mP, sg["dAB"], s, sg["wA"]); aP = T.fill_holes(aP, cP, T.backward_warp(mP, -s * sg["dAB"]).astype(np.float32), th)
                     aQ, cQ = T.forward_splat(mQ, sg["dBA"], 1.0 - s, sg["wB"]); aQ = T.fill_holes(aQ, cQ, T.backward_warp(mQ, -(1.0 - s) * sg["dBA"]).astype(np.float32), th)
-                    ms = smootherstep(s)
-                    a = np.clip(aP * (1 - ms) + aQ * ms, 0, 1).astype(np.float32)
+                    a = np.clip(aP * (1 - s) + aQ * s, 0, 1).astype(np.float32)
+                if lay["depth"] == "front":
+                    front_layers.append((lay, src, a)); continue
                 rgb = rgb * (1 - a[..., None]) + src * a[..., None]
                 alpha = alpha * (1 - a) + a
                 continue
@@ -1512,8 +1659,21 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
         frame = Bf * (1 - aA[..., None]) + Af * aA[..., None]
         if front_layer:
             fin = smootherstep(min(1.0, e / sc.parallax.get("front_in", 0.15))) if sc.parallax else 1.0
-            Fa_f = Fa_f * fin
-            frame = frame * (1 - Fa_f[..., None]) + Ff * Fa_f[..., None]
+            per = getattr(sc, "front_elements_layers", None)
+            if per:
+                # one layer per element, far to near: B's pixels and the element's own matte through its own map
+                src_rgb = Fs if z < 1.0 else sc.front_rgb          # B's own pixels (the plate is B with the front filled)
+                kk_ = kk if z < 1.0 else 1.0 / sc.kB
+                for lay_f in per:
+                    ex, ey = sc.front_element_map(lay_f, e, cam, mapx, mapy)
+                    a_f = remap_img(lay_f["alpha"], ex, ey) * fin
+                    if a_f.max() <= 1e-3:
+                        continue
+                    rgb_f = remap_img(src_rgb, ex / kk_, ey / kk_).astype(np.float32)
+                    frame = frame * (1 - a_f[..., None]) + rgb_f * a_f[..., None]
+            else:
+                Fa_f = Fa_f * fin
+                frame = frame * (1 - Fa_f[..., None]) + Ff * Fa_f[..., None]
         # layers that leave the container (depth "front") composite over B's front, through the same camera
         for lay, rgbL, aL in front_layers:
             if rgbL is None:
@@ -1522,12 +1682,16 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
                     La = La * cont
                 frame = frame * (1 - La[..., None]) + Af * La[..., None]
                 continue
-            Tw = lay["Tw"]
-            # work frame -> A canvas -> frame: the frame pixel's work coordinates = Tw(A coords)
-            wx = (Tw[0, 0] * ax + Tw[0, 2]).astype(np.float32); wy = (Tw[1, 1] * ay + Tw[1, 2]).astype(np.float32)
-            Lf = remap_img(rgbL, wx, wy); La = remap_img(aL, wx, wy)
-            if ef > 0:
-                La = La * (1 - ease01(u, end["window"][0] + 0.5 * (end["window"][1] - end["window"][0]), end["window"][1]))
+            if "Tw" in lay:
+                Tw = lay["Tw"]
+                # work frame -> A canvas -> frame: the frame pixel's work coordinates = Tw(A coords)
+                wx = (Tw[0, 0] * ax + Tw[0, 2]).astype(np.float32); wy = (Tw[1, 1] * ay + Tw[1, 2]).astype(np.float32)
+                Lf = remap_img(rgbL, wx, wy); La = remap_img(aL, wx, wy)
+                if ef > 0:
+                    La = La * (1 - ease01(u, end["window"][0] + 0.5 * (end["window"][1] - end["window"][0]), end["window"][1]))
+            else:
+                # a keyframe chain in front: its content lives in A's canvas and ends on B, so it needs no fade
+                Lf = remap_img(rgbL, ax, ay); La = remap_img(aL, ax, ay) * inside
             frame = frame * (1 - La[..., None]) + Lf * La[..., None]
         if i == 0:
             frame = sc.A.astype(np.float32)
