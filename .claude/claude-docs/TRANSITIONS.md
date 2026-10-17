@@ -774,6 +774,15 @@ to video B. Design reading [INFERRED, not built]: an endpoint is a frame plus a 
 from its neighbouring frames, and a layer's progress curve takes that velocity as its boundary
 condition; a photo endpoint has zero velocity, so the three cases are one mechanism.
 
+Amendment 2026-10-17 (the owner's answer to §13.8 question 3, verbatim: "if camera move is
+intentional and has a correct artistic sense of direction ( like in above examples) it makes total
+sense, both in 2d and 3d spaces"): the sentence "a camera move is decoration, not the transition"
+is narrowed. A camera move whose direction carries the idea of the transition (one scene inside a
+region of the other, one camera pulling back out of the first into the second, as he described on
+mismatch_5 and mismatch_3) is the transition's spine, in 2D and in 3D, and the transformation of
+the content inside it is still required; a camera move with no such direction remains decoration
+(F2). The "cameras as a transition" item leaves the parked list for that case only.
+
 ## 12. The orchestrated layered transition: the score, the probe, the first three clips (2026-09-26, third session)
 
 Result: a hand-written per-scene SCORE (layers × one action each × a time window) rendered by a
@@ -2802,3 +2811,156 @@ the transformation needs. 5. The planner's first planned render on a held-out pa
 two concepts, by the session's model unless the owner has said yes to the egress. 6. FLUX.3 klein on
 the box after the terms and a container re-pull; the 512² smoke test; one side-by-side.
 Reversibility: every item is a research script or a default-off key; nothing in either tool.
+
+### 13.10 The owner's answers and his grades on the probe page (2026-10-17 evening, verbatim)
+
+His picks file `benchmarks/runs/2026-10-17/nest/nest_picks.json` (16:35 UTC): no best, not
+acceptable, on both pairs; "nothing invented" ticked, "one picture" and "content transforms" not.
+mismatch_5: "zoom out is cool, sun correspondence to galaxy center is  the right direction, its a bit
+off center and still too large at the end  + notihing happens to the bridge and we have harsh
+transitions and borders around edges of sun but this is starting too look like something, framing
+not bad   , also missing Z depth/ parallax when zooming out". mismatch_3: "feedback is similar to
+mismatch_5, somewhat right direction , but picture A remains a static tranformed photo with hard
+edges , poorly aligned and thematically detached from B and simply crossfades out in the end , zoom
+out effect  is nice here and framing not bad , but also missing Z depth/ parallax when zooming out".
+Read: the framing is accepted as a direction on these two pairs and nothing else is; six faults are
+named (off centre, too large at the end, the bridge unchanged, harsh borders at the sun, no
+parallax; on mismatch_3 a static photo with hard edges, poorly aligned, detached, a crossfade).
+"Off centre" and "too large" have one cause: the probe's sun was the brightest blob (L ≥ 0.90 of the
+maximum), 87 px of a 275 px disc, 130 px above its centre (the disc darkens toward the horizon); the
+renderer of round 8 fits a circle to the limb instead (§13.11).
+
+His answers to the five questions of §13.8, by message with the order "continue, finish the design
+and ship it":
+1. "in these specific cases one camera looks roughly correct" — the one-camera framing stands on
+   mismatch_5 and mismatch_3; nothing is claimed for another pair.
+2. "What does it mean ?" — the question was not clear. The rule of 2026-09-27 asks every review
+   page to carry, beside the hand-tuned clips, one clip from an automatic path that never saw the
+   pair, so that a result cannot be tuned to the pair under review. In the director flow the
+   planner writes the plan without the renderer's author and the clip is rendered from that plan,
+   so the planned clip is this flow's automatic clip; the renderer's own constants (the key band,
+   the feathers, the mix windows) are the hand part and the page lists them. The round-8 page says
+   so; no waiver is needed.
+3. "Same , explaine the question, if camera move is intentional and has a correct artistic sense of
+   direction ( like in above examples) it makes total sense, both in 2d and 3d spaces" — recorded
+   as the §11 amendment of 2026-10-17: a camera move whose direction carries the idea is the
+   transition's spine; the transformation inside it is still required.
+4. "yes to both , lets start with current claude code anthropic client that we are working in, can
+   add openrouter integration later to compare" — the egress of his photos to a planner model is
+   approved, and the planner of record for round 8 is a Claude Opus 5.5 subagent run from this
+   Claude Code session (the plans carry the model id, temperature 0, the prompt's sha256 and the
+   brief); an API script against OpenRouter is later work (backlog T36). The photos already reach
+   Anthropic through this session's own reads.
+5. "FLUX 3 - yes , i have acccepted all terms and conditions from my HF account" — his token
+   answered 200 on `flux-3-image-klein`, `-base` and `-comfy` at 19:46 EEST (the repository I called
+   "distilled" on the page is `flux-3-image-klein`); Track D ran on the box (§13.12).
+No held-out pair was named; mismatch_2 (his only words on it: "similar problem to mismatch_3",
+2026-09-27) is the nearest thing to one, and its plan was written blind (§13.11).
+
+### 13.11 Round 8: the director's renderer and the first planned renders (2026-10-17 evening; `scripts/research/director_render.py`, plans under `scripts/research/plans/`, page `benchmarks/runs/2026-10-17/director/index.html`, UNGRADED)
+
+What was built. `director_render.py` (research, imports the two tools and the layered probe's
+`ot_fields` and `warp_along`; neither tool changed) reads a plan in the grammar of
+`scripts/research/plans/SCHEMA.md` and renders one concept: a container in B (`disc`, `quad`,
+`rect` or `none`), anchors that attach A to it (`circle_fit` fits a circle to a luminary's limb with
+the flat cuts of an occluder or the crop left out and two rounds of outlier rejection; `element`,
+`box`, `point`, `rows`; on B `bright_disc`, `element`, `box`, `line` by the principal axis,
+`dark_band` as a band darker than its surroundings by a difference of Gaussians), one camera (a
+similarity zoom about the fixed point of S_A, or a homography whose four frame corners move from the
+quad to the frame), transforms of A's layers (`recede`: a disc contracts about its centre while its
+limb softens; `line_to`: a band rotates about the anchor, thins to a width and takes the line's
+pixels; `morph_to`: a box-to-box or axis-to-axis affine plus an optimal-transport residual, the
+target's pixels revealed inside the moving matte by luma, edge or noise order; `move_to`; `colour`;
+`hold`), an end effect (`luma_reveal`, `edge_reveal`) and parallax by the depth model: each source's
+pull-back eases by e_p = e + g (d − d_ref) e (1 − e), zero at both ends, so nearer content moves ahead
+mid-way without a cut at either end. In a quad or rect container B's foreground (the front groups,
+kept where the depth model reads an element nearer than the container by 0.05) is a layer of its
+own over a plate filled by `cv2.inpaint`; it starts beyond the frame (a push of exp(2.5 · max(d −
+d_ref, 0.3)) at e = 0) and fades in over the first 15 % of the clip, each element moving as one
+piece. Knobs: `--set name.param=value`, `name.window=[a, b]`, `name.a_group=person`,
+`name.skip=true`, `parallax_sources`, `parallax_gain`, `cont_feather`, `end_scale`. Every resolved
+number goes to `info.json`; the first, second and last interior steps and the peak are decoded from
+the file. Two runs are byte-identical (mismatch_5 c1 at 960 px, md5 2ccb74a6… twice).
+
+The plans (an Opus 5.5 subagent, prompt sha256 a715f8ed…, saved beside the plans): mismatch_5 and
+mismatch_3 with his notes of 2026-10-17 as the brief, mismatch_2 blind. Rank 1 on mismatch_5: the sun
+falls away into the core while the deck turns into the streak and the truss sweeps into the dust
+lane; on mismatch_3: A in the glass plane, the foreground closing in front, then the wheels to the
+trunks, the flag to the painting, the brick to foliage and the crowd stepping through the glass onto
+the men; on mismatch_2 (blind): the peeking man shrinks until his eyes sit on the peeking woman's,
+B's man and the raised hand hide him as his tree did, and an edge reveal passes the peek on. The
+planner's notes name what the grammar could not say (stars in B's own order, a push-in before the
+pull-back, landmark warps) in `benchmarks/runs/2026-10-17/agents/planner_r8.md`.
+
+The renders (full size, 3 s, 30 fps; the operator's knobs on each are on the page):
+
+| Clip | Camera | Steps first / second / last, peak | Wall | md5 |
+|---|---|---|---|---|
+| mismatch_5 c1 | sim 2.5× about (938, 475); the sun's fit (993.5, 590.5) r 246.5 (residual 21.8 px: the disc is flattened by refraction) onto the core (960, 521) r 110; end scale 0.4; the disc ends at 25 px; the deck −19.17°, 121 → 7.5 px; the truss by its axis −1.4° → 20.3°, 987 → 1137 px long, the OT residual 146 px at 0.35 | 0.62 / 0.05 / 0.03, 7.03 | 39 s | 3232b74f… |
+| mismatch_3 c1 | homography, 1.562× about (1252, 421); the quad [[585, 145], [1919, −152], [1919, 925], [585, 767]]; 42 front elements (61.6 % of B) over the filled plate; the wheels 104 px, the crowd 1098 px at 0.3 | 0.29 / 0.74 / 0.39, 30.7 | 67 s | b259ec1e… |
+| mismatch_3 c1-nosit | c1 with the crowd's and the flag's moves skipped by the operator (`name.skip=true`) | 0.14 / 0.73 / 0.37, 30.6 | 49 s | 7c0b3b30… |
+| mismatch_3 c2 | the exact pane [[585, 251], [1919, 31], [1919, 741], [585, 661]], 1.924×, the glass at 0.35 | 0.27 / 1.25 / 0.38, 29.6 | 50 s | 63d67ebd… |
+| mismatch_2 c1 | sim 2.221× about (258, 722); the rect [142, 397, 413, 757] with a 10 px soft rim; the front = B's man (disparity 0.613 against the wall's 0.425) | 1.17 / 0.07 / 0.42, 19.3 | 14 s | 51d638a7… |
+| mismatch_2 c2 | the phone's quad, 9.03× | 1.38 / 1.40 / 0.03, 22.3 | 23 s | 815706f9… |
+| mismatch_5 c2 | not rendered at full size: at end scale 0.1 the truss's and the water's masses have no cells on the working grid (the 960 px draft stepped 2.04 at frame 1 and moved neither) | — | — | — |
+
+What the frames show (my eye; the owner grades; the page says the same under each clip). mismatch_5:
+the sun is centred and ends as the core's bright heart inside the glow, the deck becomes the streak,
+the truss reaches the lane; a thin dark ring at the limb from 0.9 to 1.4 s, the deck's hard top edge
+until it thins, a grey ghost where the lamp posts were keyed, the truss as a dark cluster for 0.4 s
+before it dissolves; "stars popping" has no path (T38). mismatch_3: 1.2–1.6 s is the owner's
+framing with depth (the crowd behind the glass, the group in front); the filled plate shows beside
+the quad for a few frames, the men enter magnified and fade in, and the planned crowd-onto-men morph
+smears into blobs between 2.1 and 2.6 s (a second render with that move and the flag's move skipped
+by the operator is on the page). mismatch_2 (blind): the peek is passed on and the hand hides him;
+the rectangle reads as a card between 0.9 and 1.5 s; the face-to-face finish is a reveal.
+
+Rulings kept: frame 0 is A and the last frame is B (forced after the composite; the first and last
+interior steps are read from the file); every pixel from A or B except the inpainted fill behind
+B's lifted foreground, which the page names; the renderer is offline; nothing in `transitions.py`;
+no key in `layered_probe.py` (rounds 1–7 byte-identical by construction, so the 41 md5 watches do
+not need a run). Reversibility: delete the two scripts and the plans folder; strike §13.10–§13.12
+by a dated amendment.
+
+After the skeptic's pass (2026-10-17, about 21:00–21:50 EEST). A skeptic subagent (Opus 5.5, the
+owner's eye) read the first full-size render frame by frame (`benchmarks/runs/2026-10-17/agents/skeptic_r8.md`,
+every item with frame numbers) and found 20 faults the page had not named; eight were renderer bugs
+and were fixed before the page was shown: (1) the receding sun left a second disc with a dark rim
+behind it and a strip of the deck rode inside it (the brightness-thresholded disc; the recede now
+takes the whole geometric disc but the silhouettes under L 60, and its rim ramp opens with the
+recede so frame 1 stays A); (2) B's own streak ran beside the deck bar from 0.4 s, so the deck never
+"became" anything (a `line_to` target is now filled out of the plate by `cv2.inpaint` until the end
+effect blends the plate back to B; the deck stretched 2.6× along its line); (3) a local cut of 30
+levels at 1.35 s on mismatch_3 where the wheels' dark layer took its whole box out of A and the bright
+brick vanished (a layer now covers only what it carries), and the flag torn under that box (the
+wheels by their element, `a_elements=[3]`); (4) the inpainted fill down the whole left edge for 0.8 s
+(the depth margin 0.3 keeps the wall and the ceiling in the plate; only the men and sofas are lifted);
+(5) holes in the lifted foreground (closed and filled); (6) a rectangle around the café man's face
+for 2.4 s (a `hold` no longer takes its box out of the rest of A); (7) the planner's crowd-onto-men
+and flag-onto-painting moves on mismatch_3 (blob cut-outs, black voids, a duplicate painting, a
+second copy of the lounge on a card) cut by the operator in `c1` and kept in `c1-full` so the plan
+as written is on the page; (8) the café clip's last remnant, a strip across her eyes (a
+`radial_reveal` toward his eyes, by knob). The page's "faults" texts were rewritten from the
+skeptic's timings, and the page now says which number is the clip length and which the render time.
+What remains, named on the page: the sky key's dark halo and the lamp-post ghost in the first
+0.6 s; a faint limb ring; the deck's hard top edge until it thins; the truss as three soft-edged
+slabs for about 1 s; the men entering magnified and fading in over 0.45 s; the wheels as a dissolve
+over the trunks; the pane clearing as a reveal (bright first, the crowd last); the café rectangle as
+a card for 0.7 s and his face on hers for half a second; mismatch_2 c2 as the planner's own F3 risk.
+The final renders' numbers are in the table below (the first set is in the sheet as the superseded
+table).
+
+The final renders (after the skeptic's pass; full size, 3 s at 30 fps; page md5 282d6f3a…):
+
+| Clip | Steps first / second / last, peak | Render | md5 |
+|---|---|---|---|
+| mismatch_5 c1 | 0.59 / 0.04 / 0.37, 7.02 | 40 s | d410b519… |
+| mismatch_3 c1 (the operator's cut) | 0.69 / 0.72 / 0.03, 26.1 | 49 s | 8ae49c38… |
+| mismatch_3 c1-full (the plan as written) | 0.77 / 0.74 / 0.04, 36.5 | 67 s | 10beef0e… |
+| mismatch_3 c2 | 0.88 / 1.25 / 0.03, 42.9 | 50 s | da059d5c… |
+| mismatch_2 c1 | 1.03 / 0.09 / 0.04, 19.4 | 13 s | 798cdae1… |
+| mismatch_2 c2 | 1.48 / 1.49 / 0.03, 19.4 | 23 s | d3cbde6b… |
+
+The first and last interior steps are under the 1-level bar on the three mismatch_5 and mismatch_3
+clips and on the café clips' last frames; the café clips' first steps (1.03, 1.48) are over it by
+the soft rim's border and the quad's small size (T38 names them).

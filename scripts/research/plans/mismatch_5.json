@@ -1,0 +1,64 @@
+{
+ "pair": "mismatch_5",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-17)", "temperature": 0, "prompt_sha256": "a715f8eda5822bc162a6e4aba6fd9c4f58c3115155c1cdd2c441c2b07d600e05", "date": "2026-10-17", "brief": "owner notes of 2026-10-17"},
+ "reading": {
+  "a": "A large orange sun sits behind a two-level road bridge at dusk: a dark deck band across rows 250-370, a dark truss below it across rows 383-565, and an orange reflection column on dark water under it.",
+  "b": "The Andromeda galaxy: an orange core at (960, 521) in a disk tilted down to the right, a dark dust lane below-left of the core, a star field, and one straight satellite streak at about -19 degrees passing 60 px below the core."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "The camera pulls far back and the sun, already shrinking with the pull, keeps falling away into the distance until it is the galaxy's small white core, while the bridge deck tilts 19 degrees and thins into the satellite streak, the dark truss sweeps into the dust lane of the galaxy's arm, and the glints of the reflection column fly outward and settle as stars.",
+   "container": {"in": "B", "kind": "disc", "spec": {"center": [960, 521], "radius": 110}, "rim": "soft"},
+   "anchors": [
+    {"a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "how": "The sun's fitted centre (about (994, 102), radius about 275 px) lands on the measured core centre, so the core is not off centre at the end; at end_scale 0.4 the sun is 110 px, the glow's half-maximum radius."},
+    {"a": {"kind": "element", "ids": [16]}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "how": "The deck band runs about 170 px below the sun's centre (0.62 radii) and the streak about 60 px below the core (0.55 glow radii), so after the pull-back the deck needs only a -19 degree turn about the core to lie on the streak."},
+    {"a": {"kind": "element", "ids": [29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "how": "The truss is the darkest wide band under the deck; the dust lane is the darkest band under the streak; dark mass goes to dark mass."},
+    {"a": {"kind": "box", "box": [712, 726, 1272, 1079]}, "b": {"kind": "box", "box": [1000, 560, 1900, 1000]}, "how": "The reflection column's bright ripples go to the star-rich lower-right arm of the disk."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.35}, "params": {"end_scale": 0.4}},
+   "transforms": [
+    {"name": "sun_recedes", "a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "by": "recede", "window": [0.15, 0.9], "mix": "luma", "params": {"end_radius": 25, "soften": 0.6}, "note": "Owner, 2026-10-17: the sun was still too large at the end and had harsh borders; it now contracts from 110 px to the 25 px L>=200 core inside the 110 px glow, and its limb softens into the glow."},
+    {"name": "deck_to_streak", "a": {"kind": "element", "ids": [16]}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "by": "line_to", "window": [0.2, 0.8], "mix": "edge", "params": {"width": 3}, "note": "The deck rotates about the core and stretches past the edges of A's shrinking frame across the whole of B; B's bright streak is revealed inside the thinning band."},
+    {"name": "truss_to_dust_lane", "a": {"kind": "element", "ids": [29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "by": "morph_to", "window": [0.25, 0.85], "mix": "edge", "params": {"map": "box", "mass": "dark"}, "note": "The answer to 'nothing happens to the bridge': the girders tilt down-left with the disk and their dark mass becomes the arm's dust lane."},
+    {"name": "glints_to_stars", "a": {"kind": "box", "box": [712, 726, 1272, 1079]}, "b": {"kind": "box", "box": [1000, 560, 1900, 1000]}, "by": "morph_to", "window": [0.3, 0.9], "mix": "luma", "params": {"map": "box", "mass": "bright"}, "note": "Bright ripple mass is transported onto B's brightest points, so the stars appear where glints arrive (the 'stars popping' of the owner's note)."},
+    {"name": "sky_and_water_to_space", "a": {"kind": "element", "ids": [1, 5, 10, 12, 36]}, "b": {"kind": "element", "ids": [1]}, "by": "colour", "window": [0.0, 0.8], "mix": "none", "params": {}, "note": "The red sky and water darken toward the near-black of space before the soft rim keys them out."}
+   ],
+   "end_effect": {"kind": "luma_reveal", "window": [0.8, 1.0]},
+   "helper": null,
+   "knobs": [
+    {"name": "pullback.params.end_scale", "range": [0.15, 0.6], "default": 0.4, "what": "How far the camera pulls back; 0.4 puts the sun on the glow's half-maximum radius before the recede takes it to the core."},
+    {"name": "sun_recedes.params.end_radius", "range": [12, 60], "default": 25, "what": "How small the sun ends; 25 px is the measured L>=200 core."},
+    {"name": "pullback.parallax.gain", "range": [0.0, 0.7], "default": 0.35, "what": "How much nearer layers (water 0.58, bridge 0.28 disparity) out-move the sky during the pull-back."},
+    {"name": "deck_to_streak.window[0]", "range": [0.1, 0.4], "default": 0.2, "what": "When the bridge starts to tilt relative to the camera move."}
+   ],
+   "risk": "F1 double exposure: the recede and the luma reveal both act on the sun inside the glow; if the sun's orange disc and B's glow are both visible at full strength around t 0.6-0.8 it reads as two suns. F2 decoration: if line_to draws a straight dark band that does not visibly come from the deck, the streak looks pasted on. F3 invention: none expected, every bright point at the end is a B star."
+  },
+  {
+   "id": "c2", "rank": 2,
+   "idea": "A deep pull-back shrinks the whole sunset to a speck that becomes the galaxy core by the camera alone, while the bridge refuses to shrink: its deck slides out along the satellite streak and its truss unrolls across the dust lane, so the bridge grows into the galaxy's arm as everything else falls away.",
+   "container": {"in": "B", "kind": "disc", "spec": {"center": [960, 521], "radius": 30}, "rim": "soft"},
+   "anchors": [
+    {"a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "how": "Sun centre on core centre; at end_scale 0.1 the 275 px sun is 27.5 px, the size of the 25 px core."},
+    {"a": {"kind": "element", "ids": [16]}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "how": "The deck is the bright-edged line under the luminary in both photos."},
+    {"a": {"kind": "element", "ids": [29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "how": "Dark truss to dark dust lane."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.6}, "params": {"end_scale": 0.1}},
+   "transforms": [
+    {"name": "sun_rides", "a": {"kind": "circle_fit", "box": [700, 0, 1290, 385], "min_L": 120}, "b": {"kind": "point", "point": [960, 521]}, "by": "hold", "window": [0.0, 0.85], "mix": "none", "params": {}, "note": "The sun shrinks with the camera only; distance comes from the pull-back itself."},
+    {"name": "deck_to_streak", "a": {"kind": "element", "ids": [16]}, "b": {"kind": "line", "points": [[0, 915], [1919, 248]]}, "by": "line_to", "window": [0.1, 0.75], "mix": "edge", "params": {"width": 3}, "note": "Counter-scaling: the deck stays at full frame width while A shrinks around it."},
+    {"name": "truss_to_dust_lane", "a": {"kind": "element", "ids": [29]}, "b": {"kind": "dark_band", "box": [320, 400, 1253, 747]}, "by": "morph_to", "window": [0.15, 0.85], "mix": "edge", "params": {"map": "box", "mass": "dark"}, "note": "Starts early so the truss is already arm-shaped before A's frame is small."},
+    {"name": "water_to_disk", "a": {"kind": "element", "ids": [36]}, "b": {"kind": "box", "box": [240, 290, 1870, 880]}, "by": "morph_to", "window": [0.2, 0.9], "mix": "luma", "params": {"map": "box", "mass": "bright"}, "note": "All water brightness, reflection column included, is spread onto the disk's glow and stars."}
+   ],
+   "end_effect": {"kind": "luma_reveal", "window": [0.75, 1.0]},
+   "helper": null,
+   "knobs": [
+    {"name": "pullback.params.end_scale", "range": [0.06, 0.2], "default": 0.1, "what": "Depth of the dive; at 0.1 the sun's size matches the core without a recede."},
+    {"name": "pullback.parallax.gain", "range": [0.2, 0.9], "default": 0.6, "what": "Z separation between water, bridge and sky during the long pull."},
+    {"name": "truss_to_dust_lane.window[0]", "range": [0.05, 0.4], "default": 0.15, "what": "How early the bridge stops following the camera."}
+   ],
+   "risk": "F2 decoration: the bridge layers detach from a frame that is already tiny, so for t 0.4-0.7 a large dark band and line can float over the star field like an overlay. F1 double exposure: the water-to-disk morph spreads A's orange over B's glow and can read as a dissolve if its mass does not visibly travel. F3: none expected."
+  }
+ ]
+}

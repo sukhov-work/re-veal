@@ -1,0 +1,61 @@
+{
+ "pair": "mismatch_3",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-17)", "temperature": 0, "prompt_sha256": "a715f8eda5822bc162a6e4aba6fd9c4f58c3115155c1cdd2c441c2b07d600e05", "date": "2026-10-17", "brief": "owner notes of 2026-10-17"},
+ "reading": {
+  "a": "An evening crowd of about twenty people stands behind a chain-link fence in front of a white brick wall carrying an air-conditioner, two large wooden cart wheels, a Ukrainian flag and a painted green-hills mural.",
+  "b": "A daytime lounge under a hanging-stick ceiling: eight shirtless men on green sofas in front, two paintings on a dark wall at the left, and a glass wall at the right looking onto pine trunks and a building."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "The camera pulls back out of the bar crowd until it is standing outside the lounge's glass wall, behind the seated men, with the ceiling, the dark wall and the sofa backs closing in front of it; then the cart wheels straighten into the pine trunks, the flag slides out of the glass onto the blue painting, the brick turns to foliage and the crowd steps through the glass and settles into the seated men.",
+   "container": {"in": "B", "kind": "quad", "spec": {"points": [[585, 145], [1919, -152], [1919, 925], [585, 767]]}, "rim": "glass", "params": {"reflect": 0.18}},
+   "anchors": [
+    {"a": {"kind": "box", "box": [0, 0, 1919, 1439]}, "b": {"kind": "box", "box": [585, -152, 1919, 925]}, "how": "A's whole frame goes onto a quad in the glass wall's plane: its top and bottom edges follow the measured perspective of the glass (heights 410 px at x 585 and 710 px at x 1919, ratio 1.73) scaled about 1.5x about the glass midline so A keeps 85% of its 4:3 aspect, and every edge of A lies behind a B occluder (dark wall at the left, ceiling at the top, the wall and sofas below the glass)."},
+    {"a": {"kind": "box", "box": [0, 662, 1919, 1439]}, "b": {"kind": "box", "box": [143, 600, 1913, 1324]}, "how": "With that quad, A's crowd stands with heads near y 490 inside the glass, about 200 px above B's seated heads, so the two groups overlap in depth order, not side by side."},
+    {"a": {"kind": "box", "box": [1180, 170, 1890, 830]}, "b": {"kind": "element", "ids": [7, 8]}, "how": "The wheels land near x 1400-1700 in the clear glass, beside the pine trunks 7 and 8."},
+    {"a": {"kind": "element", "ids": [9]}, "b": {"kind": "box", "box": [200, 261, 528, 642]}, "how": "The flag's blue band and the blue painting are the two large blue rectangles of the pair."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.4}, "params": {}},
+   "transforms": [
+    {"name": "wheels_to_trunks", "a": {"kind": "box", "box": [1180, 170, 1890, 830]}, "b": {"kind": "element", "ids": [7, 8]}, "by": "morph_to", "window": [0.45, 0.85], "mix": "edge", "params": {"map": "box", "mass": "dark"}, "note": "The dark spokes stretch vertically into the dark trunks behind the glass; ties A's wall to B's view."},
+    {"name": "flag_to_painting", "a": {"kind": "element", "ids": [9]}, "b": {"kind": "box", "box": [200, 261, 528, 642]}, "by": "move_to", "window": [0.4, 0.8], "mix": "edge", "params": {}, "note": "The flag leaves the glass, crosses the dark wall and lands on the blue painting, whose line drawing is revealed inside the moving matte; the one move that breaks A out of its pane."},
+    {"name": "brick_to_foliage", "a": {"kind": "element", "ids": [2]}, "b": {"kind": "element", "ids": [3]}, "by": "colour", "window": [0.3, 0.9], "mix": "none", "params": {}, "note": "The white brick takes the window's greens and sky blues, so A stops reading as a separate photo inside the glass."},
+    {"name": "crowd_sits_down", "a": {"kind": "box", "box": [0, 662, 1919, 1439]}, "b": {"kind": "box", "box": [143, 600, 1913, 1324]}, "by": "morph_to", "window": [0.55, 0.95], "mix": "edge", "params": {"map": "box", "mass": "bright"}, "note": "The creative finale the owner asked for: the crowd comes forward through the glass (a depth move, nearer layers growing) and its bright mass (faces, arms, the yellow shirt) is transported onto the men's skin."}
+   ],
+   "end_effect": {"kind": "edge_reveal", "window": [0.8, 1.0]},
+   "helper": null,
+   "knobs": [
+    {"name": "container quad vertical scale about the glass midline", "range": [1.0, 2.0], "default": 1.5, "what": "1.0 is the exact glass (A squeezed to about 0.6 of its aspect, the framing the owner graded); 1.5 keeps A near its own aspect with its edges behind B's occluders."},
+    {"name": "pullback.parallax.gain", "range": [0.0, 0.8], "default": 0.4, "what": "How much B's sofas and men (disparity 0.5-0.85) out-move the glass (0.16) during the pull-back."},
+    {"name": "container.params.reflect", "range": [0.0, 0.4], "default": 0.18, "what": "How much of B's glass content sits over A, which softens A into the pane."},
+    {"name": "crowd_sits_down.window[0]", "range": [0.45, 0.75], "default": 0.55, "what": "How long the crowd stays behind the glass before stepping in."}
+   ],
+   "risk": "F1 double exposure: the crowd-to-men morph overlaps faces on faces; if the edge mix does not move the mass visibly it is the 'very advanced crossfade' the owner rejected. F2 decoration: the flag crossing from the glass to the painting is a matte moving over B and can read as a cut-out if its edges stay hard. F3 invention: none, all pixels are A or B; the quad's top-right corner lies above the canvas (y -152) and must be clipped, not filled."
+  },
+  {
+   "id": "c2", "rank": 2,
+   "idea": "The camera pulls back until the bar scene is the reflection on the lounge's glass wall, tinted by the pines behind it; the cart wheels sink into the pine trunks, and the reflection fades bright parts first until only the view through the glass remains.",
+   "container": {"in": "B", "kind": "quad", "spec": {"points": [[585, 251], [1919, 31], [1919, 741], [585, 661]]}, "rim": "glass", "params": {"reflect": 0.35}},
+   "anchors": [
+    {"a": {"kind": "box", "box": [0, 0, 1919, 1439]}, "b": {"kind": "box", "box": [585, 31, 1919, 741]}, "how": "A's frame corners on the measured glass corners: the exact pane."},
+    {"a": {"kind": "box", "box": [1180, 170, 1890, 830]}, "b": {"kind": "element", "ids": [7, 8]}, "how": "Wheels to the nearest trunks in the pane."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.5}, "params": {}},
+   "transforms": [
+    {"name": "evening_to_day", "a": {"kind": "element", "ids": [2, 9]}, "b": {"kind": "element", "ids": [3]}, "by": "colour", "window": [0.2, 0.85], "mix": "none", "params": {}, "note": "A's wall and flag take the daylight colours of the view."},
+    {"name": "wheels_to_trunks", "a": {"kind": "box", "box": [1180, 170, 1890, 830]}, "b": {"kind": "element", "ids": [7, 8]}, "by": "morph_to", "window": [0.4, 0.85], "mix": "edge", "params": {"map": "box", "mass": "dark"}, "note": "Same link as c1, inside the tighter pane."},
+    {"name": "crowd_rides", "a": {"kind": "box", "box": [0, 662, 1919, 1439]}, "b": {"kind": "box", "box": [585, 400, 1919, 741]}, "by": "hold", "window": [0.0, 0.8], "mix": "none", "params": {}, "note": "The crowd stays in the pane's lower band, just above the men's heads, until the reveal."}
+   ],
+   "end_effect": {"kind": "luma_reveal", "window": [0.75, 1.0]},
+   "helper": null,
+   "knobs": [
+    {"name": "container.params.reflect", "range": [0.1, 0.6], "default": 0.35, "what": "How much the pane reads as glass over A rather than a picture of A."},
+    {"name": "pullback.parallax.gain", "range": [0.0, 0.8], "default": 0.5, "what": "Z separation between the men, the pane and the pines."},
+    {"name": "end_effect.window[0]", "range": [0.6, 0.9], "default": 0.75, "what": "When the reflection starts to clear."}
+   ],
+   "risk": "F2 decoration: the exact pane squeezes A to about a third of its height, which is the static transformed photo the owner graded on 2026-10-17; the glass blend may not be enough to hide it. F1 double exposure: a reflection is by construction two images at once, so the luma reveal can read as a crossfade. F3: none."
+  }
+ ]
+}

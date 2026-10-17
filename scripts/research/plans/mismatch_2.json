@@ -1,0 +1,58 @@
+{
+ "pair": "mismatch_2",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-17)", "temperature": 0, "prompt_sha256": "a715f8eda5822bc162a6e4aba6fd9c4f58c3115155c1cdd2c441c2b07d600e05", "date": "2026-10-17", "brief": "blind"},
+ "reading": {
+  "a": "A man in a bright yellow jacket peeks out from behind a tree trunk at the left, hands clasped at chest height, against soft green and orange bokeh.",
+  "b": "A café snapshot: a man at the left holds up a phone whose back faces the camera, a woman in green peeks out from behind his raised hand, and a woman in black smiles at the right, in front of a monstera, a cream brick wall with painted birds and a yellow planter."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "The camera pulls back and the peeking man shrinks into the exact spot where the woman in green peeks out from behind the raised hand, his eyes on her eyes and his clasped hands on the palm in front of her, so the man at the left and the raised hand now hide him the way his tree did; his yellow drains into the planter beside him and he is replaced from the edges inward by her.",
+   "container": {"in": "B", "kind": "rect", "spec": {"box": [142, 397, 413, 757]}, "rim": "matte"},
+   "anchors": [
+    {"a": {"kind": "point", "point": [285, 128]}, "b": {"kind": "point", "point": [270, 455]}, "how": "Midpoint of A's eyes (about (240, 130) and (330, 125)) to the midpoint of the peeking woman's eyes (about (250, 458) and (290, 452)); the eye spacing 90 px to 40 px gives end_scale 0.45, and A's 602x800 frame lands on [142, 397, 413, 757]."},
+    {"a": {"kind": "box", "box": [170, 360, 390, 560]}, "b": {"kind": "element", "ids": [19]}, "how": "At that scale A's clasped hands land at about (268, 604), on the open palm in front of the woman (element 19, centre (260, 560))."},
+    {"a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [21]}, "how": "The yellow jacket and the yellow planter at the left edge of the container are the two yellow masses of the pair."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.35}, "params": {"end_scale": 0.45}},
+   "transforms": [
+    {"name": "face_rides", "a": {"kind": "box", "box": [175, 0, 375, 280]}, "b": {"kind": "box", "box": [222, 400, 300, 520]}, "by": "hold", "window": [0.0, 0.85], "mix": "none", "params": {}, "note": "The face rides the camera onto the woman's face and is not warped; B's man (disparity 0.51) and raised hand (0.59) cover the container from the left and below by the matte rim."},
+    {"name": "bokeh_to_wall", "a": {"kind": "element", "ids": [2, 4, 5, 6, 7]}, "b": {"kind": "element", "ids": [2]}, "by": "colour", "window": [0.2, 0.8], "mix": "none", "params": {}, "note": "A's green-orange bokeh takes the cream wall's colour so the top and right edges of the container stop showing as a rectangle."},
+    {"name": "jacket_to_cardigan", "a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [15]}, "by": "colour", "window": [0.35, 0.9], "mix": "none", "params": {}, "note": "The jacket darkens toward the woman's green cardigan where it stays inside her outline."},
+    {"name": "yellow_to_planter", "a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [21]}, "by": "morph_to", "window": [0.45, 0.9], "mix": "luma", "params": {"map": "box", "mass": "bright"}, "note": "The jacket's bright yellow mass pours left into the yellow planter."}
+   ],
+   "end_effect": {"kind": "edge_reveal", "window": [0.75, 1.0]},
+   "helper": null,
+   "knobs": [
+    {"name": "pullback.params.end_scale", "range": [0.35, 0.6], "default": 0.45, "what": "How small the peeking man ends; 0.45 matches the eye spacing."},
+    {"name": "pullback.parallax.gain", "range": [0.0, 0.7], "default": 0.35, "what": "How much the near man and hand out-move the wall during the pull-back."},
+    {"name": "end_effect.window[0]", "range": [0.6, 0.9], "default": 0.75, "what": "When the woman starts to replace him from the container's rim inward."},
+    {"name": "yellow_to_planter.window[0]", "range": [0.3, 0.7], "default": 0.45, "what": "When the yellow starts to pour into the planter."}
+   ],
+   "risk": "F1 double exposure: his face and her face sit on the same pixels at the end; the edge reveal must sweep, not fade, or it is a face crossfade. F2 decoration: the top edge (y 397) and right edge (x 413) of the rectangle cross the wall and the woman in black with no occluder, so they can show as a photoshop cut-out if the colour transfer does not close the gap. F3 invention: none, but A is a widely shared meme of a real person, and nothing of his face may be warped into hers."
+  },
+  {
+   "id": "c2", "rank": 2,
+   "idea": "The camera pulls back until the whole meme fits on the phone the man is holding up, as if he were showing it to the women, and the phone's own dark back takes over the picture, brightest parts first.",
+   "container": {"in": "B", "kind": "quad", "spec": {"points": [[321, 282], [358, 296], [348, 460], [315, 450]]}, "rim": "matte"},
+   "anchors": [
+    {"a": {"kind": "box", "box": [0, 0, 601, 799]}, "b": {"kind": "box", "box": [315, 282, 358, 460]}, "how": "A's frame corners to the phone body's corners read on a 3x zoom of B; the thumb (in front, by the matte) covers the lower part."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.3}, "params": {}},
+   "transforms": [
+    {"name": "trunk_to_left_man", "a": {"kind": "element", "ids": [1]}, "b": {"kind": "element", "ids": [10]}, "by": "morph_to", "window": [0.1, 0.7], "mix": "edge", "params": {"map": "box", "mass": "dark"}, "note": "The trunk's dark mass at the left stays at the left and becomes the man's dark shirt and hair while the rest of A shrinks into the phone."},
+    {"name": "jacket_to_planter", "a": {"kind": "element", "ids": [3]}, "b": {"kind": "element", "ids": [21]}, "by": "morph_to", "window": [0.2, 0.8], "mix": "luma", "params": {"map": "box", "mass": "bright"}, "note": "Yellow mass that leaves the phone's outline goes to the planter."}
+   ],
+   "end_effect": {"kind": "luma_reveal", "window": [0.7, 1.0]},
+   "helper": null,
+   "knobs": [
+    {"name": "pullback.parallax.gain", "range": [0.0, 0.6], "default": 0.3, "what": "Z separation between the hand, the faces and the wall."},
+    {"name": "trunk_to_left_man.window[1]", "range": [0.5, 0.9], "default": 0.7, "what": "When the trunk finishes becoming the man."},
+    {"name": "end_effect.window[0]", "range": [0.5, 0.9], "default": 0.7, "what": "When the phone's back starts to replace the picture."}
+   ],
+   "risk": "F2 decoration: A's 3:4 frame is squeezed to the phone's 1:4 shape, a picture-in-picture shrink the owner may call 2D work. F3 invention: the phone shows its back, so the meme on the phone is a story B does not support; the quad must end on the phone's real pixels. F1: the luma reveal inside a 40 px quad is too small to read as a crossfade."
+  }
+ ]
+}

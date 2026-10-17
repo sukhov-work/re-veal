@@ -375,16 +375,23 @@ from the first phote are in the window pane of the second photo") are one mechan
 one scene inside a region of the other, revealed by one camera pulling back. Probed the same day
 (`scripts/research/nest_probe.py`, page `benchmarks/runs/2026-10-17/nest/`, ungraded).
 1. **The owner's picks on the probe page** (the two nested-camera clips) and his answers to the five
-   questions of `TRANSITIONS.md §13.8`.
+   questions of `TRANSITIONS.md §13.8`. DONE 2026-10-17 evening (`§13.10`): no pick, six faults, the
+   framing "roughly correct", the camera ruling narrowed (§11 amendment), the egress and FLUX.3's terms yes.
 2. **The transformation inside the container** (`§13.4` item 1): the bridge onto the dust lane by
    `morph_to` or the log-polar map, A's crowd onto B's group by `morph_to`, on the probe; the blind
-   planner's plan for mismatch_5 (`§13.6`) is the specification. The director flow's first planned
+   planner's plan for mismatch_5 (`§13.6`) is the specification. BUILT 2026-10-17 evening as the
+   plan-driven renderer `scripts/research/director_render.py` (`§13.11`): the sun recedes into the
+   core, the deck turns into the streak, the truss goes to the dust lane by an axis map; on
+   mismatch_3 A sits in the glass plane by a homography, B's foreground is a depth layer; three
+   plans by the planner (mismatch_2 blind). Page `benchmarks/runs/2026-10-17/director/`, UNGRADED. The director flow's first planned
    render follows on a held-out pair (every fixture pair carries a description by the owner; a new
    pair is asked for), by the session's model unless the owner has said yes to the egress.
 3. **The nested camera as score keys** (`pullback` and `anchors`, the container as an `element`
    mask rule with a role; default-off in `layered_probe.py`, rounds 1–7 byte-identical through
    them; first the no-code test of `TRANSITIONS.md §13.6` stage 2), with parallax by the depth
-   model as a knob; the transformation inside the container (`§13.4` item 1) comes BEFORE the keys.
+   model as a knob; the transformation inside the container (`§13.4` item 1) comes BEFORE the keys. DROPPED 2026-10-17 evening: the renderer is a separate script that imports the
+   layered probe's primitives, so no key enters `layered_probe.py` and the no-code test has no
+   purpose; rounds 1–7 stay byte-identical by construction.
 4. **Bridge → arm** (`§13.4` item 2): a semantic correspondence inside label-matched elements
    (DINOv3 or the layer source's own match), then `morph_to` or the log-polar warp.
 5. **FLUX.3 image klein on the box** (`§13.5`): after the owner accepts the gated terms and the

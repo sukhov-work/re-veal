@@ -26,6 +26,12 @@
 #   MODEL=klein MODELS=~/keyframes/models_klein ... ./strix_keyframe.sh before.png - kf_10   # FLUX.2 klein 4B (2026-09-27 evening)
 #   MODEL=klein MODELS=~/keyframes/models_klein9 KLEIN_DIFFUSION=flux-2-klein-9b-Q8_0.gguf KLEIN_LLM=Qwen3-8B-Q8_0.gguf \
 #     NEED_GB=23 ... ./strix_keyframe.sh before.png - kf_14   # FLUX.2 klein 9B (2026-09-27 night; 18.86 GB of weights + 4 GB)
+#   MODEL=flux3 MODELS=~/keyframes/models_flux3 FLUX3_LLM=qwen3vl_4b_bf16_lm.safetensors ... ./strix_keyframe.sh before.png - fx_01
+#     # FLUX.3 image klein bf16 (2026-10-17, round 8 Track D; its own image, pinned below as IMG_FLUX3; "-" as the
+#     # first picture = text to image). The encoder from black-forest-labs/flux-3-image-klein-comfy keeps the Hugging
+#     # Face names 'model.language_model.*', which sd.cpp f0aac52 rejects ("Conditioner model tensor
+#     # 'text_encoders.llm.model.embed_tokens.weight' not in model metadata"); benchmarks/runs/2026-10-17/flux3/scripts/
+#     # st_rename.py writes a copy named 'model.*' with the tensor bytes unchanged. 16 steps at 1024x1280: 312 s wall.
 # MODEL=qwen (default) runs the Qwen-Image-Edit-2511 command unchanged. MODEL=klein runs FLUX.2 [klein] 4B
 # with the flags of stable-diffusion.cpp docs/flux2.md at the image's commit 2f886889 (--cfg-scale 1.0
 # --steps 4 --sampling-method euler --diffusion-fa; --llm = Qwen3-4B; no --llm_vision, --flow-shift or
@@ -36,18 +42,29 @@
 # only usable if the two runs agree byte for byte (determinism gate).
 set -euo pipefail
 IMG="ghcr.io/leejet/stable-diffusion.cpp@sha256:0ab8e0e0ef3c51db7132f5e15c9e5615a529ea4156573409e8c4b4c97ee1ac37"  # master-vulkan, 2026-09-25
+IMG_FLUX3="ghcr.io/leejet/stable-diffusion.cpp@sha256:2ad8a48a1b1cbc207541e788a40f393c7cc1fecfc6be96387fbf0a211c2f5323"  # master-vulkan, 2026-10-17, commit f0aac52 (MODEL=flux3 only)
 MODELS="${MODELS:?models dir}"; IN="${IN:?input dir}"; OUT="${OUT:?output dir}"
 A="${1:?before image (in $IN)}"; B="${2:-}"; NAME="${3:-kf}"   # B empty or "-" = a single-reference run (2026-09-27)
 REFS=(-r "/in/$A"); if [ -n "$B" ] && [ "$B" != "-" ]; then REFS+=(-r "/in/$B"); fi
 PROMPT="${PROMPT:?prompt}"; SEED="${SEED:-20260926}"
-MODEL="${MODEL:-qwen}"   # qwen | klein (2026-09-27 evening)
-case "$MODEL" in qwen|klein) ;; *) echo "MODEL must be qwen or klein, got '$MODEL'" >&2; exit 2;; esac
+MODEL="${MODEL:-qwen}"   # qwen | klein (2026-09-27 evening) | flux3 (2026-10-17)
+case "$MODEL" in qwen|klein|flux3) ;; *) echo "MODEL must be qwen, klein or flux3, got '$MODEL'" >&2; exit 2;; esac
+# flux3 (2026-10-17): the bf16 files of black-forest-labs/flux-3-image-klein-comfy; FLUX3_DIFFUSION=flux3-image-klein-base-bf16.safetensors
+# with FLUX3_CFG=3.5 FLUX3_STEPS=20 runs the base model (docs/flux3.md)
+FLUX3_DIFFUSION="${FLUX3_DIFFUSION:-flux3-image-klein-bf16.safetensors}"; FLUX3_LLM="${FLUX3_LLM:-qwen3vl_4b_bf16.safetensors}"
+FLUX3_VAE="${FLUX3_VAE:-flux2-vae.safetensors}"; FLUX3_CFG="${FLUX3_CFG:-1.0}"; FLUX3_STEPS="${FLUX3_STEPS:-16}"; FLUX3_FLOW_SHIFT="${FLUX3_FLOW_SHIFT:-}"
 KLEIN_VAE="${KLEIN_VAE:-flux-2-klein-4b-vae.safetensors}"
 # the klein transformer and text encoder files (2026-09-27 night); the defaults are the klein 4B pair. klein 9B needs
 # Qwen3-8B as its --llm (docs/flux2.md) and more memory: NEED_GB is computed from the files below unless it is given
 KLEIN_DIFFUSION="${KLEIN_DIFFUSION:-flux-2-klein-4b-Q8_0.gguf}"; KLEIN_LLM="${KLEIN_LLM:-Qwen3-4B-Q8_0.gguf}"
 # NEED_GB: qwen 26. klein: the three files' bytes in whole GB plus 6 (4 GB of buffers and the rounding), so the 4B
 # pair gives 14 as before and the 9B pair 24; a fixed 14 would let a 9B run pass the pre-flight (2026-09-27 night)
+# flux3 (2026-10-17): the three files' bytes in whole GB plus 6, as for klein; the bf16 set (11.10 + 8.88 + 0.34 GB) gives 26
+if [ "$MODEL" = flux3 ] && [ -z "${NEED_GB:-}" ]; then
+  kb=0; for f in "$MODELS/$FLUX3_DIFFUSION" "$MODELS/$FLUX3_LLM" "$MODELS/$FLUX3_VAE"; do
+    [ -f "$f" ] && kb=$(( kb + $(stat -c %s "$f" 2>/dev/null || stat -f %z "$f") )); done
+  NEED_GB=$(( kb / 1000000000 + 6 ))
+fi
 if [ "$MODEL" = klein ]; then
   if [ -z "${NEED_GB:-}" ]; then
     kb=0; for f in "$MODELS/$KLEIN_DIFFUSION" "$MODELS/$KLEIN_LLM" "$MODELS/$KLEIN_VAE"; do
@@ -95,7 +112,7 @@ $INHIBIT timeout 45m $DOCKER run --rm --init \
   --cfg-scale 2.5 --sampling-method euler --flow-shift 3 --diffusion-fa --vae-tiling \
   --max-vram "$MAX_VRAM" --seed "$SEED" --rng cpu --sampler-rng cpu -W "$W" -H "$H" \
   -o "/output/${NAME}.png"
-else
+elif [ "$MODEL" = klein ]; then
 $INHIBIT timeout 45m $DOCKER run --rm --init \
   --user "$(id -u):$(id -g)" --group-add "$RENDER_GID" --group-add "$VIDEO_GID" \
   --device /dev/dri --network none --read-only --tmpfs /tmp \
@@ -108,12 +125,39 @@ $INHIBIT timeout 45m $DOCKER run --rm --init \
   --cfg-scale 1.0 --steps 4 --sampling-method euler --diffusion-fa --vae-tiling \
   --max-vram "$MAX_VRAM" --seed "$SEED" --rng cpu --sampler-rng cpu -W "$W" -H "$H" \
   -o "/output/${NAME}.png"
+else
+# FLUX.3 image klein (2026-10-17): the flags of stable-diffusion.cpp docs/flux3.md at the image's commit f0aac52
+# (distilled: --cfg-scale 1.0 --steps 16 --sampling-method euler; --llm = Qwen3-VL 4B, no --llm_vision; -r up to 10;
+# --flow-shift overrides the default 6.93). REF "-" as the first argument = text to image (no reference).
+REFS3=(); if [ "$A" != "-" ]; then REFS3=(-r "/in/$A"); if [ -n "$B" ] && [ "$B" != "-" ]; then REFS3+=(-r "/in/$B"); fi; fi
+SHIFT3=(); if [ -n "$FLUX3_FLOW_SHIFT" ]; then SHIFT3=(--flow-shift "$FLUX3_FLOW_SHIFT"); fi
+$INHIBIT timeout 45m $DOCKER run --rm --init \
+  --user "$(id -u):$(id -g)" --group-add "$RENDER_GID" --group-add "$VIDEO_GID" \
+  --device /dev/dri --network none --read-only --tmpfs /tmp \
+  --memory "$MEM_CAP" --memory-swap "$MEM_CAP" --pids-limit 256 --cpus 8 --oom-score-adj 1000 \
+  -v "$MODELS":/models:ro -v "$IN":/in:ro -v "$OUT":/output "$IMG_FLUX3" \
+  --diffusion-model "/models/$FLUX3_DIFFUSION" \
+  --llm "/models/$FLUX3_LLM" \
+  --vae "/models/$FLUX3_VAE" \
+  "${REFS3[@]}" -p "$PROMPT" \
+  --cfg-scale "$FLUX3_CFG" --steps "$FLUX3_STEPS" --sampling-method euler "${SHIFT3[@]}" --flash-attn off,diffusion=on --vae-tiling \
+  --max-vram "$MAX_VRAM" --seed "$SEED" --rng cpu --sampler-rng cpu -W "$W" -H "$H" \
+  -o "/output/${NAME}.png"
 fi
 # manifest beside the keyframe: everything a re-render needs to reproduce it
+if [ "$MODEL" = flux3 ]; then
+cat > "$OUT/${NAME}.manifest.json" <<EOF
+{"image": "$IMG_FLUX3", "models": $(ls -1 "$MODELS" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().split()))'),
+ "before": "$A", "after": "$B", "prompt": $(printf '%s' "$PROMPT" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))'),
+ "model": "flux3", "seed": $SEED, "cfg": $FLUX3_CFG, "steps": $FLUX3_STEPS, "sampler": "euler", "flow_shift": ${FLUX3_FLOW_SHIFT:-null}, "vae": "$FLUX3_VAE", "diffusion_model": "$FLUX3_DIFFUSION", "llm": "$FLUX3_LLM", "size": [$W, $H], "max_vram": $MAX_VRAM, "mem_cap": "$MEM_CAP",
+ "sha256": "$(sha256sum "$OUT/${NAME}.png" | cut -d' ' -f1)", "date": "$(date -Is)"}
+EOF
+else
 cat > "$OUT/${NAME}.manifest.json" <<EOF
 {"image": "$IMG", "models": $(ls -1 "$MODELS" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().split()))'),
  "before": "$A", "after": "$B", "prompt": $(printf '%s' "$PROMPT" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))'),
  "model": "$MODEL", "seed": $SEED, "cfg": $([ "$MODEL" = klein ] && echo 1.0 || echo 2.5), "steps": $([ "$MODEL" = klein ] && echo 4 || echo 20), "sampler": "euler", "flow_shift": $([ "$MODEL" = klein ] && echo null || echo 3), "vae": "$([ "$MODEL" = klein ] && echo "$KLEIN_VAE" || echo qwen_image_vae.safetensors)", "diffusion_model": "$([ "$MODEL" = klein ] && echo "$KLEIN_DIFFUSION" || echo qwen-image-edit-2511-Q4_K_M.gguf)", "llm": "$([ "$MODEL" = klein ] && echo "$KLEIN_LLM" || echo Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf)", "size": [$W, $H], "max_vram": $MAX_VRAM, "mem_cap": "$MEM_CAP",
  "sha256": "$(sha256sum "$OUT/${NAME}.png" | cut -d' ' -f1)", "date": "$(date -Is)"}
 EOF
+fi
 echo "wrote $OUT/${NAME}.png and its manifest"
