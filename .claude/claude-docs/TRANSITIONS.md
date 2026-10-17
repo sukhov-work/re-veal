@@ -3107,3 +3107,71 @@ Operator's knobs on the final renders: mismatch_5 `parallax_sources=["A"]`, `par
 `key_window` [0.2, 0.8]; mismatch_3 `front_margin=0.3`, `cont_feather=14`; mismatch_2
 `man_becomes_nearest_person.mix=luma`, `ot_weight=0.35`, `mix_window=[0.55,0.9]`. Every first and
 last interior step is under the 1-level bar.
+
+### 13.15 The owner's grades on round 9 (2026-10-17 19:42 UTC, verbatim in the director sheet; his three frames under `benchmarks/runs/2026-10-17/director_r9/owner_frames/`), the ceiling they show, and what round 10 has to be
+
+No best, nothing acceptable, on all three pairs. mismatch_5: "still some hard edges around sun and
+bridge" with a frame that shows a bright ring and a dark gap at the sun's rim, the deck as a
+hard-edged bar with a grey band, vertical bands in the sky at the lamp posts, the wire's band as a
+tilted bar. mismatch_2: "the idea is correct but the execution is very ugly and sloppy , rough
+cutout of man from A is just moved and then hard crossfaded onto man from B, rest of frame A is just
+left with hard cut silhuette revealing B underneath , as if two images were layers in photoshop and
+i simply hard removed part of above layer." mismatch_3: "a bit more subtle A into windown pane /
+background transition but it also became sloppier ( more detailed trasfomrational noise , like
+wheels on the wal of A tranform into sky , weird and some people and furniture in B ) and still
+crossfades , just less obviously also obscures part of the ceiling of B which should have been in
+foreground and not obcured by tranformed B frame". He ticked "one picture" on mismatch_3 for the
+first time on this family, "content transforms" on all three, "nothing invented" on all three.
+
+Reading. Across rounds 8 and 9 the same things pass and the same things fail. Pass: the nested
+camera, B's foreground entering by depth, the sun landing on the core, the bridge folding into the
+arm (round 8), the window framing. Fail, every time and in his own words: (1) every layer is a
+silhouette from the layer source composited with a hard alpha, so anything that moves is a
+"cutout" and anything it uncovers is a "hard cut silhouette" (the café man; the tree's hole; the
+deck's bar; the sun's rim); (2) the only transformation of content the renderer has is a warp (an
+affine, an axis map, optimal transport) plus a reveal ordered by luma, edge, noise or B's
+brightness, and he reads each of those as "crossfade", "melt" or "transformational noise" (the
+wheels turning into sky, the crowd on the foliage); (3) a morph between two subjects that are not
+the same thing (a man and another man, a brick wall and pine trees) has no in-between in either
+photo, so its middle frames are a double exposure or a cut by construction. Round 9's additions
+(stars first, the slow key, the wire into the streak, the exit, the axis turn) were rendering
+mechanics on top of the same three limits, and the skeptic's pass and his frame show the extra
+mechanics added dirt (the sky's bands from the depth remap, the rim's ring from the limb flatten).
+
+The ceiling, stated plainly: a deterministic renderer that may use only the two photos' pixels can
+place, move and reveal, and it can transform a dark band into a dark band; it cannot show A's
+subject becoming B's subject when the subjects differ, because that in-between appearance exists
+in neither photo. The in-between has to come from somewhere, and his rule of 2026-09-29 names the
+allowed source: a generated helper (realistic, at least half of the objects original and
+consistent between frames, no new objects), executed as keyframes that deterministic interpolation
+bridges, never full video generation. The box has klein 9B and FLUX.3 image klein (base and
+distilled) ready (§13.12), with multi-reference editing.
+
+Round 10, in the order of what each grade needs (his decision only on the pairs and the budget;
+the helper itself is allowed by his 2026-09-29 answer):
+1. Soft mattes everywhere (answers "rough cutout" on all three): a matting model offline on the
+   Mac (ViTMatte or RMBG-2.0, behind a warmup and a manifest in the research tree, never
+   `models/`) turns each element's hard mask into an alpha with hair and edge softness; the
+   renderer's layers composite with it. Cheapest, no owner input.
+2. mismatch_5 finishing (his "hard edges around sun and bridge"): the rim mixes into the core's
+   glow from the start of the recede over a wide ramp (no limb flatten, no ring); the depth remap
+   leaves the sky alone (parallax on the bridge layers only, none in the sky); the bridge's matte by
+   item 1; the wire's band as a line, not a bar (its alpha from the wire's pixels only, no taper
+   band). No owner input.
+3. mismatch_2, his concept done with a helper: two or three keyframes on the box from both photos
+   as references ("the man in the yellow jacket turning toward the camera and becoming the man
+   holding up the phone", the crops of both men as references, the café as the plate), each checked
+   for added hands or faces; the renderer morphs A → k1 → k2 → B inside the man's soft matte, the
+   tree exits as now, the bokeh's colour path as now. The in-between then has a source. Box time
+   about 2–10 minutes per keyframe (§13.12). His decision: whether this pair stays, and klein 9B
+   or FLUX.3 base for the keyframes.
+4. mismatch_3, the pane's finish with a helper: one keyframe of the view through the glass ("the
+   bar's brick wall and crowd half taken over by pine trees and sky"), composited inside the pane
+   only, the renderer morphing A's pane → keyframe → B's view; the ceiling forced into the front
+   layer (a `front_ids` list; the depth margin had dropped it, which is his "obscures part of the
+   ceiling"); no wheels-to-sky and no crowd morph. His decision: the same as item 3.
+5. The planner stays in the loop (his notes as the brief) and a skeptic pass runs on every
+   full-size render before the page, with a re-render after it (round 9's first render was worse
+   than round 8 on his own pair until the skeptic caught it).
+Not proposed: more rendering mechanics on the current primitives (rounds 8 and 9 show their limit),
+a second blind pair before items 1–4 land, FLUX.3 as the planner.
