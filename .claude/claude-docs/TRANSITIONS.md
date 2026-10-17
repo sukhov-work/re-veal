@@ -2964,3 +2964,44 @@ The final renders (after the skeptic's pass; full size, 3 s at 30 fps; page md5 
 The first and last interior steps are under the 1-level bar on the three mismatch_5 and mismatch_3
 clips and on the café clips' last frames; the café clips' first steps (1.03, 1.48) are over it by
 the soft rim's border and the quad's small size (T38 names them).
+
+### 13.12 FLUX.3 image klein on the box (2026-10-17 evening, Track D, an Opus 5.5 subagent; report `benchmarks/runs/2026-10-17/agents/flux3_run.md`, page `benchmarks/runs/2026-10-17/flux3/index.html`, UNGRADED)
+
+The bf16 files of `black-forest-labs/flux-3-image-klein-comfy` (the distilled and the base
+transformer, the Qwen3-VL-4B text encoder, the FLUX.2 VAE; sha256 equal to Hugging Face's on the
+box) were downloaded on the Mac at 47–53 MB/s and moved to the box at 15–22 MB/s. The
+stable-diffusion.cpp image `master-vulkan` of 2026-10-17 (commit f0aac52, digest sha256:2ad8a48a…)
+is pinned for the recipe's new `MODEL=flux3` branch only; the qwen and klein branches and their
+manifest are byte-identical to before. One fix: that build rejects the comfy encoder's tensor names
+("Conditioner model tensor 'text_encoders.llm.model.embed_tokens.weight' not in model metadata"), so
+`flux3/scripts/st_rename.py` writes a renamed copy with the tensor bytes unchanged.
+
+Smoke test at 512×512, 16 steps: 56 s and 50 s wall, about 2.5 s per step, "total params memory
+size = 18416.35MB", MemAvailable 47.66 → 30.46 GiB, GTT 59.18 → 76.46 GB; two runs with the same seed
+byte-identical. One image-to-image run with one reference: 105 s.
+
+Side by side on the box pair (the fabra boxes) at 1024×1280, the same prompt, reference and size per
+row (the 2026-10-09 run had no klein 9B plate or keyframe of this pair, so both prompts were written
+tonight in the style of the earlier ones and klein 9B ran them too); the zone is two hand-drawn
+rectangles over the boxes, 17.8 % of the frame:
+
+| Run | Wall | Mean abs. difference outside the zone (levels) | Pixels outside changed by more than 8 levels |
+|---|---|---|---|
+| plate, klein 9B | 89 s | 14.18 | 63.1 % |
+| plate, FLUX.3 distilled | 312 s | 14.15 | 73.2 % |
+| plate, FLUX.3 base | 923 s | 12.80 | 63.1 % |
+| keyframe, klein 9B | 89 s | 17.99 | 82.0 % |
+| keyframe, FLUX.3 distilled | 351 s | 15.14 | 79.6 % |
+| keyframe, FLUX.3 base | 781 s | 10.72 | 58.2 % |
+
+Time per step is the same (18.5 s against 18.2 s); FLUX.3 takes 16 steps where klein 9B takes 4, so
+the distilled model costs 3.5–3.9× the time and the base 8.8–10.4×. Lowest MemAvailable in any
+FLUX.3 run 24.89 GiB; every run `run_rc=0`; the hold file removed at 19:14:55 BST and no container
+left. Reading: on the keyframe the base model keeps more of the frame outside the zone (58 % of
+those pixels changed against 82 %, 10.7 levels against 18.0); the distilled model matches klein 9B
+in fidelity at 3.5× the time. Neither has a mask, so every number is "how much the model moved what
+it was told to keep", and the choice of the plate and keyframe model of record (T35) is the owner's
+by eye on the page. Not run: `--flow-shift 16`, a second reference, the prompt upsampler. Two
+resident `llama-server` processes restarted at 18:00 and 18:12 BST while no job of the track ran
+(a `llama-swap` model swap is likely; its log was not read). The weights on the Mac (31 GB) sit in
+the session scratchpad and are not needed again.
