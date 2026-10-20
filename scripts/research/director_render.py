@@ -48,9 +48,46 @@ def ease01(u, t0, t1, kind="smootherstep"):
     return smootherstep(x)
 
 
+def trapezoid01(x, edge=0.35):
+    """Round 12: a beat's progress with a velocity that ramps up by a smoothstep over `edge` of the window,
+    holds, and ramps down over the last `edge` (the integral of a smooth trapezoid; C1 at both ends and in
+    the middle). edge 0.5 is one smooth hump (no constant part); a small edge is close to linear. The owner's
+    round-11 words: "all happen with weird pauses and in very linear way, looks too artificial and clunky"."""
+    x = float(min(1.0, max(0.0, x)))
+    a = float(min(0.5, max(1e-3, edge)))
+    n = 1.0 - a
+    if x < a:
+        t = x / a
+        return a * (t * t * t - 0.5 * t * t * t * t) / n
+    if x > 1.0 - a:
+        t = (1.0 - x) / a
+        return 1.0 - a * (t * t * t - 0.5 * t * t * t * t) / n
+    return (x - 0.5 * a) / n
+
+
+def rate_profile(e, profile):
+    """Round 12: the rate of a beat (the owner: "whole sun to rapidly shrink"): `fast_in` does most of the change
+    early, `fast_out` late; both keep e(0) = 0, e(1) = 1 and a finite velocity, so the trapezoid's ends stay smooth."""
+    if profile == "fast_in":
+        return 1.0 - (1.0 - e) * (1.0 - e)
+    if profile == "fast_out":
+        return e * e
+    return e
+
+
 def layer_e(u, lay):
-    """A layer's progress in its window: smootherstep, or linear for a keyframe chain (round 11)."""
-    return ease01(u, *lay["window"], kind=lay.get("ease", "smootherstep"))
+    """A layer's progress in its window: smootherstep, linear for a keyframe chain (round 11), or the smooth
+    trapezoid of the continuous motion model (round 12, `ease` "trapezoid" with `edge`), then the beat's rate profile."""
+    kind = lay.get("ease", "smootherstep")
+    if kind == "trapezoid":
+        t0, t1 = lay["window"]
+        if t1 <= t0:
+            return 1.0 if u >= t1 else 0.0
+        e = trapezoid01((u - t0) / (t1 - t0), float(lay.get("m_edge", 0.35)))
+    else:
+        e = ease01(u, *lay["window"], kind=kind)
+    pr = lay.get("rate")
+    return rate_profile(e, pr) if pr else e
 
 
 def to3(M):
@@ -400,6 +437,18 @@ class Scene:
         self.anchors = {}
         self.A = None; self.shiftA = (0, 0)
         self.dark_alpha = None
+        # round 12: the continuous motion model (plan key `motion`, knob `motion=continuous|legacy`) and the reveal
+        # policy (plan key `reveal`, knob `guard=false`): absent in a plan, both are off and rounds 8-11 render as before
+        mo = dict(concept.get("motion") or {})
+        if knobs.get("motion") is not None:
+            mo["kind"] = knobs["motion"]
+        self.motion = mo if mo.get("kind") == "continuous" else None
+        rv = dict(concept.get("reveal") or {})
+        if "guard" in knobs:
+            rv["guard"] = bool(knobs["guard"])
+        self.guard_on = bool(rv.get("guard", self.motion is not None))
+        self.guard_ramp = float(rv.get("ramp", 0.08)); self.guard_band = float(rv.get("band", 0.01))
+        self.guard_layers = []
 
     # --- coordinates of the plan (the layer source's canvas) -> this canvas
     def sc(self, v):
@@ -588,7 +637,9 @@ class Scene:
             if cont["kind"] == "rect":
                 s1 = (x1 - x0) / W
                 S_A = np.array([[s1, 0, x0], [0, s1, y0], [0, 0, 1]], np.float64)
-                self.cam = Camera(S_A, W, H)
+                # round 12: a rect of the frame's own size is a translation, which has no fixed point for the 'sim'
+                # camera (mismatch_1's blind plan: a 45-level cut at frame 1); the corner-interpolating camera handles it
+                self.cam = Camera(S_A, W, H, quad=quad) if abs(s1 - 1.0) < 1e-3 else Camera(S_A, W, H)
                 self.S_A3 = S_A
             else:
                 Hq = cv2.getPerspectiveTransform(src, quad.astype(np.float32)).astype(np.float64)
@@ -824,7 +875,9 @@ class Scene:
             tr = trs[i_tr]
             by = tr["by"]
             lay = {"name": tr["name"], "by": by, "window": tr.get("window", [0, 1]), "mix": tr.get("mix", "luma"), "params": dict(tr.get("params", {})), "depth": tr.get("depth", "inside")}
-            lay["ease"] = tr.get("params", {}).get("ease", "linear" if by == "keyframe_chain" else "smootherstep")
+            lay["ease"] = tr.get("params", {}).get("ease", ("trapezoid" if self.motion else ("linear" if by == "keyframe_chain" else "smootherstep")))
+            lay["m_edge"] = float(tr.get("params", {}).get("edge", (self.motion or {}).get("edge", 0.35)))   # m_edge: `edge` is the morph layers' rim order
+            lay["rate"] = tr.get("params", {}).get("rate")                   # round 12: "fast_in" | "fast_out" | None (rule 11: the plan states the rate)
             for k, v in self.knobs.items():
                 if k.startswith(tr["name"] + "."):
                     key = k.split(".", 1)[1]
@@ -882,6 +935,28 @@ class Scene:
                 s1 = float(self.S_A3[0, 0])
                 end_r_A = float(p.get("end_radius", 30.0)) * self.ls_scale / s1       # B px -> A canvas px
                 lay.update(centre=ca, r=ra, k_end=min(1.0, end_r_A / ra), soften=float(p.get("soften", 0.0)))   # round 11: the ramp is the only radius
+                lay["profile"] = p.get("profile", "linear")             # round 12: "geometric" shrinks at a constant relative rate ("rapidly shrink")
+                if p.get("end_shape") == "b_blob":
+                    # round 12: the disc ends on B's bright blob around the b anchor, by its centroid, its two axes and its
+                    # angle (the owner on round 11: "do not align (perfectly ) neither by the centers nor by shapes")
+                    reach = float(p.get("blob_search", 3.0)) * max(float(rb), end_r_A * s1, 8.0)
+                    yyB, xxB = np.mgrid[0:self.H, 0:self.W]
+                    near = np.hypot(xxB - cb[0], yyB - cb[1]) <= reach
+                    thr = float(p.get("blob_frac", 0.6)) * float(self.LB[near].max()) if near.any() else 255.0
+                    bl = ((self.LB >= thr) & near).astype(np.uint8)
+                    nb, labb, stb, _ = cv2.connectedComponentsWithStats(bl, 8)
+                    if nb > 1:
+                        kb_ = 1 + int(np.argmax(stb[1:, cv2.CC_STAT_AREA])); ysb_, xsb_ = np.nonzero(labb == kb_)
+                        pts = np.stack([xsb_, ysb_], 1).astype(np.float64); cB_blob = pts.mean(0)
+                        cov = np.cov((pts - cB_blob).T) if len(pts) > 5 else np.eye(2)
+                        evals, evecs = np.linalg.eigh(cov); evals = np.maximum(evals, 1e-6)
+                        ax_B = 2.0 * math.sqrt(evals[1]); ay_B = 2.0 * math.sqrt(evals[0]); th_B = math.atan2(evecs[1, 1], evecs[0, 1])
+                        qc = Si @ np.array([cB_blob[0], cB_blob[1], 1.0]); cA_t = qc[:2] / qc[2]
+                        kx = max(1e-3, ax_B / s1 / ra); ky = max(1e-3, ay_B / s1 / ra)
+                        lay.update(k_end=min(1.0, math.sqrt(kx * ky)), kx_end=kx, ky_end=ky, th_end=th_B, c_end=(float(cA_t[0]), float(cA_t[1])))
+                        lay["end_blob"] = {"centre_B": [round(float(cB_blob[0]), 1), round(float(cB_blob[1]), 1)], "axes_B": [round(ax_B, 1), round(ay_B, 1)], "angle_deg": round(math.degrees(th_B), 1), "offset_from_anchor_px": round(float(np.hypot(cB_blob[0] - cb[0], cB_blob[1] - cb[1])), 1)}
+                    else:
+                        print(f"INFO recede: no bright blob of B near the anchor for end_shape b_blob; the end radius is used", file=sys.stderr)
                 disc = mA
                 yy, xx = np.mgrid[0:H, 0:W]
                 rr0 = np.hypot(xx - ca[0], yy - ca[1]) / max(1.0, ra)
@@ -1200,7 +1275,17 @@ class Scene:
                         mattes.append(np.clip(cv2.GaussianBlur(mw_, (0, 0), 1.0), 0, 1).astype(np.float32))
                     mattes.append(sB_inA)
                 n_seg = len(segs)
-                times = [float(t) for t in (p.get("times") or [(j + 1) / n_seg for j in range(n_seg - 1)])]
+                if p.get("times") == "arc":
+                    # round 12: knots by arc length, so the visual speed is the same through every segment (a segment's
+                    # share of the window is its median displacement; a dissolve segment with no motion keeps a floor share)
+                    dd = [float(sg_["disp_median_px"]) for sg_ in segs]
+                    floor_ = float(p.get("arc_floor", 0.2)) * max(dd) if max(dd) > 0 else 1.0
+                    dd = [max(d_, floor_) for d_ in dd]
+                    cum = np.cumsum(dd) / float(sum(dd))
+                    times = [round(float(t), 4) for t in cum[:-1]]
+                    lay["arc_times"] = True
+                else:
+                    times = [float(t) for t in (p.get("times") or [(j + 1) / n_seg for j in range(n_seg - 1)])]
                 if len(times) != n_seg - 1:
                     times = [(j + 1) / n_seg for j in range(n_seg - 1)]
                     print(f"INFO chain: {tr['name']} has {n_seg} segments; the plan's times do not fit and were spaced evenly", file=sys.stderr)
@@ -1218,6 +1303,80 @@ class Scene:
             raise ValueError(f"transform kind {by}")
         self.layers = [built[i] for i in range(len(trs)) if i in built]      # the plan's order for compositing
         self.covered = covered
+        self.recede_layer = next((l for l in self.layers if l["by"] == "recede"), None)
+        if self.motion:
+            # round 12: consecutive beats overlap by `overlap` of the earlier beat's window, so one motion hands over to
+            # the next while it is still moving (the owner: "happen very discretely ... with weird pauses"); the renderer
+            # moves a later beat's start earlier and says so
+            ov = float(self.motion.get("overlap", 0.1)); adjusted = []
+            beats = sorted([l for l in self.layers if l["by"] not in ("colour", "hold")], key=lambda l: l["window"][0])
+            for prev, nxt in zip(beats, beats[1:]):
+                p0, p1 = prev["window"]; n0, n1 = nxt["window"]
+                want = p1 - ov * (p1 - p0)
+                if ov > 0 and n0 > want + 1e-6 and want < n1:
+                    nxt["window"] = [round(max(0.0, want), 4), n1]
+                    adjusted.append({"name": nxt["name"], "from": n0, "to": nxt["window"][0], "after": prev["name"]})
+                    print(f"INFO motion: {nxt['name']} starts at {nxt['window'][0]:.3f} instead of {n0:.3f} to overlap {prev['name']}", file=sys.stderr)
+            self.info["motion"] = {"kind": "continuous", "edge": float(self.motion.get("edge", 0.35)), "overlap": ov, "adjusted": adjusted,
+                                   "beats": [{"name": l["name"], "window": l["window"], "ease": l.get("ease"), "edge": l.get("m_edge")} for l in beats]}
+        if self.guard_on:
+            # round 12: the reveal policy. B's target of a beat (the b-mask, grown by `band` of the width) is not shown
+            # before the beat has delivered it ("should never clip to underlaying next/last frame in advance (unless it
+            # was specific director intention"): a hole, the end effect or the key cannot show it there; A's base shows
+            # instead. A transform with `reveal_ahead: true` opts out (the recede does by default: its vacated ring shows
+            # B's glow, and a fill of a luminary's footprint is a dark ring, T46).
+            by_name = {tr["name"]: tr for tr in trs}
+            gb_px = max(1, int(round(self.guard_band * self.W))) | 1
+            for lay in self.layers:
+                tr = by_name.get(lay["name"]); p = lay["params"]
+                if tr is None or lay["by"] in ("colour", "hold", "exit") or not tr.get("b"):
+                    continue
+                if bool(p.get("reveal_ahead", lay["by"] == "recede")):
+                    continue
+                try:
+                    gB = self.soft_B(tr["b"]) if tr["b"].get("kind") == "element" else self.mask_B(tr["b"]).astype(np.float32)
+                except Exception as ex:
+                    print(f"INFO guard: {lay['name']}: no b-mask ({ex}); no guard", file=sys.stderr); continue
+                gB = cv2.dilate((gB > 0.3).astype(np.uint8), np.ones((gb_px, gb_px), np.uint8)).astype(np.float32)
+                gB = feather(gB, max(1.0, 0.5 * gb_px))
+                if lay["by"] == "keyframe_chain":
+                    arrive = float(p.get("arrive", lay["times"][0] if (lay.get("chain", {}).get("lead") and lay.get("times")) else 0.95))
+                else:
+                    arrive = float(p.get("arrive", p.get("mix_window", [0.25, 0.9] if lay["by"] != "line_to" else [0.3, 0.9])[1]))
+                lay["guardB"] = np.clip(gB, 0, 1).astype(np.float32); lay["arrive"] = arrive
+                self.guard_layers.append(lay)
+            self.info["guard"] = [{"name": l["name"], "arrive": l["arrive"], "share_B": round(float((l["guardB"] > 0.5).mean()), 4)} for l in self.guard_layers]
+            # round 12: a layer whose footprint uncovers a guarded target (the tree over B's man) may not finish leaving
+            # before the guard releases, else the fill under it shows as a pale silhouette of the target for the gap;
+            # its window's end is moved to the guard's arrival in clip time and the renderer says so
+            def t_of_e(lay_, e_want):
+                t0_, t1_ = lay_["window"]
+                if lay_.get("ease") != "trapezoid":
+                    return t0_ + e_want * (t1_ - t0_)
+                lo_, hi_ = 0.0, 1.0
+                for _ in range(40):
+                    mid_ = 0.5 * (lo_ + hi_)
+                    if trapezoid01(mid_, float(lay_.get("m_edge", 0.35))) < e_want:
+                        lo_ = mid_
+                    else:
+                        hi_ = mid_
+                return t0_ + 0.5 * (lo_ + hi_) * (t1_ - t0_)
+            held = []
+            for g_ in self.guard_layers:
+                t_arr = t_of_e(g_, g_["arrive"])
+                gA = cv2.warpPerspective(g_["guardB"], Si, (W, H), flags=cv2.INTER_LINEAR, borderValue=0) if abs(Si[2, 0]) + abs(Si[2, 1]) > 1e-12 else cv2.warpAffine(g_["guardB"], Si[:2].astype(np.float32), (W, H), flags=cv2.INTER_LINEAR, borderValue=0)
+                gA_b = gA > 0.5
+                for lay in self.layers:
+                    if lay is g_ or lay["by"] not in ("exit", "move_to", "morph_to") or "foot_hard" not in lay:
+                        continue
+                    ft = lay["foot_hard"].astype(bool)
+                    ov_ = float((ft & gA_b).sum()) / max(1.0, float(gA_b.sum()))
+                    if ov_ >= 0.2 and lay["window"][1] < t_arr - 1e-3:
+                        old_ = lay["window"][1]; lay["window"] = [lay["window"][0], round(float(min(1.0, t_arr)), 4)]
+                        held.append({"name": lay["name"], "end_from": old_, "end_to": lay["window"][1], "for": g_["name"], "overlap_of_target": round(ov_, 3)})
+                        print(f"INFO guard: {lay['name']} ends at {lay['window'][1]:.3f} instead of {old_:.3f}: it uncovers {ov_ * 100:.0f} % of {g_['name']}'s target, guarded until {t_arr:.3f}", file=sys.stderr)
+            if held:
+                self.info.setdefault("motion", {})["held"] = held
         self.info["unplaced"] = self.unplaced
         # round 10: A is filled under the lifted layers' footprints (cv2.inpaint, Telea, at <= 1280 px; a fill, not a
         # generation), so a layer that moves away uncovers A's own surround and not a hard-cut silhouette of B; the
@@ -1301,7 +1460,7 @@ class Scene:
             self.sky = {}
         self.info["matte_fallbacks"] = [f"{ph}:{i}" for ph, i in MATTE_FALLBACKS]
         self.info["layers"] = [{"name": l["name"], "by": l["by"], "window": l["window"], **({"soft": l["soft"]} if "soft" in l else {}), **({"chain": l["chain"]} if "chain" in l else {}), **({"ot": l["ot"]} if "ot" in l else {}), **({"axis": l["axis"]} if "axis" in l else {}), **({"depth": l["depth"], "target_inside_share": l.get("target_inside_share")} if l["by"] in ("morph_to", "move_to") else {}),
-                                **({"k_end": round(l["k_end"], 4)} if "k_end" in l else {}),
+                                **({"k_end": round(l["k_end"], 4)} if "k_end" in l else {}), **({"end_blob": l["end_blob"], "profile": l.get("profile")} if "end_blob" in l else {}),
                                 **({"theta_deg": round(math.degrees(l["theta"]), 2), "off0": round(l["off0"], 1), "off1": round(l["off1"], 1), "thick0": l["thick0"], "width_end": round(l["width_end"], 2)} if "theta" in l else {}),
                                 **({"ext": l["ext"], "work_scale": round(l["wl"], 3)} if "ext" in l else {})} for l in self.layers]
 
@@ -1364,6 +1523,16 @@ class Scene:
                     R = R0 + (r_near - R0) * smootherstep(u / max(1e-6, t_near))
                 else:
                     R = r_near + (r_end - r_near) * min(1.0, (u - t_near) / max(1e-6, t_end - t_near))
+                if self.motion and self.sky.get("follow", 2.0) and getattr(self, "recede_layer", None) is not None:
+                    # round 12: the window follows the receding luminary (its current radius times `follow`), so the
+                    # photo's own dark halo right at the limb (T46) is keyed out as the sun shrinks instead of standing
+                    # as a dark ring around a small sun (the draft of mismatch_5 r12 at frame 51)
+                    rl = self.recede_layer
+                    e_r = layer_e(u, rl)
+                    k_now = rl["k_end"] ** e_r if rl.get("profile") == "geometric" else 1.0 + (rl["k_end"] - 1.0) * e_r
+                    # the scheduled window scaled by the sun's shrink (continuous at the recede's start, k = 1), never
+                    # tighter than `follow` current radii; a window that jumped to 2 r at frame 1 cut the first frame (12.5 levels)
+                    R = max(R * (k_now ** float(self.sky.get("follow_power", 1.0))), float(self.sky.get("follow", 2.0)) * rl["r"] * k_now)
                 wr = wfrac * R
                 x_ = np.clip((R - self.r_anchor) / max(1.0, wr), 0, 1)
                 a_rest = a_rest * (x_ * x_ * (3.0 - 2.0 * x_))
@@ -1375,6 +1544,7 @@ class Scene:
             alpha = self.rest_soft.copy()
         if hole is not None:
             alpha = (alpha * (1.0 - np.clip(hole, 0, 1))).astype(np.float32)
+        base = rgb if self.guard_on else None             # round 12: what a guarded region shows where every layer has left
         rgb = rgb * alpha[..., None]                      # premultiplied from here on; un-premultiplied at the end
         front_layers = []
         for lay in self.layers:
@@ -1388,9 +1558,19 @@ class Scene:
                 alpha = alpha * (1 - a) + a
                 continue
             if by == "recede":
-                k = 1.0 + (lay["k_end"] - 1.0) * e
                 ca = lay["centre"]
-                M = sim_about(k, ca[0], ca[1])[:2].astype(np.float32)
+                geo = lay.get("profile") == "geometric"
+                if "kx_end" in lay:
+                    kx = lay["kx_end"] ** e if geo else 1.0 + (lay["kx_end"] - 1.0) * e
+                    ky = lay["ky_end"] ** e if geo else 1.0 + (lay["ky_end"] - 1.0) * e
+                    k = math.sqrt(kx * ky)
+                    th_ = lay["th_end"]; cx_ = ca[0] + (lay["c_end"][0] - ca[0]) * e; cy_ = ca[1] + (lay["c_end"][1] - ca[1]) * e
+                    Rt = np.array([[math.cos(th_), -math.sin(th_)], [math.sin(th_), math.cos(th_)]])
+                    A2 = Rt @ np.diag([kx, ky]) @ Rt.T
+                    M = np.array([[A2[0, 0], A2[0, 1], cx_ - A2[0, 0] * ca[0] - A2[0, 1] * ca[1]], [A2[1, 0], A2[1, 1], cy_ - A2[1, 0] * ca[0] - A2[1, 1] * ca[1]]], np.float32)
+                else:
+                    k = lay["k_end"] ** e if geo else 1.0 + (lay["k_end"] - 1.0) * e
+                    M = sim_about(k, ca[0], ca[1])[:2].astype(np.float32)
                 content = lay["content"]
                 if "content0" in lay:
                     wf = smootherstep(min(1.0, e / max(1e-6, lay["fill_in"])))
@@ -1411,7 +1591,8 @@ class Scene:
                 mw = lay["params"].get("mix_window", [0.55, 0.95]); ramp = float(lay["params"].get("mix_ramp", 0.5))
                 em = ease01(e, *mw)
                 yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-                rr = np.hypot(xx - ca[0], yy - ca[1]) / max(1.0, lay["r"] * k)
+                cm_ = (cx_, cy_) if "kx_end" in lay else ca
+                rr = np.hypot(xx - cm_[0], yy - cm_[1]) / max(1.0, lay["r"] * k)
                 order = np.clip(rr, 0, 1)                         # 0 centre .. 1 limb
                 a_mix = np.clip((em * (1.0 + ramp) - (1 - order)) / ramp, 0, 1) if em > 0 else np.zeros((H, W), np.float32)
                 src = disc_rgb * (1 - a_mix[..., None]) + self.B_inA.astype(np.float32) * a_mix[..., None]
@@ -1473,8 +1654,8 @@ class Scene:
                 s = float(np.clip(s, 0.0, 1.0))
                 P, Q = lay["imgs"][j], lay["imgs"][j + 1]
                 mP, mQ = lay["mattes"][j], lay["mattes"][j + 1]
-                if lay["segs"][j].get("lead"):
-                    s = smootherstep(s)                      # the rigid move eases in and out; the keyframe segments stay linear
+                if lay["segs"][j].get("lead") and lay.get("ease") != "trapezoid":
+                    s = smootherstep(s)                      # the rigid move eases in and out; the keyframe segments stay linear (round 12: the trapezoid eases the whole chain instead)
                 if s <= 0.0:
                     src, a = P, mP
                 elif s >= 1.0:
@@ -1534,7 +1715,7 @@ class Scene:
                 alpha = alpha * (1 - aC) + aC
                 continue
         rgb = rgb / np.maximum(alpha, 1e-3)[..., None]
-        rgb = np.where(alpha[..., None] > 1e-3, rgb, self.A_f)
+        rgb = np.where(alpha[..., None] > 1e-3, rgb, base if base is not None else self.A_f)
         return np.clip(rgb, 0, 255), alpha, front_layers
 
 
@@ -1556,6 +1737,8 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
     keep = []
     one = np.ones((H, W), np.float32)
     ease = concept.get("pullback", {}).get("ease", "smootherstep")
+    guard_max = 0.0
+    b_inside_series = []; residual_edge_series = []
     for i in range(n):
         u = i / (n - 1)
         e = smootherstep(u) if ease == "smootherstep" else u
@@ -1656,6 +1839,26 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
             a_fin = np.clip((of + ef * (1.0 + band_end) - 1.0) / band_end, 0, 1)
             a_fin = cv2.GaussianBlur(a_fin, (0, 0), 1.2)
             aA = aA * (1 - a_fin)
+        if sc.guard_layers:
+            g = None
+            for lay in sc.guard_layers:
+                gk = 1.0 - ease01(layer_e(u, lay), lay["arrive"] - sc.guard_ramp, lay["arrive"])
+                if gk <= 0.0:
+                    continue
+                gm = remap_img(lay["guardB"], bx, by_) * gk
+                g = gm if g is None else np.maximum(g, gm)
+            if g is not None:
+                full = inside * (cont if sc.cont["kind"] in ("quad", "rect") else one)
+                g = g * (full > aA + 1e-3)
+                aA = aA * (1 - g) + full * g
+                guard_max = max(guard_max, float((g > 0.5).mean()))
+        if i % 3 == 0 or i == n - 1:
+            # round 12: rule 1's measure, B visible inside A's region (the share of A's covered region where B shows
+            # through: 1 - A's alpha), read AFTER the guard (the skeptic's first pass on round 12 found it read before);
+            # rule 5's measure (edges in neither photo) is taken after the frame is composed, below
+            reg = (inside > 0.5) & ((cont > 0.5) if sc.cont["kind"] in ("quad", "rect") else True)
+            b_in = float((1.0 - aA)[reg].mean()) if reg.any() else 0.0
+            b_inside_series.append([i, round(b_in, 4)])
         frame = Bf * (1 - aA[..., None]) + Af * aA[..., None]
         if front_layer:
             fin = smootherstep(min(1.0, e / sc.parallax.get("front_in", 0.15))) if sc.parallax else 1.0
@@ -1698,21 +1901,48 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
         if i == n - 1:
             frame = sc.B.astype(np.float32)
         f8 = T.to_u8(frame)
+        if (i % 3 == 0 or i == n - 1) and 0 < i < n - 1:
+            sm_ = 720.0 / max(W, H)
+            def _edges(img):
+                g8 = cv2.cvtColor(T.to_u8(img) if img.dtype != np.uint8 else img, cv2.COLOR_RGB2GRAY)
+                if sm_ < 1:
+                    g8 = cv2.resize(g8, (max(8, int(W * sm_)), max(8, int(H * sm_))), interpolation=cv2.INTER_AREA)
+                return cv2.Canny(g8, 60, 140)
+            ef_ = _edges(f8); ea_ = _edges(Af); eb_ = _edges(Bf)
+            known = cv2.dilate(np.maximum(ea_, eb_), np.ones((7, 7), np.uint8))
+            resid = (ef_ > 0) & (known == 0)
+            residual_edge_series.append([i, round(float(resid.mean()), 5)])
         enc.write(f8)
         if i in {0, n // 8, n // 4, 3 * n // 8, n // 2, 5 * n // 8, 3 * n // 4, 7 * n // 8, n - 1}:
             keep.append(f8)
     enc.close()
-    cap = cv2.VideoCapture(str(out / "transition.mp4")); prev = None; steps = []
+    cap = cv2.VideoCapture(str(out / "transition.mp4")); prev = None; steps = []; prev_g = None; motion = []
+    dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_MEDIUM)
     while True:
         ok, fr = cap.read()
         if not ok:
             break
         if prev is not None:
             steps.append(float(np.abs(fr.astype(np.float32) - prev).mean()))
-        prev = fr
+        # round 12: the motion profile (the mean flow magnitude between consecutive frames at <= 480 px, in frame px), which
+        # reads what the owner called "discretely" and "weird pauses": a pause is a frame with less than a fifth of the
+        # median motion while the clip is between 10 % and 90 %
+        sm = 480.0 / max(fr.shape[:2])
+        g = cv2.cvtColor(cv2.resize(fr, (max(8, int(fr.shape[1] * sm)), max(8, int(fr.shape[0] * sm))), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY) if sm < 1 else cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY)
+        if prev_g is not None:
+            fl = dis.calc(prev_g, g, None)
+            motion.append(float(np.linalg.norm(fl, axis=2).mean() / max(sm, 1e-6) if sm < 1 else np.linalg.norm(fl, axis=2).mean()))
+        prev = fr; prev_g = g
     cap.release()
+    n_m = len(motion); mid = [m for i_, m in enumerate(motion) if 0.1 * n_m <= i_ <= 0.9 * n_m]
+    med = float(np.median(mid)) if mid else 0.0
+    pauses = int(sum(1 for m in mid if m < 0.2 * med)) if med > 0 else len(mid)
+    jumps = int(sum(1 for a_, b_ in zip(motion, motion[1:]) if abs(b_ - a_) > max(1.0, 0.5 * med)))
     sc.info.update(frames=len(steps) + 1, step_first=round(steps[0], 2), step_second=round(steps[1], 2), step_last=round(steps[-1], 2), step_max=round(max(steps), 2),
-                   seconds=seconds, fps=fps, knobs=knobs, wall_s=round(time.time() - t_start, 1))
+                   seconds=seconds, fps=fps, knobs=knobs, wall_s=round(time.time() - t_start, 1),
+                   motion_px=[round(m, 2) for m in motion], motion_median_px=round(med, 2), motion_pauses=pauses, motion_jumps=jumps, guard_share_max=round(guard_max, 4),
+                   b_inside=b_inside_series, b_inside_first=next((f_ for f_, v_ in b_inside_series if v_ > 0.01), None),
+                   residual_edges=residual_edge_series, residual_edge_max=round(max((v_ for _, v_ in residual_edge_series), default=0.0), 5))
     return keep, sc.info
 
 

@@ -1,0 +1,39 @@
+{
+ "pair": "mismatch_1",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-20, round 12 blind)", "temperature": 0, "prompt_sha256": "e2c7615e7042f5780b1706a618264489e79f0710210f218cd26a42741a94d4c2", "date": "2026-10-20", "brief": "blind"},
+ "reading": {
+  "a": "A bright blue summer sky with a thin diagonal cirrus streak at the top, a long white cumulus bank across the middle and small clouds lower down, over a grey-green office tower crowned with antenna masts and dishes and low roofs along the bottom quarter.",
+  "b": "A grey-blue sky turning stormy, with thin horizontal streaks at the top right, a sunlit cumulus tower on the left above a grey cloud deck, over a city that fills the lower 40 % of the frame: a red-brick block in front, taller apartment towers and stacks behind, and dark trees along the bottom."
+ },
+ "relation": "themed",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "A's weather becomes B's while the camera lowers its gaze by 359 rows (3.0 s): A's roofline (row 1499) rises to B's (row 1140) and B's red-brick block and the trees in front come up from below by depth as the nearest things; from the first frame A's blue sky moves toward B's grey-blue (t 0-0.6, 0-1.8 s), the cirrus streak turns and lies down into B's horizontal streaks (t 0.05-0.60, 0.15-1.8 s), the long cumulus bank draws together into the sunlit cumulus tower and the grey deck (t 0.15-0.85, 0.45-2.55 s), the tower with its masts becomes the apartment towers behind the brick block (t 0.30-1.0, 0.9-3.0 s), and the last of A gives way brightest-first (t 0.86-1.0, 2.6-3.0 s).",
+   "motion": {"kind": "continuous", "edge": 0.35, "overlap": 0.1},
+   "reveal": {"guard": true, "ramp": 0.08, "band": 0.01},
+   "container": {"in": "B", "kind": "rect", "spec": {"box": [0, -359, 1444, 1561], "front_ids": [19, 33, 51, 54, 56, 62, 63]}, "rim": "matte"},
+   "anchors": [
+    {"a": {"kind": "box", "box": [0, 0, 1443, 1919]}, "b": {"kind": "box", "box": [0, -359, 1444, 1561]}, "how": "The roofline on the roofline: at scale 1 A's frame moves up by 359 rows so A's city top (median row 1499) lands on B's (median row 1140); the camera is a pure tilt down. A's frame ends at row 1561, and the band below it is B's brick block and trees, which the front brings in over A's bottom edge."},
+    {"a": {"kind": "element", "ids": [6, 10, 12, 18]}, "b": {"kind": "element", "ids": [7, 9, 11]}, "how": "Cloud mass on cloud mass: A's long cumulus bank and the clouds under its right end against B's sunlit cumulus tower and the grey deck."},
+    {"a": {"kind": "element", "ids": [5]}, "b": {"kind": "element", "ids": [2, 5]}, "how": "A's one diagonal cirrus streak against B's two thin horizontal streaks at the top right."},
+    {"a": {"kind": "element", "ids": [24, 32, 34, 40, 44, 45, 46, 47, 48, 49, 52, 54, 56]}, "b": {"kind": "element", "ids": [13, 14, 15, 16, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 44, 45, 46]}, "how": "A's city (the tower, the block at the right and the low roofs) against B's city behind the brick block (the apartment towers, the stacks and the low buildings); the brick block (19) and the near trees and wall are B's front, not a target."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.3, "gain_A": 0.3, "a_elements": [24, 32, 34, 40, 44, 45, 46, 47, 48, 49, 52, 54, 56]}, "params": {}},
+   "transforms": [
+    {"name": "blue_to_grey_sky", "a": {"kind": "element", "ids": [1, 11, 17]}, "b": {"kind": "element", "ids": [1, 12]}, "by": "colour", "window": [0.0, 0.6], "mix": "none", "params": {}, "note": "The lead, not a beat: A's saturated blue sky moves in Lab statistics toward B's paler grey-blue from the first frame."},
+    {"name": "streak_lies_down", "a": {"kind": "element", "ids": [5]}, "b": {"kind": "element", "ids": [2, 5]}, "by": "morph_to", "window": [0.05, 0.6], "mix": "edge", "params": {"map": "box", "rotate": true, "mass": "bright"}, "note": "Beat 1: the cirrus streak turns from its diagonal to B's horizontal axis and settles into B's two streaks (rotate, the axis map); the first thing that moves, so the camera is never alone at the start. No rate named."},
+    {"name": "cumulus_gathers", "a": {"kind": "element", "ids": [6, 10, 12, 18]}, "b": {"kind": "element", "ids": [7, 9, 11]}, "by": "morph_to", "window": [0.15, 0.85], "mix": "luma", "params": {"map": "box", "mass": "bright", "rate": "fast_out"}, "note": "Beat 2: the long white bank draws together into the lit cumulus tower on the left and the grey deck on the right, and B's clouds are delivered inside the moving matte brightest first, so the sunlit tower is the first of B's clouds seen. Rate fast_out: the bank keeps its shape while the camera starts and gathers late, the way a cloud builds; a guess, nothing in the pair demands it."},
+    {"name": "tower_into_city", "a": {"kind": "element", "ids": [24, 32, 34, 40, 44, 45, 46, 47, 48, 49, 52, 54, 56]}, "b": {"kind": "element", "ids": [13, 14, 15, 16, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 44, 45, 46]}, "by": "morph_to", "window": [0.3, 1.0], "mix": "edge", "params": {"map": "box"}, "note": "Beat 3, the last, a band onto a band: A's tower and roofs, already raised to B's roofline by the camera, spread into the apartment towers and stacks behind the brick block, which comes up in front of them. Guarded: B's towers cannot show before this beat delivers them. No rate named."}
+   ],
+   "end_effect": {"kind": "b_luma_reveal", "window": [0.86, 1.0], "params": {"band": 0.4}},
+   "helper": null,
+   "knobs": [
+    {"name": "front_ids", "range": [[33, 51, 54, 56, 62, 63], [19, 33, 51, 54, 56, 62, 63]], "default": [19, 33, 51, 54, 56, 62, 63], "what": "Whether B's brick block rises in front with the trees (the default; it hides A's bottom edge on the left two thirds) or is left to the end effect (then A's bottom edge at row 1561 is bare over the block)."},
+    {"name": "cumulus_gathers.params.rate", "range": ["fast_in", "fast_out"], "default": "fast_out", "what": "Whether the cumulus bank gathers early (fast_in, with the camera's start) or late (fast_out, after the camera has done most of its tilt)."},
+    {"name": "cumulus_gathers.params.ot_weight", "range": [0.3, 1.0], "default": 1.0, "what": "How far the bank's light travels into B's cloud shapes; lower keeps more of the bank's own shape and leaves more to the reveal inside the matte."}
+   ],
+   "risk": "Rule 1: the tilt opens a band of B below A's frame (rows 1561-1919 at the end) from the first frames; the front (the brick block, the near trees and the wall) covers most of it, but between columns 959 and 1206 B's low buildings 39, 44 and 45 are not front, and they are also this plan's tower target, so the guard and the container's surround disagree there; read b_inside_first and look at the lower middle at t 0.1-0.4. Rule 5: A's bottom edge is a straight horizontal line wherever the front does not cover it; the brick block's mask carries a strip of distant city above its roof (mattes fault 5) that will ride with the front as a hard band; A's tower's masts are mostly missing from its matte (fault 6) and stay in A's base until the end effect. Rule 7: the cumulus beat mixes in luma order and B's clouds 11 and 12 split one cloud through its middle (fault 4), so the target matte cuts a cloud in two and the cut may show as a soft line at t 0.5-0.85. Rule 10: B's brick block (disparity 0.59) comes up in front of A's tower (0.61); the two are at the same depth, so the block passing in front of the tower is the plan's choice, not the depth model's. Rule 9: three beats and a front under one camera; if the streak's beat reads as a separate event it should be cut first. F3 invention: none."
+  }
+ ]
+}

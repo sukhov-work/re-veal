@@ -1,0 +1,36 @@
+{
+ "pair": "mismatch_6",
+ "planner": {"model": "claude-opus-5-5 (Claude Code subagent, 2026-10-20, round 12 blind)", "temperature": 0, "prompt_sha256": "e2c7615e7042f5780b1706a618264489e79f0710210f218cd26a42741a94d4c2", "date": "2026-10-20", "brief": "blind"},
+ "reading": {
+  "a": "A deep blue daytime sky full of large white cumulus clouds fills most of the frame above a row of city buildings along the bottom (a modern block with balconies on the left, a round glass tower, older offices and roofs).",
+  "b": "A dark blue night sky full of small stars, seen looking up, with a roof eave and an air-conditioning unit cutting into the top right corner and the dark crowns of trees along the bottom."
+ },
+ "relation": "unrelated",
+ "concepts": [
+  {
+   "id": "c1", "rank": 1,
+   "idea": "Day falls into night inside one frame (3.0 s): the camera pushes slowly in toward the middle of the sky (A grows by 12 % about the point (575, 892)) while B's eave and air-conditioning unit come in over the top right corner as the nearest things, entering by depth; from the first frame the whole of A darkens toward the night sky's colour (t 0-0.65, 0-1.95 s), the clouds draw together into the night sky's light and break up there (t 0.12-0.80, 0.36-2.4 s), the city's roofline rises and roughens into the tree crowns (t 0.30-1.0, 0.9-3.0 s), and the stars come through brightest-first at the end (t 0.84-1.0, 2.5-3.0 s).",
+   "motion": {"kind": "continuous", "edge": 0.35, "overlap": 0.1},
+   "reveal": {"guard": true, "ramp": 0.08, "band": 0.01},
+   "container": {"in": "B", "kind": "rect", "spec": {"box": [-69, -107, 1215, 1600], "front_ids": [2, 3]}, "rim": "matte"},
+   "anchors": [
+    {"a": {"kind": "box", "box": [0, 0, 1145, 1523]}, "b": {"kind": "box", "box": [-69, -107, 1215, 1600]}, "how": "No object is shared, so A's whole frame goes onto a rectangle larger than B's frame on every side (scale 1.12, centred across, set so A's building tops at median row 1173 land at row 1207, the median top of B's trees): A covers B to the end and no rectangle edge of A can show; the camera is a slow push into A's sky."},
+    {"a": {"kind": "element", "ids": [16, 17, 18, 20, 21, 23, 24, 26, 27, 28, 29, 31, 32, 33, 34, 35, 36, 37, 38]}, "b": {"kind": "element", "ids": [4, 5, 6, 8, 9]}, "how": "The roofline band against the tree-crown band: A's buildings, the street tree, the wall and the lamp pole (rows 1113-1523) against B's four trees and the blurred leaves at the left edge (element 6, labelled moon; rows 915-1523)."}
+   ],
+   "pullback": {"ease": "smootherstep", "parallax": {"kind": "depth", "gain": 0.3, "gain_A": 0.3, "a_elements": [16, 17, 18, 20, 21, 23, 24, 26, 27, 28, 29, 31, 32, 33, 34, 35, 36, 37, 38]}, "params": {}},
+   "transforms": [
+    {"name": "day_to_night_colour", "a": {"kind": "all"}, "b": {"kind": "element", "ids": [1]}, "by": "colour", "window": [0.0, 0.65], "mix": "none", "params": {}, "note": "The lead, not a beat: A's whole frame moves in Lab statistics toward B's night sky, so the clouds go dark blue-grey and the buildings take a night tint (he liked A's buildings with a night tint on a keyframe, L4 kf_13) before any of B's pixels arrive."},
+    {"name": "clouds_into_night_sky", "a": {"kind": "element", "ids": [2, 3, 4, 5, 6, 8, 9, 12, 13, 14, 19, 30]}, "b": {"kind": "element", "ids": [1]}, "by": "morph_to", "window": [0.12, 0.8], "mix": "luma", "params": {"map": "box", "mass": "bright"}, "note": "Beat 1: the clouds' light flows by optimal transport onto the light of B's sky (its stars and the glow above the trees) and B's sky is delivered inside the moving matte, brightest first. A's blue sky patches (1, 7, 10, 11, 15, 22, 25) are not moved; the colour lead takes them toward the night colour and the end effect replaces them. No rate is named: nothing in a day turning to night asks for a fast start or end."},
+    {"name": "roofline_into_treeline", "a": {"kind": "element", "ids": [16, 17, 18, 20, 21, 23, 24, 26, 27, 28, 29, 31, 32, 33, 34, 35, 36, 37, 38]}, "b": {"kind": "element", "ids": [4, 5, 6, 8, 9]}, "by": "morph_to", "window": [0.3, 1.0], "mix": "edge", "params": {"map": "box", "mass": "dark"}, "note": "Beat 2, the last, a band onto a band (on L4 he said the buildings 'transtitoned to tree nicely'): the box map raises the roofline's left end toward the tall crown on the left (B's element 5 reaches row 932), the dark mass of windows and roofs flows into the crowns, and the trees are delivered inside the moving matte from their edges. Guarded: B's trees cannot show before this beat delivers them."}
+   ],
+   "end_effect": {"kind": "b_luma_reveal", "window": [0.84, 1.0], "params": {"band": 0.4}},
+   "helper": null,
+   "knobs": [
+    {"name": "front_ids", "range": [[], [2, 3]], "default": [2, 3], "what": "B's eave and air-conditioning unit as the front entering over the top right corner by depth; empty leaves them to the end effect, which removes the one early-B region the plan declares."},
+    {"name": "clouds_into_night_sky.params.ot_weight", "range": [0.3, 1.0], "default": 1.0, "what": "How far the clouds' light travels toward B's light; lower keeps the clouds near their place and lets them darken and dissolve there, higher draws them down into the glow above the trees."},
+    {"name": "roofline_into_treeline.window[0]", "range": [0.2, 0.45], "default": 0.3, "what": "When the roofline starts to turn into the crowns; earlier overlaps it more with the clouds' beat, later leaves the city standing in the dark for longer."}
+   ],
+   "risk": "Rule 1: B's eave and air-conditioning unit (front_ids 2, 3) are the declared early region; they enter from beyond the top right corner by depth and must not fade in before they are inside the frame; read b_inside_first against their entry. Rule 7: the clouds' beat mixes in luma order inside a matte that covers about 55 % of the frame, so at t 0.3-0.7 the clouds can read as half-strength over the star field, a double exposure; this is the concept's weakest point, and ot_weight is the knob. Rule 4 does not apply in its luminary form, but the optimal transport of a continuous cloud mass onto point stars and a soft glow has no shape to match: it may pool into the glow above the trees as blobs (the crowd morph's failure, T38); look at t 0.4-0.7. Rule 2: a 12 % push is a slow camera; read motion_pauses at t 0-0.1 and 0.9-1.0. Rule 10: B's trees are far by the depth model (median disparity 0.13-0.15) and A's buildings near (up to 1.0); A's near roofs move most under the parallax while they turn into far crowns, so check the bottom rows at t 0.3-0.6 for the roofs sliding against the crowns. F3 invention: none."
+  }
+ ]
+}

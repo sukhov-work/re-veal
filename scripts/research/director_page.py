@@ -62,7 +62,7 @@ def main():
         for concept, p in cl:
             info = json.load(open(p / "info.json"))
             base = concept.split("-")[0]           # a variant folder "c1-nosit" shows its base concept's plan with the knobs it was rendered with
-            c = next(cc for cc in plan["concepts"] if cc["id"] == base)
+            c = next((cc for cc in plan["concepts"] if cc["id"] == base), plan["concepts"][0])
             tag = f"{pair}_{concept}"; tags.append(tag)
             n = notes.get(tag, {})
             out.append(f"<div class=clip><h3>{esc(tag)} — rank {c.get('rank')} (<code>{esc(c['id'])}</code>)</h3>"
@@ -82,6 +82,23 @@ def main():
                        f"{(', push ' + str(par.get('push'))) if par.get('push') else ''}{(', sources ' + ','.join(par.get('sources', []))) if par.get('sources') else ''}; "
                        f"first / second / last interior step {info['step_first']} / {info['step_second']} / {info['step_last']} levels, peak {info['step_max']}; "
                        f"{info['frames']} frames ({info['seconds']} s at {info['fps']} fps), rendered in {info['wall_s']} s. Layers: {esc(lays)}. Unplaced or skipped: {esc(unpl)}.</p>")
+            # round 12: the motion profile (the mean flow between consecutive frames) as a sparkline with the pauses and
+            # jumps, and the rule measures (B inside A's region, edges in neither photo, the guard)
+            mp = info.get("motion_px")
+            if mp:
+                mx = max(mp) or 1.0; w_, h_ = 600, 60
+                pts = " ".join(f"{(j / max(1, len(mp) - 1)) * w_:.1f},{h_ - (v / mx) * (h_ - 4):.1f}" for j, v in enumerate(mp))
+                mo = info.get("motion") or {}
+                adj = "; ".join(f"{a_['name']} {a_['from']} → {a_['to']}" for a_ in mo.get("adjusted", [])) if mo else ""
+                out.append(f"<p><b>Motion profile</b> (mean flow per frame, peak {mx:.1f} px; median {info.get('motion_median_px')} px; "
+                           f"{info.get('motion_pauses')} pause frames, {info.get('motion_jumps')} jumps; model {esc(mo.get('kind', 'round 11: a smootherstep per layer'))}"
+                           f"{(', beats moved to overlap: ' + esc(adj)) if adj else ''}):<br>"
+                           f"<svg width={w_} height={h_} style='background:#f4f4f4;border:1px solid #ccc'><polyline fill=none stroke='#36c' stroke-width=1.5 points='{pts}'/></svg></p>")
+                gd = info.get("guard") or []
+                out.append(f"<p><b>Rule measures:</b> B inside A's region first above 1 % at frame {info.get('b_inside_first')}; "
+                           f"edges in neither photo at most {info.get('residual_edge_max', 0) * 100:.2f} % of the frame; "
+                           f"guarded targets {esc(', '.join(f"{g['name']} (until {g['arrive']}, {g['share_B'] * 100:.1f} % of B)" for g in gd)) or 'none'}"
+                           f"{(', guard engaged on up to ' + format(info.get('guard_share_max', 0) * 100, '.1f') + ' % of the frame') if info.get('guard_share_max') else ''}.</p>")
             knobs = "; ".join(f"<code>{esc(k['name'])}</code> {esc(k.get('what', ''))} (range {k.get('range')}, default {k.get('default')})" for k in c.get("knobs", []))
             out.append(f"<p><b>Knobs you can turn (say which, and which way):</b> {knobs}</p>")
             if info.get("knobs"):

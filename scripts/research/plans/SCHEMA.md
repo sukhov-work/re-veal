@@ -177,3 +177,56 @@ from A or B (A re-coloured where a `colour` transform says so); nothing is gener
   cv2.inpaint): Telea's fill of a body was a flesh-coloured smear that showed below the pane before
   the man's layer arrived. The operator's `parallax_push` (default 2.5) sets how far B's front
   starts beyond the frame; 1.5 brings it in sooner.
+
+## Additions of round 12 (2026-10-20, from the owner's grades on round 11 and the retrospective `research/2026-10-20/retrospective.md`: the rules that hold for any pair)
+
+- The motion model (rule 2, "all happen with weird pauses and in very linear way"): a concept with `"motion": {"kind":
+  "continuous", "edge": 0.35, "overlap": 0.1}` renders every beat's progress as a smooth trapezoid in its window
+  (the velocity ramps up by a smoothstep over `edge` of the window, holds, ramps down over the last `edge`; `edge`
+  0.5 is one smooth hump, a small `edge` is near linear; `params.edge` per transform overrides), with no second
+  ease anywhere (a keyframe chain's lead no longer eases on its own). Consecutive beats overlap: a later beat whose
+  window starts after the earlier beat has run 1 − `overlap` of its window is moved earlier to that point, and the
+  renderer prints `INFO motion: <name> starts at … to overlap <name>` and lists it in `info.json` under
+  `motion.adjusted` (`overlap` 0 turns the rule off). The plan's last beat should end at 1.0 and the clip should
+  carry a camera or a beat at every moment: the renderer measures the motion profile of the decoded clip
+  (`motion_px`: the mean DIS flow magnitude between consecutive frames in frame px; `motion_median_px`;
+  `motion_pauses`: frames between 10 % and 90 % of the clip under a fifth of the median; `motion_jumps`: frames
+  where the motion changes by more than half the median). Without a `motion` key a plan renders as in round 11
+  (knob `motion=continuous` turns the model on for an old plan, `motion=legacy` off).
+- The rate of a beat (rule 11, "whole sun to rapidly shrink"): `params.rate` "fast_in" (most of the change early)
+  or "fast_out" (late) on any transform; `recede` also takes `params.profile` "geometric" (the disc shrinks at a
+  constant relative rate, which reads as accelerating into the target) instead of "linear".
+- The reveal policy (rule 1, "should never clip to underlaying next/last frame in advance (unless it was specific
+  director intention"): with `"reveal": {"guard": true, "ramp": 0.08, "band": 0.01}` (the default when `motion` is
+  present; knob `guard=false`) B's target of every transform that has a `b` (its matte grown by `band` of the width)
+  cannot show before the transform has delivered it: not through a hole, not by the end effect, not by the key; A's
+  base (its plate under a lifted layer) shows there instead until the beat arrives (`params.arrive`: the chain's
+  progress at which the lead lands by default, or the end of a transform's `mix_window`), over `ramp` of the beat.
+  A transform with `"reveal_ahead": true` in its params is the director's intention and opts out (`recede` does by
+  default: its vacated ring shows B's glow, because a fill of a luminary's footprint is a dark ring, T46). `info.json`
+  lists the guarded targets (`guard`) with their B shares and `guard_share_max`; the measure `b_inside` is, every
+  third frame, the share of A's covered region where B shows through, and `b_inside_first` the first frame above 1 %.
+- Shape alignment of a luminary (rule 4, "do not align (perfectly ) neither by the centers nor by shapes"): `recede`
+  with `params.end_shape: "b_blob"` ends on B's bright blob around the b anchor (the connected region above
+  `blob_frac` 0.6 of the local maximum within `blob_search` 3 radii): the disc moves to the blob's centroid and
+  takes its two axes and its angle, so the sun lands on the core by centre and shape, and the mix then dissolves it
+  into that blob. `info.json` reports `end_blob` (centre, axes, angle, offset from the plan's anchor). A larger
+  `blob_frac` picks the denser, smaller core.
+- A keyframe chain's `params.times: "arc"`: the knots are placed by arc length (each segment's share of the window is
+  its median displacement, with a floor of `arc_floor` 0.2 of the largest for a segment without motion), so the
+  visual speed is the same through every segment; explicit times still work.
+- Rule 5's measure ("hard edges", "concentric bands"): `residual_edges` is, every third frame, the share of the
+  frame's Canny edges that lie within 3 px of no edge of A or of B seen through the camera; `residual_edge_max` its
+  maximum. A ring or a band the photos do not have raises it.
+- Knobs on the command line for all of the above: `motion=continuous`, `guard=false`, `name.edge=0.2`,
+  `name.rate=fast_in`, `name.profile=geometric`, `name.end_shape=b_blob`, `name.blob_frac=0.7`, `name.times="arc"`,
+  `name.reveal_ahead=true`, `name.arrive=0.5`.
+- Later in round 12 (after the first drafts): (a) a layer whose footprint uncovers a guarded target (an `exit`,
+  `move_to` or `morph_to` over 20 % or more of the target) may not finish before the guard releases; the renderer
+  moves its window's end to the guard's arrival in clip time, prints `INFO guard: <name> ends at …` and lists it
+  under `motion.held` (the café's tree over B's man: a pale fill for the gap otherwise); (b) under the motion model
+  the radial sky window follows a receding luminary: the scheduled radius is scaled by the disc's current shrink
+  (`sky.follow_power`, 1.0) and never tighter than `sky.follow` (2.0) current radii, so the photo's own dark halo at
+  the limb (T46) is keyed out as the sun shrinks instead of standing as a ring around a small sun; (c) a `rect`
+  container of the frame's own size (a translation) uses the corner-interpolating camera (the zoom camera has no
+  fixed point for a translation: mismatch_1's blind plan cut 46 levels at frame 1).
