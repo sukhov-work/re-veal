@@ -55,9 +55,16 @@ def main():
     tags = []
     for pair, cl in pairs.items():
         out.append(f"<h2>{esc(pair)}</h2>")
-        plan = json.load(open(PLANS / f"{pair}.json"))
+        # round 13: a tag `<pair>_r13_c1` rendered from an older round's plan with knobs (no `<pair>_r13.json` exists)
+        # falls back to the newest plan of that pair at or below the tag's round, and the page says which plan it was
+        plan_path = PLANS / f"{pair}.json"
+        if not plan_path.exists() and "_r" in pair:
+            base, rnd = pair.rsplit("_r", 1)
+            cands = sorted(((int(p_.stem.rsplit("_r", 1)[1]), p_) for p_ in PLANS.glob(f"{base}_r*.json") if p_.stem.rsplit("_r", 1)[1].isdigit()), reverse=True)
+            plan_path = next((p_ for n_, p_ in cands if not rnd.isdigit() or n_ <= int(rnd)), plan_path)
+        plan = json.load(open(plan_path))
         out.append(f"<p class=plan><b>The planner's reading.</b> A: {esc(plan['reading']['a'])} B: {esc(plan['reading']['b'])} "
-                   f"(planner: {esc(plan['planner']['model'])}, brief: {esc(plan['planner']['brief'])}, prompt sha256 {esc(plan['planner']['prompt_sha256'][:12])}…)</p>")
+                   f"(plan <code>{esc(plan_path.name)}</code>; planner: {esc(plan['planner']['model'])}, brief: {esc(plan['planner']['brief'])}, prompt sha256 {esc(plan['planner']['prompt_sha256'][:12])}…)</p>")
         out.append("<div class=row>")
         for concept, p in cl:
             info = json.load(open(p / "info.json"))
@@ -95,10 +102,20 @@ def main():
                            f"{(', beats moved to overlap: ' + esc(adj)) if adj else ''}):<br>"
                            f"<svg width={w_} height={h_} style='background:#f4f4f4;border:1px solid #ccc'><polyline fill=none stroke='#36c' stroke-width=1.5 points='{pts}'/></svg></p>")
                 gd = info.get("guard") or []
+                # round 13: the luminary's surround (the radial luma profile around the brightest blob on every third
+                # frame): the largest step between 10 px bins and the deepest ring (a valley or a peak against the
+                # profile's monotone envelope), both in levels; null on a pair without a luminary
+                halo = ""
+                if info.get("halo_step_max") is not None:
+                    hs = info.get("halo") or []
+                    worst = max(hs, key=lambda h: h[2]) if hs else None
+                    halo = (f"; the luminary's surround: largest step {info['halo_step_max']} levels, deepest ring {info['halo_ring_max']} levels"
+                            f"{(' (at frame ' + str(worst[0]) + ', blob radius ' + str(worst[3]) + ' px)') if worst else ''}"
+                            f"; the sky window's knobs <code>sky.band</code> (window | limb), <code>sky.ring</code> (b | window), <code>sky.inner</code> (current radii)")
                 out.append(f"<p><b>Rule measures:</b> B inside A's region first above 1 % at frame {info.get('b_inside_first')}; "
                            f"edges in neither photo at most {info.get('residual_edge_max', 0) * 100:.2f} % of the frame; "
                            f"guarded targets {esc(', '.join(f"{g['name']} (until {g['arrive']}, {g['share_B'] * 100:.1f} % of B)" for g in gd)) or 'none'}"
-                           f"{(', guard engaged on up to ' + format(info.get('guard_share_max', 0) * 100, '.1f') + ' % of the frame') if info.get('guard_share_max') else ''}.</p>")
+                           f"{(', guard engaged on up to ' + format(info.get('guard_share_max', 0) * 100, '.1f') + ' % of the frame') if info.get('guard_share_max') else ''}{halo}.</p>")
             knobs = "; ".join(f"<code>{esc(k['name'])}</code> {esc(k.get('what', ''))} (range {k.get('range')}, default {k.get('default')})" for k in c.get("knobs", []))
             out.append(f"<p><b>Knobs you can turn (say which, and which way):</b> {knobs}</p>")
             if info.get("knobs"):

@@ -1435,7 +1435,10 @@ class Scene:
         rest = ~covered
         if self.cont["kind"] == "disc":
             pr = self.c.get("params", {})
-            sky = self.knobs.get("sky", self.cont.get("params", {}).get("sky")) or {}
+            sky = dict(self.knobs.get("sky", self.cont.get("params", {}).get("sky")) or {})
+            for k_, v_ in self.knobs.items():                    # round 13: dotted knobs reach the sky's keys ("sky.band=limb")
+                if k_.startswith("sky."):
+                    sky[k_[4:]] = v_
             self.sky = sky
             lumr = cv2.GaussianBlur(lum(np.clip(self.A_base, 0, 255).astype(np.uint8)), (0, 0), 4.0)   # the key's order is the brightness of what is shown (the fill where a layer has left)
             lo, hi = np.percentile(lumr[rest], [1, 99]) if rest.any() else (0, 1)
@@ -1523,6 +1526,7 @@ class Scene:
                     R = R0 + (r_near - R0) * smootherstep(u / max(1e-6, t_near))
                 else:
                     R = r_near + (r_end - r_near) * min(1.0, (u - t_near) / max(1e-6, t_end - t_near))
+                r_now = ra0                                        # the luminary's current radius in A's canvas
                 if self.motion and self.sky.get("follow", 2.0) and getattr(self, "recede_layer", None) is not None:
                     # round 12: the window follows the receding luminary (its current radius times `follow`), so the
                     # photo's own dark halo right at the limb (T46) is keyed out as the sun shrinks instead of standing
@@ -1533,9 +1537,60 @@ class Scene:
                     # the scheduled window scaled by the sun's shrink (continuous at the recede's start, k = 1), never
                     # tighter than `follow` current radii; a window that jumped to 2 r at frame 1 cut the first frame (12.5 levels)
                     R = max(R * (k_now ** float(self.sky.get("follow_power", 1.0))), float(self.sky.get("follow", 2.0)) * rl["r"] * k_now)
-                wr = wfrac * R
+                    r_now = rl["r"] * k_now
+                if self.sky.get("band", "window") == "limb":
+                    # round 13 (the owner on round 12: "too distinct orange halo from frame A", "still a bit of limb around
+                    # sun"): the fade runs from `inner` current luminary radii out to the window's edge, so the kept disc of
+                    # A's sky has no edge of its own; with `band` "window" (rounds 11-12) it is `radial_width` of R wide.
+                    # The fade's inner edge sweeps in from the far corner over the first `radial_near_at` of the clip (a
+                    # band that spanned the frame at frame 1 cut it by 2.7 levels on the sunset and 3.3 on the sun-to-sun)
+                    r_in = max(float(self.sky.get("inner", 1.2)) * r_now, self.r_far * (1.0 - smootherstep(min(1.0, u / max(1e-6, t_near)))))
+                    wr = max(1.0, R - min(r_in, R * (1.0 - wfrac)))
+                else:
+                    wr = wfrac * R
                 x_ = np.clip((R - self.r_anchor) / max(1.0, wr), 0, 1)
+                keep = x_ * x_ * (3.0 - 2.0 * x_)
+                a_rest = a_rest * keep
+                if self.sky.get("ring", "b") == "window" and hole is not None:
+                    # round 13: the footprint a luminary vacates gives way to B only where the window has released, so the
+                    # ring shows the plate (continuous with the sky around it) and B's glow comes in from the window's
+                    # edge inward; with `ring` "b" (rounds 10-12) the ring shows B at once and its edge is a step
+                    # (15 levels at 1.5 current radii on the round-12 sunset at frame 31)
+                    hole = hole * (1.0 - keep)
+                    self.hole_last = hole
+            elif self.sky.get("shape") == "radial_out" and "a0" in self.anchors and e_cam > 0:
+                # round 13 (the owner on round 12: "still a bit of limb around sun"; on round 11: "it should shrink and
+                # dissolve into that dense gas near the very center of galaxy"): B grows from the luminary's footprint
+                # OUTWARD with the recede's progress, so the ring the sun vacates and the sky around it are one field of B
+                # with no edge between them, and the photo's own dark halo at the limb (T46) is the first of A's sky to
+                # go; A's sky survives farthest from the sun until the key and the end effect take it. The front starts
+                # at `out_from` (1.0) sun radii and reaches the far corner at `out_at` (0.7) of the recede's progress (the
+                # clip's time between `radial_near_at` and `radial_end_at` without a recede); the fade is `radial_width`
+                # of the front's radius, outside it. With `shape` "radial" (rounds 11-12) A's sky is a disc around the sun
+                # that shrinks inward, whose edge against B's glow in the ring read as a limb (15 levels at 1.5 radii)
+                ca0, ra0 = self.anchors["a0"]
+                if not hasattr(self, "r_anchor"):
+                    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+                    self.r_anchor = np.hypot(xx - ca0[0], yy - ca0[1]).astype(np.float32)
+                    self.r_far = float(max(np.hypot(ca0[0], ca0[1]), np.hypot(W - ca0[0], ca0[1]), np.hypot(ca0[0], H - ca0[1]), np.hypot(W - ca0[0], H - ca0[1])))
+                rl = getattr(self, "recede_layer", None)
+                t_near = float(self.sky.get("radial_near_at", 0.25)); t_end = float(self.sky.get("radial_end_at", 0.9))
+                prog = layer_e(u, rl) if rl is not None else ease01(u, t_near, t_end)
+                r_in0 = float(self.sky.get("out_from", 1.0)) * ra0
+                R_in = r_in0 + (self.r_far - r_in0) * min(1.0, prog / max(1e-6, float(self.sky.get("out_at", 0.7))))
+                wr = max(1.0, float(self.sky.get("radial_width", 0.35)) * max(R_in, ra0))
+                # the fade lies INSIDE the front (B is whole inside R_in - wr, A whole outside R_in), so at the start the
+                # whole band sits under the luminary and frame 1 equals A (a band outside the front cut it by 1.0 level)
+                x_ = np.clip((self.r_anchor - (R_in - wr)) / wr, 0, 1)
                 a_rest = a_rest * (x_ * x_ * (3.0 - 2.0 * x_))
+                if hasattr(self, "dborder") and bool(self.sky.get("out_border", True)):
+                    # the frame's own border feathers as under the plain soft rim: without it A's photo frame stood as a
+                    # straight-edged rectangle against B's stars at frames 12–36 (the skeptic's first round-13 pass,
+                    # 20–22 levels along the left edge). `sky.out_border` false keeps A's border whole: on the sun-to-sun
+                    # pair (the camera at scale 0.85, A inside the frame) the border key brought B's clouds and water in
+                    # from frame 12, before the sun's beat, and the edge-clamped stripes of round 12 with them
+                    wpx = min(self.rim_frac, 4.0 * e_cam) * min(H, W)
+                    a_rest = a_rest * np.clip(self.dborder / max(1.0, wpx), 0, 1)
             elif e_cam > 0 and hasattr(self, "dborder"):
                 wpx = min(self.rim_frac, 4.0 * e_cam) * min(H, W)
                 a_rest = a_rest * np.clip(self.dborder / max(1.0, wpx), 0, 1)
@@ -1720,12 +1775,36 @@ class Scene:
 
 
 # ----------------------------------------------------------------------------- the render
-def render(plan, concept, out, seconds, fps, max_long, knobs):
+def _jsonable(v):
+    if isinstance(v, (np.floating, np.integer)):
+        return v.item()
+    if isinstance(v, np.ndarray):
+        return v.tolist() if v.size <= 64 else {"shape": list(v.shape)}
+    if isinstance(v, (list, tuple)):
+        return [_jsonable(x) for x in v]
+    if isinstance(v, dict):
+        return {str(k): _jsonable(x) for k, x in v.items()}
+    return v if isinstance(v, (str, int, float, bool)) or v is None else str(v)
+
+
+def render(plan, concept, out, seconds, fps, max_long, knobs, progress=False, resolve_only=False):
     t_start = time.time()
     sc = Scene(plan, concept, max_long, knobs)
     sc.build()
     W, H = sc.W, sc.H
     n = int(round(seconds * fps))
+    if resolve_only:
+        # UI0 (2026-10-21): the resolved scene for the workbench's overlays, then stop before the frame loop; the same
+        # code path decides what the overlay shows and what a render uses
+        cv2.imwrite(str(out / "canvas_A.png"), cv2.cvtColor(sc.A, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(str(out / "canvas_B.png"), cv2.cvtColor(sc.B, cv2.COLOR_RGB2BGR))
+        anchors = {k: ({"centre": _jsonable(v[0]), "radius": _jsonable(v[1])} if isinstance(v, tuple) and len(v) == 2 else _jsonable(v)) for k, v in sc.anchors.items()}
+        layers = [{k: _jsonable(l[k]) for k in ("name", "by", "window", "depth", "centre", "r", "k_end", "end_blob", "theta", "off0", "off1", "pivot", "arrive", "face_A", "face_B", "box_A", "box_B") if k in l} for l in sc.layers]
+        json.dump({"pair": plan["pair"], "concept": concept["id"], "canvas": [W, H], "frames": n, "anchors": anchors, "layers": layers, "info": _jsonable(sc.info),
+                   "camera": {"kind": getattr(sc.cam, "kind", None), "S_A3": _jsonable(sc.S_A3)}, "renderer_md5": hashlib.md5(Path(__file__).read_bytes()).hexdigest()},
+                  open(out / "anchors.json", "w"), indent=1)
+        sc.info["resolve_only"] = True
+        return [], sc.info
     cam = sc.cam
     S_A3 = sc.S_A3
     end = dict(concept.get("end_effect") or {"kind": "luma_reveal", "window": [0.78, 1.0]})
@@ -1741,6 +1820,8 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
     b_inside_series = []; residual_edge_series = []
     for i in range(n):
         u = i / (n - 1)
+        if progress and (i % 5 == 0 or i == n - 1):
+            print(f"PROGRESS {i} {n}", file=sys.stderr, flush=True)      # UI0: the workbench reads it from the log
         e = smootherstep(u) if ease == "smootherstep" else u
         mapx, mapy = cam.inverse_map(e)                          # frame -> plate
         front_layer = getattr(sc, "front_alpha", None) is not None
@@ -1918,12 +1999,42 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
     enc.close()
     cap = cv2.VideoCapture(str(out / "transition.mp4")); prev = None; steps = []; prev_g = None; motion = []
     dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_MEDIUM)
+    # round 13: the luminary's surround (the owner on round 12: "too distinct orange halo from frame A", "still a bit of
+    # limb around sun"): on every third frame the radial luma profile around the brightest blob, in 10 px bins from 1.2
+    # to 5 blob radii; `halo_step` the largest step between adjacent bins, `halo_ring` the depth of the largest valley
+    # or peak against the profile's monotone envelope (a dark or a bright ring the photos do not have); only when the
+    # concept has a recede layer under a disc container (a luminary), else null
+    has_lum = sc.cont["kind"] == "disc" and getattr(sc, "recede_layer", None) is not None
+    halo_series = []; fi = 0
     while True:
         ok, fr = cap.read()
         if not ok:
             break
         if prev is not None:
             steps.append(float(np.abs(fr.astype(np.float32) - prev).mean()))
+        if has_lum and fi % 3 == 0 and 0 < fi < n - 1:
+            Lf = cv2.cvtColor(fr, cv2.COLOR_BGR2LAB)[..., 0].astype(np.float32)
+            # the luminary: the largest blob within 60 levels of the frame's maximum (a flattened sun reads 204 beside
+            # stars at 255), then its own core within 25 levels of the blob's maximum (the sun without its glow)
+            bl = (Lf >= max(float(Lf.max()) - 60.0, 150.0)).astype(np.uint8)
+            nb_, lab_, st_, cen_ = cv2.connectedComponentsWithStats(bl, 8)
+            if nb_ > 1:
+                kb_ = 1 + int(np.argmax(st_[1:, cv2.CC_STAT_AREA])); big_ = lab_ == kb_
+                core_ = (big_ & (Lf >= float(Lf[big_].max()) - 25.0)).astype(np.uint8)
+                nc_, labc_, stc_, cenc_ = cv2.connectedComponentsWithStats(core_, 8)
+                kc_ = 1 + int(np.argmax(stc_[1:, cv2.CC_STAT_AREA])) if nc_ > 1 else None
+                cx_, cy_ = (cenc_[kc_] if kc_ else cen_[kb_]); rb_ = max(4.0, float(np.sqrt((stc_[kc_, cv2.CC_STAT_AREA] if kc_ else st_[kb_, cv2.CC_STAT_AREA]) / np.pi)))
+                yy_, xx_ = np.mgrid[0:fr.shape[0], 0:fr.shape[1]]
+                rr_ = np.hypot(xx_ - cx_, yy_ - cy_)
+                r_lo = int(1.2 * rb_); r_hi = int(min(5.0 * rb_, 0.45 * min(fr.shape[:2])))
+                prof = [float(Lf[(rr_ >= r0_) & (rr_ < r0_ + 10)].mean()) for r0_ in range(r_lo, r_hi, 10) if ((rr_ >= r0_) & (rr_ < r0_ + 10)).any()]
+                if len(prof) >= 3:
+                    d_ = np.diff(prof); step_ = float(np.abs(d_).max())
+                    p_ = np.array(prof); ring_ = 0.0
+                    for j_ in range(1, len(p_) - 1):
+                        ring_ = max(ring_, min(p_[:j_].max(), p_[j_ + 1:].max()) - p_[j_], p_[j_] - max(p_[:j_].min(), p_[j_ + 1:].min()))
+                    halo_series.append([fi, round(step_, 1), round(float(ring_), 1), round(rb_, 1)])
+        fi += 1
         # round 12: the motion profile (the mean flow magnitude between consecutive frames at <= 480 px, in frame px), which
         # reads what the owner called "discretely" and "weird pauses": a pause is a frame with less than a fifth of the
         # median motion while the clip is between 10 % and 90 %
@@ -1942,7 +2053,9 @@ def render(plan, concept, out, seconds, fps, max_long, knobs):
                    seconds=seconds, fps=fps, knobs=knobs, wall_s=round(time.time() - t_start, 1),
                    motion_px=[round(m, 2) for m in motion], motion_median_px=round(med, 2), motion_pauses=pauses, motion_jumps=jumps, guard_share_max=round(guard_max, 4),
                    b_inside=b_inside_series, b_inside_first=next((f_ for f_, v_ in b_inside_series if v_ > 0.01), None),
-                   residual_edges=residual_edge_series, residual_edge_max=round(max((v_ for _, v_ in residual_edge_series), default=0.0), 5))
+                   residual_edges=residual_edge_series, residual_edge_max=round(max((v_ for _, v_ in residual_edge_series), default=0.0), 5),
+                   halo=halo_series if has_lum else None, halo_step_max=(round(max(h[1] for h in halo_series), 1) if halo_series else None),
+                   halo_ring_max=(round(max(h[2] for h in halo_series), 1) if halo_series else None))
     return keep, sc.info
 
 
@@ -1966,14 +2079,28 @@ if __name__ == "__main__":
     ap.add_argument("plan"); ap.add_argument("out"); ap.add_argument("--concept", default=None)
     ap.add_argument("--seconds", type=float, default=3.0); ap.add_argument("--fps", type=int, default=30); ap.add_argument("--max-long", type=int, default=1920)
     ap.add_argument("--set", action="append", default=[], help="knob=value (JSON value); 'name.param' targets a transform's params")
+    # UI0 (2026-10-21, `research/2026-10-20/ui_design.md` §4): three default-off hooks for the workbench; the mp4 is
+    # byte-identical with and without them (checked on the round-11 café, md5 d1dd9762…)
+    ap.add_argument("--progress", action="store_true", help="print 'PROGRESS i n' to stderr every 5 frames and at the last")
+    ap.add_argument("--resolve-only", action="store_true", help="build the scene, write canvas_A.png, canvas_B.png and anchors.json into OUT, and stop before the frame loop")
+    ap.add_argument("--layers-dir", default=None, help="the layer tables' root (default benchmarks/runs/2026-09-28/layers_v3)")
+    ap.add_argument("--mattes-dir", default=None, help="the mattes' root (default benchmarks/runs/2026-10-17/mattes)")
     a = ap.parse_args()
+    if a.layers_dir:
+        LAYERS = Path(a.layers_dir).resolve()
+    if a.mattes_dir:
+        MATTES = Path(a.mattes_dir).resolve()
     plan = json.load(open(a.plan))
     concepts = plan["concepts"]
     concept = next((c for c in concepts if c["id"] == a.concept), concepts[0]) if a.concept else concepts[0]
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     knobs = dict(parse_knob(s) for s in a.set)
-    keep, info = render(plan, concept, out, a.seconds, a.fps, a.max_long, knobs)
+    keep, info = render(plan, concept, out, a.seconds, a.fps, a.max_long, knobs, progress=a.progress, resolve_only=a.resolve_only)
     info["plan_sha256"] = hashlib.sha256(Path(a.plan).read_bytes()).hexdigest()[:16]
-    montage(keep, out / "montage.jpg")
+    info["renderer_md5"] = hashlib.md5(Path(__file__).read_bytes()).hexdigest()      # UI0: the stamp (the sheets recorded it by hand)
+    info["transitions_md5"] = hashlib.md5(Path(T.__file__).read_bytes()).hexdigest()
+    info["layers_dir"] = str(LAYERS); info["mattes_dir"] = str(MATTES)
+    if not a.resolve_only:
+        montage(keep, out / "montage.jpg")
     json.dump(info, open(out / "info.json", "w"), indent=1)
     print(json.dumps(info))

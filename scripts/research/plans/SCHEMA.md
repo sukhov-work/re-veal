@@ -230,3 +230,51 @@ from A or B (A re-coloured where a `colour` transform says so); nothing is gener
   the limb (T46) is keyed out as the sun shrinks instead of standing as a ring around a small sun; (c) a `rect`
   container of the frame's own size (a translation) uses the corner-interpolating camera (the zoom camera has no
   fixed point for a translation: mismatch_1's blind plan cut 46 levels at frame 1).
+
+## Additions of round 13 (2026-10-21, from the owner's grades on round 12: "Sky shrinks in too distinct orange halo from frame A - can be a bit more subtle", "still a bit of limb around sun", "this whole transition should have been a rapid zoom out")
+
+- The sky window's shape (`container.params.sky.shape`, under a disc container): `"radial"` (rounds 11–12: what remains of
+  A's sky is a disc around the luminary that shrinks inward) or `"radial_out"` (B grows from the luminary's footprint
+  OUTWARD with the recede's progress, so the ring the sun vacates and the sky around it are one field of B with no
+  edge between them, and the photo's own dark halo at the limb (T46) is the first of A's sky to go; A's sky survives
+  farthest from the sun until the key and the end effect take it). `out_from` (1.0) sun radii is where the front
+  starts; it reaches the far corner at `out_at` (0.7) of the recede's progress (the clip's time between
+  `radial_near_at` and `radial_end_at` without a recede); the fade is `radial_width` of the front's radius, inside it. The frame's own border feathers as under the plain soft rim (the first render without it showed A's
+  photo frame as a straight-edged rectangle against B's stars at frames 12–36, 20–22 levels along the left edge); the
+  front's steepness must stay under B's own steepest gradient (the skeptic read 17.9 against 10.8 levels per 10 px on
+  the sun-to-sun pair at `radial_width` 0.35 and 14 at 0.6; backlog T62). `sky.out_border` false keeps A's border whole under the
+  outward front: on a pair whose camera leaves A inside the frame (the sun-to-sun pair at scale 0.85) the border key brought
+  B's clouds and water in from frame 12, before the sun's beat, and round 12's edge-clamped stripes with them; on the sunset
+  (A fills the frame at the start) the border key is what removes the rectangle, so it stays on there.
+- The radial window's band (`sky.band`): `"window"` (rounds 11–12: the fade is `radial_width` of R wide) or `"limb"`
+  (the fade runs from `sky.inner` (1.2) current luminary radii out to the window's edge, so the kept disc of A's sky
+  has no edge of its own; the inner edge sweeps in from the far corner over the first `radial_near_at` of the clip).
+  Measured on the sun-to-sun pair at 1920 px: the deepest ring in the luminary's surround 24.9 levels (round 12)
+  → 10.1 (`band` "limb") → 0.0 (`shape` "radial_out").
+- The vacated ring (`sky.ring`): `"b"` (rounds 10–12: the ring a receding luminary vacates shows B at once) or
+  `"window"` (it gives way to B only where the window has released). `"window"` is recorded as TRIED AND WRONG on the
+  sunset: the ring then shows A's plate, which is a dark pull-push fill of the whole footprint (L 23 against the sun's
+  204; T46 again), a dark ring 60 levels deep at frame 31. Keep `"b"`.
+- What the sunset's "limb" is (measured, `research/2026-10-21/`): B's core glow seen in the vacated ring around a sun
+  that is still 0.6 of its radius at t 0.34 under round 12's schedule; the window's shape and band do not change it
+  (the same profile at frames 31 and 45 in all three shapes). The answer is the recede's schedule: a shorter window
+  (`sun_recedes.window` [0.15, 0.6] gives k 0.33 at t 0.34 and 0.18 by t 0.5) so the sun is small before B's glow is
+  prominent; the mix into the core then lands inside the window (t 0.44–0.59).
+- Dotted knobs reach the sky's keys from the command line: `sky.shape=radial_out`, `sky.band=limb`, `sky.inner=1.2`,
+  `sky.ring=b`, `sky.out_at=0.7`.
+- The luminary's surround measure (rule 5 on a luminary pair; `info.json` `halo`, `halo_step_max`, `halo_ring_max`):
+  on every third frame the radial luma profile around the brightest large blob's core (within 60 levels of the frame's
+  maximum, then within 25 of the blob's own), in 10 px bins from 1.2 to 5 blob radii; `halo_step` the largest step
+  between adjacent bins, `halo_ring` the depth of the largest valley or peak against the profile's monotone envelope;
+  null on a pair without a recede under a disc. The page prints both with the frame of the deepest ring.
+- UI0 (`research/2026-10-20/ui_design.md` §4; default-off, the mp4 byte-identical with and without them):
+  `--progress` prints `PROGRESS i n` to stderr every 5 frames and at the last; `--resolve-only` writes `canvas_A.png`,
+  `canvas_B.png` and `anchors.json` (the resolved anchors, the camera, every layer's resolved numbers, `info`) and stops
+  before the frame loop; `--layers-dir` / `--mattes-dir` override the two roots; `info.json` carries `renderer_md5`,
+  `transitions_md5`, `layers_dir`, `mattes_dir`.
+- Read by the renderer but unnamed until now: `mix_window` on a `morph_to` (default [0.25, 0.9] of the beat's progress;
+  the round-13 mismatch_1 plan sets [0.0, 0.9] so the clouds mix rim-first from the beat's start);
+  `container.params.feather_px` (knob `cont_feather`) softens a rect or quad container's edge in frame px.
+- Still missing (the round-13 planner on the zoom-out): a rate for the camera (`pullback.ease` is smootherstep or
+  linear and spans the clip); `end_scale` is read under a disc only, so a rect's end size is `container.spec.box`;
+  the colour lead does not reach a lifted layer's content.
