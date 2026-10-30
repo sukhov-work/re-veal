@@ -1,0 +1,44 @@
+{
+ "seq": "group-teleport",
+ "in": "benchmarks/runs/2026-10-30/halloween/in/group-teleport",
+ "gag": "The woman in green beams out of the right end of the group: she squeezes into a bright vertical line, a two-frame flash, and the cut shows her at the left end (everyone shuffled to make room). The loop cuts back.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 14
+  },
+  {
+   "to": 1,
+   "n": 10,
+   "method": "teleport",
+   "ease": "smooth",
+   "out_box": [
+    0.79,
+    0.1,
+    0.955,
+    0.98
+   ],
+   "box_thr": 24,
+   "span": 1.0,
+   "glow": 0.7,
+   "rest": "cut",
+   "flash": 2,
+   "flash_gain": 0.5
+  },
+  {
+   "key": 1,
+   "hold": 20
+  },
+  {
+   "to": 0,
+   "n": 0,
+   "method": "cut"
+  }
+ ],
+ "effects": [],
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

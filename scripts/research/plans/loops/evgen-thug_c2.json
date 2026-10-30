@@ -1,0 +1,71 @@
+{
+ "seq": "evgen-thug",
+ "in": "benchmarks/runs/2026-10-30/halloween/in/evgen-thug",
+ "title": "the same, with a fast rewind instead of the cut back",
+ "gag": "The pumpkin comes off the head (two in-betweens into the real blur still, then a cut), he looks up, a smash cut to the drawn gun; then the tape rewinds at triple speed to the pumpkin on the head.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 12
+  },
+  {
+   "to": 1,
+   "n": 2,
+   "method": "rife",
+   "ease": "accel"
+  },
+  {
+   "key": 1,
+   "hold": 1
+  },
+  {
+   "to": 2,
+   "n": 0,
+   "method": "cut"
+  },
+  {
+   "key": 2,
+   "hold": 6
+  },
+  {
+   "to": 3,
+   "n": 6,
+   "method": "rife",
+   "ease": "smooth"
+  },
+  {
+   "key": 3,
+   "hold": 10
+  },
+  {
+   "to": 4,
+   "n": 0,
+   "method": "cut"
+  },
+  {
+   "key": 4,
+   "hold": 2
+  },
+  {
+   "to": 5,
+   "n": 0,
+   "method": "cut"
+  },
+  {
+   "key": 5,
+   "hold": 18
+  },
+  {
+   "to": 0,
+   "method": "rewind",
+   "stride": 3,
+   "from": 0
+  }
+ ],
+ "effects": [],
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

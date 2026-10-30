@@ -1,0 +1,5 @@
+{"seq": "zeke-bite", "in": "benchmarks/runs/2026-10-30/halloween/in/zeke-bite",
+ "title": "no in-betweens: a hard cut into the real motion-blur still and a hard cut back (zero generated frames, no double glasses)",
+ "gag": "The vampire bites; the victim whips round (his own motion-blur frame) and the vampire is gone; cut back, the vampire is at the neck again.",
+ "timeline": [{"key": 0, "hold": 20}, {"to": 1, "n": 0, "method": "cut"}, {"key": 1, "hold": 7}, {"to": 0, "n": 0, "method": "cut"}],
+ "effects": [{"kind": "breath", "z": 0.02, "cx": 0.5, "cy": 0.45}], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

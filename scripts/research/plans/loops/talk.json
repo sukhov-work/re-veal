@@ -1,0 +1,40 @@
+{
+ "seq": "talk",
+ "in": "benchmarks/runs/2026-10-30/halloween/in/talk",
+ "gag": "The witch lectures; the wand flicks up into his face in three in-betweens; he takes it on the chin and the loop settles the poke back.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 12
+  },
+  {
+   "to": 1,
+   "n": 3,
+   "method": "rife",
+   "ease": "accel"
+  },
+  {
+   "key": 1,
+   "hold": 8
+  },
+  {
+   "to": 0,
+   "n": 5,
+   "method": "rife",
+   "ease": "smooth"
+  }
+ ],
+ "effects": [
+  {
+   "kind": "breath",
+   "z": 0.02,
+   "cx": 0.5,
+   "cy": 0.35
+  }
+ ],
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

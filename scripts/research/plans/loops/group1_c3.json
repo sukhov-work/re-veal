@@ -1,0 +1,4 @@
+{"seq": "group1", "in": "benchmarks/runs/2026-10-30/halloween/in/group1", "title": "the breathing group through transitions.py's morph (the DIS flow, no generated pixels), no breath; the third option beside the RIFE in-betweens (c1) and the hard cuts (c2)",
+ "gag": "The group photo breathes: everyone shifts, the eyeball becomes the lit pumpkin and back.",
+ "timeline": [{"key": 0, "hold": 12}, {"to": 1, "n": 10, "method": "morph"}, {"key": 1, "hold": 12}, {"to": 0, "n": 10, "method": "morph"}],
+ "effects": [], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

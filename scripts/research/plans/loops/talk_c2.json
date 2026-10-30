@@ -1,0 +1,9 @@
+{"seq": "talk", "in": "benchmarks/runs/2026-10-30/halloween/in/talk",
+ "title": "a double poke: two fast pokes (3 in-betweens each, snap) with a 2-frame recoil between, the second held, then the slow settle; no breath",
+ "gag": "The witch lectures; poke, poke: the wand jabs his face twice, the second one stays, then she lowers it.",
+ "timeline": [{"key": 0, "hold": 10},
+  {"to": 1, "n": 3, "method": "rife", "ease": "snap"}, {"key": 1, "hold": 3},
+  {"to": 0, "n": 3, "method": "rife", "ease": "smooth"}, {"key": 0, "hold": 2},
+  {"to": 1, "n": 3, "method": "rife", "ease": "snap"}, {"key": 1, "hold": 10},
+  {"to": 0, "n": 8, "method": "rife", "ease": "smooth"}],
+ "effects": [], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

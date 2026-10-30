@@ -1,0 +1,5 @@
+{"seq": "sveta-head", "in": "benchmarks/runs/2026-10-30/halloween/in/sveta-head",
+ "title": "the even sway replaced by a quick double bob then a rest (4-frame legs, 2-frame holds, a 12-frame rest); no breath",
+ "gag": "A dashboard bobble-witch: she bobs her head and wand twice, quickly, then rests.",
+ "timeline": [{"key": 0, "hold": 12}, {"to": 1, "n": 4, "method": "rife", "ease": "smooth"}, {"key": 1, "hold": 2}, {"to": 0, "n": 4, "method": "rife", "ease": "smooth"}, {"key": 0, "hold": 2}, {"to": 1, "n": 4, "method": "rife", "ease": "smooth"}, {"key": 1, "hold": 2}, {"to": 0, "n": 4, "method": "rife", "ease": "smooth"}],
+ "effects": [], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

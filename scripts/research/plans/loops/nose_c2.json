@@ -1,0 +1,5 @@
+{"seq": "nose", "in": "benchmarks/runs/2026-10-30/halloween/in/nose",
+ "title": "no breath (it shimmered the curtain mesh); the one change (his head tilt) played as a tick-tock waggle: tick, tock, tick, hold, settle",
+ "gag": "He peeks through the curtain and waggles his head left-right-left like a metronome, grins, and settles back.",
+ "timeline": [{"key": 0, "hold": 14}, {"to": 1, "n": 3, "method": "rife", "ease": "snap"}, {"key": 1, "hold": 4}, {"to": 0, "n": 3, "method": "rife", "ease": "snap"}, {"key": 0, "hold": 4}, {"to": 1, "n": 3, "method": "rife", "ease": "snap"}, {"key": 1, "hold": 12}, {"to": 0, "n": 5, "method": "rife", "ease": "smooth"}],
+ "effects": [], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

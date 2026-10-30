@@ -1,0 +1,5 @@
+{"seq": "evgen-npc", "in": "benchmarks/runs/2026-10-30/halloween/in/evgen-npc",
+ "title": "the NPC as a game sprite: hard cuts between the three stills at 7 frames each, ping-pong k0-k1-k2-k1; no in-betweens, no breath",
+ "gag": "A low-frame-rate NPC idle sprite: the pumpkin seller ticks through his three poses like a 2000s game character.",
+ "timeline": [{"key": 0, "hold": 7}, {"to": 1, "n": 0, "method": "cut"}, {"key": 1, "hold": 7}, {"to": 2, "n": 0, "method": "cut"}, {"key": 2, "hold": 7}, {"to": 1, "n": 0, "method": "cut"}, {"key": 1, "hold": 7}, {"to": 0, "n": 0, "method": "cut"}],
+ "effects": [], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

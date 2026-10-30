@@ -1,0 +1,70 @@
+{
+ "seq": "evgen-thug",
+ "in": "benchmarks/runs/2026-10-30/halloween/in/evgen-thug",
+ "title": "director A's faster set-up (the gun on screen from frame 30 of 54, held 24 frames; the blur stills 2 frames each), with the blur-to-belly leg a cut as in c1 (the skeptic's second pass: the RIFE leg doubled the pumpkin again)",
+ "gag": "The pumpkin comes off the head in a blur, he looks up, a smash cut to the drawn gun held; the loop cuts back to the pumpkin on the head.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 10
+  },
+  {
+   "to": 1,
+   "n": 2,
+   "method": "rife",
+   "ease": "accel"
+  },
+  {
+   "key": 1,
+   "hold": 2
+  },
+  {
+   "to": 2,
+   "n": 0,
+   "method": "cut"
+  },
+  {
+   "key": 2,
+   "hold": 3
+  },
+  {
+   "to": 3,
+   "n": 4,
+   "method": "rife",
+   "ease": "smooth"
+  },
+  {
+   "key": 3,
+   "hold": 7
+  },
+  {
+   "to": 4,
+   "n": 0,
+   "method": "cut"
+  },
+  {
+   "key": 4,
+   "hold": 2
+  },
+  {
+   "to": 5,
+   "n": 0,
+   "method": "cut"
+  },
+  {
+   "key": 5,
+   "hold": 24
+  },
+  {
+   "to": 0,
+   "n": 0,
+   "method": "cut"
+  }
+ ],
+ "effects": [],
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

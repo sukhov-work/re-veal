@@ -1,0 +1,4 @@
+{"seq": "zeke-back", "in": "benchmarks/runs/2026-10-30/halloween/in/zeke-back", "title": "a jump scare: the ghoul appears by a hard cut (the pair moved too far between the first two stills for in-betweens), creeps closer over three generated legs, and vanishes by a hard cut",
+ "gag": "The pair stand alone; cut: a ghoul is behind them with a hand on the shoulder; he creeps closer frame by frame; cut: gone. They never notice.",
+ "timeline": [{"key": 0, "hold": 16}, {"to": 1, "n": 0, "method": "cut"}, {"key": 1, "hold": 8}, {"to": 2, "n": 8, "method": "rife", "ease": "smooth"}, {"key": 2, "hold": 5}, {"to": 3, "n": 7, "method": "rife", "ease": "smooth"}, {"key": 3, "hold": 5}, {"to": 4, "n": 7, "method": "rife", "ease": "smooth"}, {"key": 4, "hold": 16}, {"to": 0, "n": 0, "method": "cut"}],
+ "effects": [], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

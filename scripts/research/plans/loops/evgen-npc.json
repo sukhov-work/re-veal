@@ -1,0 +1,4 @@
+{"seq": "evgen-npc", "in": "benchmarks/runs/2026-10-30/halloween/in/evgen-npc",
+ "gag": "An NPC idle animation: the pumpkin seller cycles through his three gestures for ever.",
+ "timeline": [{"key": 0, "hold": 10}, {"to": 1, "n": 7, "method": "rife", "ease": "smooth"}, {"key": 1, "hold": 8}, {"to": 2, "n": 7, "method": "rife", "ease": "smooth"}, {"key": 2, "hold": 10}, {"to": 0, "n": 7, "method": "rife", "ease": "smooth"}],
+ "effects": [{"kind": "breath", "z": 0.02, "cx": 0.5, "cy": 0.5}], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

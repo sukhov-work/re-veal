@@ -1,0 +1,4 @@
+{"seq": "wand", "in": "benchmarks/runs/2026-10-30/halloween/in/wand",
+ "gag": "The wand duel: she pushes, he bends back, and the tug repeats.",
+ "timeline": [{"key": 0, "hold": 6}, {"to": 1, "n": 8, "method": "rife", "ease": "smooth"}, {"key": 1, "hold": 6}, {"to": 0, "n": 8, "method": "rife", "ease": "smooth"}],
+ "effects": [{"kind": "breath", "z": 0.015, "cx": 0.5, "cy": 0.4}], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

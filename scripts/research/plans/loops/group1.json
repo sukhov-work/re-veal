@@ -1,0 +1,4 @@
+{"seq": "group1", "in": "benchmarks/runs/2026-10-30/halloween/in/group1",
+ "gag": "The group photo breathes: everyone shifts, the eyeball becomes the lit pumpkin and back.",
+ "timeline": [{"key": 0, "hold": 12}, {"to": 1, "n": 12, "method": "rife", "ease": "smooth"}, {"key": 1, "hold": 12}, {"to": 0, "n": 12, "method": "rife", "ease": "smooth"}],
+ "effects": [{"kind": "breath", "z": 0.015, "cx": 0.5, "cy": 0.45}], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

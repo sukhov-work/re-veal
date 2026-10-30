@@ -1,0 +1,71 @@
+{
+ "seq": "group-teleport",
+ "in": "benchmarks/runs/2026-10-30/halloween/in/group-teleport",
+ "title": "director A's version: she squeezes out on the right, a 3-frame beat with her nowhere, and squeezes in on the left (the left box stops at x 0.25, short of the leopard-mask man); everyone else by RIFE; the boxes' content by the change matte",
+ "gag": "The woman in green teleports from the right end of the group to the left end: she squeezes into a bright line, a beat with her nowhere, the line opens on the left into her; the loop beams her back.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 12
+  },
+  {
+   "to": 1,
+   "n": 12,
+   "method": "teleport",
+   "ease": "linear",
+   "out_box": [
+    0.795,
+    0.13,
+    0.945,
+    0.84
+   ],
+   "in_box": [
+    0.135,
+    0.14,
+    0.25,
+    0.8
+   ],
+   "span": 0.45,
+   "glow": 0.6,
+   "box_mode": "change"
+  },
+  {
+   "key": 1,
+   "hold": 18
+  },
+  {
+   "to": 0,
+   "n": 12,
+   "method": "teleport",
+   "ease": "linear",
+   "out_box": [
+    0.135,
+    0.14,
+    0.25,
+    0.8
+   ],
+   "in_box": [
+    0.795,
+    0.13,
+    0.945,
+    0.84
+   ],
+   "span": 0.45,
+   "glow": 0.6,
+   "box_mode": "change"
+  }
+ ],
+ "effects": [
+  {
+   "kind": "breath",
+   "z": 0.015,
+   "cx": 0.5,
+   "cy": 0.45
+  }
+ ],
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

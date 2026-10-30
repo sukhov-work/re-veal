@@ -1,0 +1,89 @@
+{
+ "seq": "zeke-back",
+ "in": "benchmarks/runs/2026-10-30/halloween/in/zeke-back",
+ "title": "the ghoul's fade-in and blink-out confined to his own matte inside a box (x 0.30\u20130.52; director A's box widened so the hat is whole), the pair by RIFE; the blink-out eased to land on the still",
+ "gag": "A ghoul fades in behind the pair, creeps closer frame by frame, and blinks out; the two never notice.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 12
+  },
+  {
+   "to": 1,
+   "n": 10,
+   "method": "teleport",
+   "mode": "fade",
+   "ease": "smooth",
+   "span": 1.0,
+   "in_box": [
+    0.3,
+    0.05,
+    0.52,
+    0.45
+   ],
+   "box_thr": 30
+  },
+  {
+   "key": 1,
+   "hold": 6
+  },
+  {
+   "to": 2,
+   "n": 8,
+   "method": "rife",
+   "ease": "smooth"
+  },
+  {
+   "key": 2,
+   "hold": 5
+  },
+  {
+   "to": 3,
+   "n": 7,
+   "method": "rife",
+   "ease": "smooth"
+  },
+  {
+   "key": 3,
+   "hold": 5
+  },
+  {
+   "to": 4,
+   "n": 7,
+   "method": "rife",
+   "ease": "smooth"
+  },
+  {
+   "key": 4,
+   "hold": 14
+  },
+  {
+   "to": 0,
+   "n": 5,
+   "method": "teleport",
+   "mode": "fade",
+   "ease": "decel",
+   "span": 1.0,
+   "out_box": [
+    0.26,
+    0.05,
+    0.52,
+    0.45
+   ],
+   "box_thr": 30
+  }
+ ],
+ "effects": [
+  {
+   "kind": "breath",
+   "z": 0.015,
+   "cx": 0.5,
+   "cy": 0.3
+  }
+ ],
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

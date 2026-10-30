@@ -1,0 +1,4 @@
+{"seq": "zeke-back", "in": "benchmarks/runs/2026-10-30/halloween/in/zeke-back",
+ "gag": "A ghoul fades in behind the pair, creeps closer frame by frame, and blinks out; the two never notice.",
+ "timeline": [{"key": 0, "hold": 12}, {"to": 1, "n": 10, "method": "dissolve", "ease": "smooth"}, {"key": 1, "hold": 6}, {"to": 2, "n": 8, "method": "rife", "ease": "smooth"}, {"key": 2, "hold": 5}, {"to": 3, "n": 7, "method": "rife", "ease": "smooth"}, {"key": 3, "hold": 5}, {"to": 4, "n": 7, "method": "rife", "ease": "smooth"}, {"key": 4, "hold": 14}, {"to": 0, "n": 4, "method": "dissolve", "ease": "accel"}],
+ "effects": [{"kind": "breath", "z": 0.015, "cx": 0.5, "cy": 0.3}], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}

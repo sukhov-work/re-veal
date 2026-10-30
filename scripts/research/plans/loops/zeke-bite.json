@@ -1,0 +1,40 @@
+{
+ "seq": "zeke-bite",
+ "in": "benchmarks/runs/2026-10-30/halloween/in/zeke-bite",
+ "gag": "The vampire lunges for the neck; the victim whips round (the real motion-blur still, three in-betweens each way so the turn flashes by) and settles back.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 14
+  },
+  {
+   "to": 1,
+   "n": 3,
+   "method": "rife",
+   "ease": "accel"
+  },
+  {
+   "key": 1,
+   "hold": 7
+  },
+  {
+   "to": 0,
+   "n": 3,
+   "method": "rife",
+   "ease": "smooth"
+  }
+ ],
+ "effects": [
+  {
+   "kind": "breath",
+   "z": 0.02,
+   "cx": 0.5,
+   "cy": 0.45
+  }
+ ],
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

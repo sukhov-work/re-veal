@@ -1,0 +1,5 @@
+{"seq": "wand", "in": "benchmarks/runs/2026-10-30/halloween/in/wand",
+ "title": "an asymmetric rhythm instead of the even tug: a 3-frame zap, a long recoil hold, a slow creep back; no breath",
+ "gag": "The spell lands: her wand jabs and he is blown back in three frames, frozen in the recoil, then creeps back for another go.",
+ "timeline": [{"key": 0, "hold": 10}, {"to": 1, "n": 3, "method": "rife", "ease": "accel"}, {"key": 1, "hold": 12}, {"to": 0, "n": 10, "method": "rife", "ease": "smooth"}],
+ "effects": [], "matte": {"thr": 14, "grow": 0.015, "feather": 0.01}}
