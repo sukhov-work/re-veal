@@ -1,16 +1,16 @@
 {
  "seq": "group-teleport",
  "in": "benchmarks/runs/2026-10-30/halloween/in/group-teleport",
- "title": "round 3b: the slide with her mattes eroded by 0.4 % of the width (the halo at the landing) and the flight blur at 0.45 of her speed",
- "gag": "The woman in green zips from the right end of the group to the left end while everyone shuffles to make room; then back.",
+ "title": "round 4 (your grade: 'just dissolve morph person into background and do inverse in destination, all other people stay as in c2, whole scene 20 % faster'): she dissolves out in place over the first 55 % of the segment and dissolves in at the destination over the last 55 %, the others morph underneath as before; 46 frames instead of 56; after the fourth pass: GrabCut on both sides, the cutout's matte applied once (the halo); the door strip excluded from her right-side matte; her destination filled from the first still's own wall where it shows one",
+ "gag": "The woman in green fades out of the right end of the group and fades in at the left end while everyone shuffles to make room; then back.",
  "timeline": [
   {
    "key": 0,
-   "hold": 12
+   "hold": 10
   },
   {
    "to": 1,
-   "n": 16,
+   "n": 13,
    "method": "slide",
    "ease": "linear",
    "box_a": [
@@ -26,9 +26,22 @@
     0.824
    ],
    "matte_a": {
-    "kind": "box",
-    "thr": 24,
-    "erode": 0.004
+    "kind": "grabcut",
+    "erode": 0.0,
+    "exclude": [
+     [
+      0.915,
+      0.12,
+      0.97,
+      0.33
+     ],
+     [
+      0.915,
+      0.45,
+      0.97,
+      0.82
+     ]
+    ]
    },
    "matte_b": {
     "kind": "grabcut",
@@ -40,7 +53,7 @@
       0.74
      ]
     ],
-    "erode": 0.004
+    "erode": 0.0
    },
    "window": [
     0.25,
@@ -49,15 +62,31 @@
    "slide_ease": "sine",
    "floor_y": 0.76,
    "blur": true,
-   "blur_k": 0.45
+   "blur_k": 0.45,
+   "mode": "dissolve",
+   "window_out": [
+    0.0,
+    0.55
+   ],
+   "window_in": [
+    0.45,
+    1.0
+   ],
+   "donor_box_b": [
+    0.12,
+    0.1,
+    0.3,
+    0.92
+   ],
+   "fill": "donor+vertical"
   },
   {
    "key": 1,
-   "hold": 12
+   "hold": 10
   },
   {
    "to": 0,
-   "n": 16,
+   "n": 13,
    "method": "slide",
    "ease": "linear",
    "box_a": [
@@ -82,12 +111,25 @@
       0.74
      ]
     ],
-    "erode": 0.004
+    "erode": 0.0
    },
    "matte_b": {
-    "kind": "box",
-    "thr": 24,
-    "erode": 0.004
+    "kind": "grabcut",
+    "erode": 0.0,
+    "exclude": [
+     [
+      0.915,
+      0.12,
+      0.97,
+      0.33
+     ],
+     [
+      0.915,
+      0.45,
+      0.97,
+      0.82
+     ]
+    ]
    },
    "window": [
     0.25,
@@ -96,7 +138,17 @@
    "slide_ease": "sine",
    "floor_y": 0.76,
    "blur": true,
-   "blur_k": 0.45
+   "blur_k": 0.45,
+   "mode": "dissolve",
+   "window_out": [
+    0.0,
+    0.55
+   ],
+   "window_in": [
+    0.45,
+    1.0
+   ],
+   "fill": "donor+vertical"
   }
  ],
  "effects": [],

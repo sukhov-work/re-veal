@@ -1,49 +1,19 @@
 {
  "seq": "zeke-back",
  "in": "benchmarks/runs/2026-10-30/halloween/in/zeke-back",
- "title": "round 3b: the ghoul's hat and face (a colour matte inside a box that stops above the girl's head) rise from behind the man, whose GrabCut matte reaches his chest; the pair settle by RIFE; one continuous creep; the sink the same way",
- "gag": "The pair stand alone; a top hat rises behind the man's shoulder and a ghoul leans in, closer and closer; then he sinks away. They never notice.",
+ "title": "round 4 (your grade: 'a more immediate snap from frame 1 to 2 like in c3 but more fluid and with slight motion blur, and then nice gradual single clean motion animation'): the ghoul appears in a 3-frame snap (a blend with a vertical motion blur of up to 1.5 % of the height), then one constant-speed motion through the three closer stills (36 generated frames, no softening at the stills), the hold, and a 3-frame snap back; after the fourth pass: a linear profile, the first leg given half the frames, no frame within 4 % of a still, the snap's blur 2.2 %",
+ "gag": "The pair stand alone; in a blink a ghoul is behind the man; he leans in closer and closer in one motion; in a blink he is gone.",
  "timeline": [
   {
    "key": 0,
-   "hold": 14
+   "hold": 12
   },
   {
    "to": 1,
-   "n": 18,
-   "method": "rise",
-   "ease": "linear",
-   "ghoul_box": [
-    0.33,
-    0.12,
-    0.54,
-    0.3
-   ],
-   "man_box": [
-    0.378,
-    0.123,
-    0.76,
-    0.52
-   ],
-   "man_box_other": [
-    0.37,
-    0.12,
-    0.86,
-    0.52
-   ],
-   "start_offset": [
-    0.0,
-    0.1
-   ],
-   "window": [
-    0.3,
-    1.0
-   ],
-   "rise_ease": "smooth",
-   "matte_ghoul": {
-    "kind": "box",
-    "thr": 30
-   }
+   "n": 3,
+   "method": "snap",
+   "blur_frac": 0.022,
+   "direction": "vertical"
   },
   {
    "key": 1,
@@ -55,52 +25,27 @@
     3
    ],
    "to": 4,
-   "n": 30,
+   "n": 36,
    "method": "rife",
-   "ease": "sine",
-   "soft": 0.4
+   "ease": "linear",
+   "soft": 0.0,
+   "weights": [
+    2.0,
+    1.0,
+    1.0
+   ],
+   "knot_margin": 0.04
   },
   {
    "key": 4,
-   "hold": 14
+   "hold": 12
   },
   {
    "to": 0,
-   "n": 10,
-   "method": "rise",
-   "direction": "down",
-   "ease": "linear",
-   "ghoul_box": [
-    0.33,
-    0.12,
-    0.54,
-    0.3
-   ],
-   "man_box": [
-    0.378,
-    0.123,
-    0.76,
-    0.52
-   ],
-   "man_box_other": [
-    0.37,
-    0.12,
-    0.86,
-    0.52
-   ],
-   "start_offset": [
-    0.0,
-    0.1
-   ],
-   "window": [
-    0.0,
-    0.8
-   ],
-   "rise_ease": "smooth",
-   "matte_ghoul": {
-    "kind": "box",
-    "thr": 30
-   }
+   "n": 3,
+   "method": "snap",
+   "blur_frac": 0.022,
+   "direction": "vertical"
   }
  ],
  "effects": [],

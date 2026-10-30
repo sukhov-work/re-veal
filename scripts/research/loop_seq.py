@@ -338,7 +338,7 @@ def frames_rife(A, B, n, ease, matte_cfg, out_rows):
     return out, m
 
 
-def frames_chain(keys, knots, n, weights, ease, soft, method, matte_cfg, out_rows):
+def frames_chain(keys, knots, n, weights, ease, soft, method, matte_cfg, out_rows, margin=0.0):
     """n frames along the chain of stills `knots` (the current still first) under ONE global speed profile:
     u = ease(j / (n + 1)) picks the segment by its weight and the local t; `soft` slows the motion near each
     inner still without stopping (speed 1 - soft there). The inner stills are passed through, never held."""
@@ -354,6 +354,8 @@ def frames_chain(keys, knots, n, weights, ease, soft, method, matte_cfg, out_row
         t = (u - b[i]) / (b[i + 1] - b[i])
         if soft:
             t = knot_soft(t, soft)
+        if margin:                                   # never render within `margin` of a still (RIFE's frames there hug the still)
+            t = margin + (1 - 2 * margin) * t
         A, B = keys[knots[i]], keys[knots[i + 1]]
         if i not in mattes:
             mattes[i] = change_matte(A, B, **matte_cfg)
@@ -631,8 +633,13 @@ def frames_slide(A, B, n, ease, step, matte_cfg, out_rows):
         valid = 1 - cv2.dilate((mD > 0.5).astype(np.uint8), np.ones((g, g), np.uint8))
     else:
         valid = np.ones((H, W), np.uint8)
-    if step.get("fill", "vertical") == "vertical":
+    fill = step.get("fill", "donor+vertical")
+    if fill == "vertical":
         B2 = fill_vertical(B, hB, step.get("floor_y"))                      # her B spot: the wall from above, the floor from below
+    elif fill == "donor+vertical":                                          # the vertical fill, then A's own background where A shows it
+        B2 = fill_vertical(B, hB, step.get("floor_y"))
+        ok = (hB > 0) & (valid * (1 - hA) > 0)
+        B2[ok] = A[ok]
     else:
         B2 = fill_region(B, hB, donor=A, donor_valid=valid * (1 - hA))     # her B spot: A's background, else the wall extended
     m_rest = change_matte(A2, B2, **matte_cfg); m3 = m_rest[..., None]
@@ -641,10 +648,21 @@ def frames_slide(A, B, n, ease, step, matte_cfg, out_rows):
     cutA = A.astype(np.float32) * mA[..., None]; cutB = B.astype(np.float32) * mB[..., None]
     import rife_probe as R
     out = []; prev_p = None
+    mode = step.get("mode", "fly")
     for i in range(n):
         t = EASES[ease]((i + 1) / (n + 1))
         X = _RIFE.at(A2, B2, t)
         base = m3 * X + (1 - m3) * blend(A2, B2, t)
+        if mode == "dissolve":                    # no flight: the old cutout fades out in place, the new one fades in at the destination
+            wo0, wo1 = step.get("window_out", [0.0, 0.55]); wi0, wi1 = step.get("window_in", [0.45, 1.0])
+            qo = EASES["sine"](min(1.0, max(0.0, (t - wo0) / (wo1 - wo0)))); qi = EASES["sine"](min(1.0, max(0.0, (t - wi0) / (wi1 - wi0))))
+            al = np.clip(mA * (1 - qo) + mB * qi, 0, 1)
+            lay = cutA * (1 - qo) + cutB * qi                       # cutA is A premultiplied by mA already: one matte factor, not two
+            al3 = al[..., None]
+            frame = base * (1 - al3) + lay
+            out.append(np.clip(frame, 0, 255).round().astype(np.uint8))
+            out_rows.append({"t": round(t, 4), "generated": "rife (the base)", "fade_out": round(qo, 3), "fade_in": round(qi, 3), "dexp_rest": R.dexp_share(X, A2, B2, m_rest)})
+            continue
         q = min(1.0, max(0.0, (t - w0) / (w1 - w0)))
         e = EASES[step.get("slide_ease", "sine")](q)
         p = cA + e * (cB - cA)
@@ -716,6 +734,26 @@ def frames_rise(A, B, n, ease, step, matte_cfg, out_rows):
     return out, {"mG_share": round(float((mG > 0.5).mean()), 4), "mM_share": round(float((mM > 0.5).mean()), 4)}
 
 
+def frames_snap(A, B, n, step, out_rows):
+    """A fast change in n frames: the plain blend, blurred along `direction` by a line kernel whose length
+    is blur_frac of the height times sin(πt) (a whip; the blur hides the double exposure of a big move).
+    No generated pixels."""
+    H, W = A.shape[:2]
+    frac = float(step.get("blur_frac", 0.015)); horiz = step.get("direction", "vertical") == "horizontal"
+    out = []
+    for i in range(n):
+        t = (i + 1) / (n + 1)
+        f = blend(A, B, t)
+        L = int(round(frac * H * math.sin(math.pi * t))) | 1
+        if L >= 3:
+            k = np.zeros((1, L), np.float32) if horiz else np.zeros((L, 1), np.float32)
+            k[:] = 1.0 / L
+            f = cv2.filter2D(f, -1, k, borderType=cv2.BORDER_REFLECT)
+        out.append(np.clip(f, 0, 255).round().astype(np.uint8))
+        out_rows.append({"t": round(t, 4), "generated": "none (blend + motion blur)", "blur_px": L})
+    return out
+
+
 def apply_breath(frames, eff):
     """A push-in about (cx, cy) (canvas fractions) by 1 + z sin²(πu) over the loop; frame 0 untouched."""
     n = len(frames); H, W = frames[0].shape[:2]
@@ -758,7 +796,7 @@ def render_plan(plan, out, fps, draft=0):
         seg_rows = []
         if "through" in step:
             knots = [cur] + [int(k) for k in step["through"]] + [j]
-            fr = frames_chain(keys, knots, n, step.get("weights"), ease, float(step.get("soft", 0.0)), method, matte_cfg, seg_rows)
+            fr = frames_chain(keys, knots, n, step.get("weights"), ease, float(step.get("soft", 0.0)), method, matte_cfg, seg_rows, margin=float(step.get("knot_margin", 0.0)))
         elif method == "rife":
             fr, _ = frames_rife(A, B, n, ease, matte_cfg, seg_rows)
         elif method == "dissolve":
@@ -771,6 +809,8 @@ def render_plan(plan, out, fps, draft=0):
             fr, info = frames_slide(A, B, n, ease, step, matte_cfg, seg_rows); log(f"render: slide {info}")
         elif method == "rise":
             fr, info = frames_rise(A, B, n, ease, step, matte_cfg, seg_rows); log(f"render: rise {info}")
+        elif method == "snap":
+            fr = frames_snap(A, B, n, step, seg_rows)
         elif method == "cut":
             fr = []
         elif method == "rewind":
