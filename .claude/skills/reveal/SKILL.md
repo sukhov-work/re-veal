@@ -60,8 +60,9 @@ Phase 4: Record — memory + DECISIONS + handover + doc-sync
 | **Research** (evaluate an approach/source) | parallel tracks → synthesize → report | Phases 2–3 |
 | **Review** (judge one finished artifact: claim, doc, diff, result) | evidence-check against source + gate → verdict | Phase 2 build |
 | **Audit** (whole-repo) | tracks → parallel finder agents → verification pass → report (`references/audit-mode.md`) | Phase 2 — **READ-ONLY on artifacts; fixes are separate sliced sessions** |
+| **Loop / sequence** (a looped clip or a gif from the owner's stills; a clip from a sequence) | `references/loops.md` FIRST (the playbook: intake, pipeline, his taste as rules, recipes by situation, what failed, measures, routing) → prep → probe → plan → render → skeptic → page → his grades | Phase 1 (the playbook is the research); nothing enters either tool (T68 is the UI flow) |
 
-**Precedence when signals mix:** review > implement > design > research — a finished artifact
+**Precedence when signals mix:** review > implement > loop/sequence > design > research — a finished artifact
 outranks intent; a requested state-change outranks a question. An owner "comprehensive review"
 order ⇒ **Audit**, not Review.
 
