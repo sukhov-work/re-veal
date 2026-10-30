@@ -1,0 +1,38 @@
+{
+ "seq": "talk",
+ "in": "benchmarks/runs/2026-10-30/halloween/in/talk",
+ "title": "round 3: the wand carried as one stick by transitions.py's morph with eight hand anchors (the wand's two ends and its knob, his hat, her hat tip, the cane, two lamp points; \u00b13\u201310 px), six frames up and eight back, no breath, no generated pixels",
+ "gag": "The witch lectures; the wand swings up into his face as one stick; he takes it on the chin and the loop settles the poke back.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 12
+  },
+  {
+   "to": 1,
+   "n": 6,
+   "method": "morph",
+   "anchors": "423,777,455,730;652,687,552,505;636,691,546,520;655,272,678,290;465,410,410,399;863,1056,861,1054;415,153,418,150;527,153,530,150",
+   "falloff": 0.25
+  },
+  {
+   "key": 1,
+   "hold": 8
+  },
+  {
+   "to": 0,
+   "n": 8,
+   "method": "morph",
+   "anchors": "455,730,423,777;552,505,652,687;546,520,636,691;678,290,655,272;410,399,465,410;861,1054,863,1056;418,150,415,153;530,150,527,153",
+   "falloff": 0.25,
+   "warp": 0.85,
+   "color": 0.5
+  }
+ ],
+ "effects": [],
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

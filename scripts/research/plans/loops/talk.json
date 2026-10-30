@@ -1,7 +1,8 @@
 {
  "seq": "talk",
  "in": "benchmarks/runs/2026-10-30/halloween/in/talk",
- "gag": "The witch lectures; the wand flicks up into his face in three in-betweens; he takes it on the chin and the loop settles the poke back.",
+ "title": "round 3: more in-betweens (6 up, 8 back), a sine ease, no breath",
+ "gag": "The witch lectures; the wand swings up into his face; he takes it on the chin and the loop settles the poke back.",
  "timeline": [
   {
    "key": 0,
@@ -9,9 +10,9 @@
   },
   {
    "to": 1,
-   "n": 3,
+   "n": 6,
    "method": "rife",
-   "ease": "accel"
+   "ease": "sine"
   },
   {
    "key": 1,
@@ -19,19 +20,12 @@
   },
   {
    "to": 0,
-   "n": 5,
+   "n": 8,
    "method": "rife",
-   "ease": "smooth"
+   "ease": "sine"
   }
  ],
- "effects": [
-  {
-   "kind": "breath",
-   "z": 0.02,
-   "cx": 0.5,
-   "cy": 0.35
-  }
- ],
+ "effects": [],
  "matte": {
   "thr": 14,
   "grow": 0.015,

@@ -18,7 +18,8 @@ Subcommands
       OUT/k<i>.png and OUT/prep.json (the method, inliers, residual, the map and the crop per frame).
   render PLAN.json --out OUT [--fps 25] [--draft 0]
       Renders the loop the plan describes (see plans/loops/SCHEMA.md): keyframes by index into the prep
-      folder, holds per visit, segments between keyframes rendered by `morph` (transitions.py, the DIS flow
+      folder, holds per visit, a `through` chain of stills under one global speed profile (the inner stills
+      passed, never held; `weights` per segment, `soft` slows near a still), segments rendered by `morph` (transitions.py, the DIS flow
       and optional anchors), `rife` (in-betweens inside the change matte; generated content, labelled),
       `dissolve` (a plain blend inside the change matte; for content that exists in one frame only),
       `teleport` (a region's content squeezed out and another region's squeezed in; `mode: fade` fades the
@@ -265,8 +266,15 @@ EASES = {
     "smooth": lambda t: t * t * (3 - 2 * t),
     "snap": lambda t: (lambda u: u * u * (3 - 2 * u))(t * t * (3 - 2 * t)),
     "accel": lambda t: t * t,
+    "accel3": lambda t: t * t * t,
     "decel": lambda t: 1 - (1 - t) ** 2,
+    "sine": lambda t: 0.5 - 0.5 * math.cos(math.pi * t),
 }
+
+
+def knot_soft(t, a):
+    """Slow the motion near a knot without stopping: t' = t - a sin(2πt) / 2π; the speed at the knot is 1 - a."""
+    return t - a * math.sin(2 * math.pi * t) / (2 * math.pi)
 
 
 def change_matte(A, B, thr=14.0, grow=0.015, feather=0.01, min_share=0.0005):
@@ -328,6 +336,38 @@ def frames_rife(A, B, n, ease, matte_cfg, out_rows):
         out_rows.append({"t": round(t, 4), "generated": "rife", "matte_share": round(float((m > 0.5).mean()), 4),
                          "dexp": R.dexp_share(X, A, B, m), "seconds": round(sec, 2)})
     return out, m
+
+
+def frames_chain(keys, knots, n, weights, ease, soft, method, matte_cfg, out_rows):
+    """n frames along the chain of stills `knots` (the current still first) under ONE global speed profile:
+    u = ease(j / (n + 1)) picks the segment by its weight and the local t; `soft` slows the motion near each
+    inner still without stopping (speed 1 - soft there). The inner stills are passed through, never held."""
+    K = len(knots) - 1
+    w = np.array(weights if weights else [1.0] * K, np.float64); w = w / w.sum()
+    b = np.concatenate([[0.0], np.cumsum(w)])
+    mattes = {}
+    import rife_probe as R
+    out = []
+    for j in range(1, n + 1):
+        u = EASES[ease](j / (n + 1))
+        i = min(K - 1, int(np.searchsorted(b, u, side="right") - 1))
+        t = (u - b[i]) / (b[i + 1] - b[i])
+        if soft:
+            t = knot_soft(t, soft)
+        A, B = keys[knots[i]], keys[knots[i + 1]]
+        if i not in mattes:
+            mattes[i] = change_matte(A, B, **matte_cfg)
+        m = mattes[i]; m3 = m[..., None]
+        if method == "dissolve":
+            f = blend(A, B, t).round().astype(np.uint8); row = {"generated": "none (blend)"}
+        else:
+            t0 = time.perf_counter(); X = _RIFE.at(A, B, t); sec = time.perf_counter() - t0
+            f = (m3 * X + (1 - m3) * blend(A, B, t)).round().astype(np.uint8)
+            row = {"generated": "rife", "dexp": R.dexp_share(X, A, B, m), "seconds": round(sec, 2), "matte_share": round(float((m > 0.5).mean()), 4)}
+        out.append(f)
+        row.update({"u": round(float(u), 4), "segment": [int(knots[i]), int(knots[i + 1])], "t": round(float(t), 4)})
+        out_rows.append(row)
+    return out
 
 
 def frames_dissolve(A, B, n, ease, out_rows):
@@ -449,6 +489,233 @@ def frames_teleport(A, B, n, ease, step, matte_cfg, out_rows):
     return out, m
 
 
+def grabcut_matte(img, box_px, iters=5, proxy=None, feather=0.004):
+    """A person inside a box by GrabCut (rect init on a proxy, the GMM colour model separates olive from
+    beige where a Lab threshold cannot), upsampled and feathered. Soft matte in [0, 1]."""
+    H, W = img.shape[:2]
+    x0, y0, x1, y1 = box_px
+    if proxy is None:
+        proxy = min(1.0, 1000.0 / max(H, W))            # GrabCut on a long side of about 1000 px
+    small = cv2.resize(img, None, fx=proxy, fy=proxy, interpolation=cv2.INTER_AREA) if proxy < 1 else img.copy()
+    rect = (int(x0 * proxy), int(y0 * proxy), int((x1 - x0) * proxy), int((y1 - y0) * proxy))
+    mask = np.zeros(small.shape[:2], np.uint8)
+    bg = np.zeros((1, 65), np.float64); fg = np.zeros((1, 65), np.float64)
+    cv2.grabCut(small, mask, rect, bg, fg, iters, cv2.GC_INIT_WITH_RECT)
+    m = ((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD)).astype(np.uint8)
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    n, lab, st, _ = cv2.connectedComponentsWithStats(m, 8)
+    if n > 1:
+        areas = st[1:, cv2.CC_STAT_AREA]; big = areas.max(); keep = np.zeros_like(m)
+        for k in range(1, n):
+            if st[k, cv2.CC_STAT_AREA] >= 0.02 * big:
+                keep[lab == k] = 1
+        m = keep
+    m = cv2.resize(m.astype(np.float32), (W, H), interpolation=cv2.INTER_LINEAR)
+    soft = cv2.GaussianBlur(m, (0, 0), max(1.0, feather * W))
+    return np.clip(np.maximum(soft, m * (soft > 0.5)), 0, 1)
+
+
+def _matte_for(img, other, box_px, spec):
+    """A person matte by the plan's choice: {"kind": "grabcut"} or {"kind": "box", "thr": 24}; `exclude` lists
+    boxes (canvas fractions) zeroed afterwards (a neighbour inside the box)."""
+    H, W = img.shape[:2]
+    if spec.get("kind", "box") == "grabcut":
+        m = grabcut_matte(img, box_px, iters=int(spec.get("iters", 5)))
+        if (m > 0.5).mean() < 0.002:
+            log("matte: GrabCut found nothing in the box; the box matte (thr 24) used instead")
+            m = box_matte(img, other, box_px, thr=24.0)
+    else:
+        m = box_matte(img, other, box_px, thr=float(spec.get("thr", 30.0)), open_frac=float(spec.get("open", 0.02)))
+    for ex in spec.get("exclude", []):
+        x0, y0, x1, y1 = _box_px(ex, W, H)
+        m[y0:y1, x0:x1] = 0
+    if spec.get("exclude"):
+        m = cv2.GaussianBlur(m, (0, 0), max(1.0, 0.004 * W))
+    er = float(spec.get("erode", 0.0))                                # shrink the matte by this fraction of the width (a halo of the old background)
+    if er > 0:
+        k = max(3, int(round(er * W))) | 1
+        core = cv2.erode((m > 0.5).astype(np.uint8), np.ones((k, k), np.uint8)).astype(np.float32)
+        soft = cv2.GaussianBlur(core, (0, 0), max(1.0, 0.004 * W))
+        m = np.clip(np.maximum(soft, core * (soft > 0.5)), 0, 1)
+    return m
+
+
+def _centroid(m):
+    ys, xs = np.nonzero(m > 0.5)
+    return np.array([xs.mean(), ys.mean()], np.float32)
+
+
+def _shift(img, d):
+    M = np.float32([[1, 0, d[0]], [0, 1, d[1]]])
+    return cv2.warpAffine(img, M, (img.shape[1], img.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+
+
+def _hblur(img, length):
+    """A horizontal box blur of the given length in px (a motion blur along a lateral move)."""
+    k = int(round(length))
+    if k < 2:
+        return img
+    return cv2.blur(img, (k, 1))
+
+
+def fill_region(img, region, donor=None, donor_valid=None):
+    """Fill `region` (uint8 0/1) of img: the donor's pixels where donor_valid says the donor shows background
+    there, else a horizontal extension from the nearest filled pixel on the left of the row (the right when
+    the row has none). Plain walls and floors extend well; a person's pixels never do."""
+    out = img.copy()
+    reg = region > 0
+    if donor is not None:
+        ok = reg & (donor_valid > 0 if donor_valid is not None else True)
+        out[ok] = donor[ok]; reg = reg & ~ok
+    H, W = img.shape[:2]
+    for y in np.nonzero(reg.any(1))[0]:
+        row = reg[y]; xs = np.nonzero(row)[0]
+        # runs of pixels to fill
+        start = xs[0]; prev = xs[0]
+        runs = []
+        for x in xs[1:]:
+            if x != prev + 1:
+                runs.append((start, prev)); start = x
+            prev = x
+        runs.append((start, prev))
+        for a, b in runs:
+            if a > 0:
+                src = out[y, a - 1].astype(np.float32); src2 = out[y, b + 1].astype(np.float32) if b + 1 < W else src
+                w = np.linspace(0, 1, b - a + 1, dtype=np.float32)[:, None]
+                out[y, a:b + 1] = (src * (1 - w) + src2 * w).round().astype(np.uint8)
+            elif b + 1 < W:
+                out[y, a:b + 1] = out[y, b + 1]
+    return out
+
+
+def fill_vertical(img, region, floor_y=None, band=(8, 48)):
+    """Fill `region` (uint8 0/1) column by column with the wall from above it and, below the row floor_y (a
+    fraction of the height), the floor from below it: per column, the median of a band of rows above the
+    region's top row (and below its bottom row), so a hat or a shadow at the region's edge does not streak.
+    Donor-free; for a person standing against a plain wall and floor. The result is blurred by 2 px."""
+    out = img.copy(); H, W = img.shape[:2]
+    reg = region > 0
+    rows = np.nonzero(reg.any(1))[0]
+    if len(rows) == 0:
+        return out
+    y_top, y_bot = int(rows[0]), int(rows[-1])
+    split = H if floor_y is None else int(floor_y * H)
+    a0, a1 = max(0, y_top - band[1]), max(1, y_top - band[0])
+    b0, b1 = min(H - 1, y_bot + band[0]), min(H, y_bot + band[1])
+    top = np.median(img[a0:a1].astype(np.float32), axis=0) if a1 > a0 else img[y_top].astype(np.float32)
+    bot = np.median(img[b0:b1].astype(np.float32), axis=0) if b1 > b0 else img[y_bot].astype(np.float32)
+    fill = np.empty_like(out)
+    fill[:split] = top[None].round().astype(np.uint8)
+    fill[split:] = bot[None].round().astype(np.uint8)
+    fill = cv2.GaussianBlur(fill, (0, 0), 2)
+    out[reg] = fill[reg]
+    return out
+
+
+def frames_slide(A, B, n, ease, step, matte_cfg, out_rows):
+    """One person slides laterally from her place in A to her place in B: her cutout (A's, crossfading to B's
+    in flight, with a motion blur along the move) travels along the straight path between the two mattes'
+    centroids inside the window [w0, w1] of the segment; underneath, the base morphs by RIFE between A' and B'
+    (the stills with her removed: A' takes B's pixels at her A spot, B' is inpainted at her B spot, both
+    labelled), so the remaining people move too."""
+    H, W = A.shape[:2]
+    ba = _box_px(step["box_a"], W, H); bb = _box_px(step["box_b"], W, H)
+    mA = _matte_for(A, B, ba, step.get("matte_a", {"kind": "box", "thr": 24}))
+    mB = _matte_for(B, A, bb, step.get("matte_b", {"kind": "grabcut"}))
+    g = max(3, int(0.012 * W)) | 1
+    hA = cv2.dilate((mA > 0.5).astype(np.uint8), np.ones((g, g), np.uint8))
+    hB = cv2.dilate((mB > 0.5).astype(np.uint8), np.ones((g, g), np.uint8))
+    A2 = fill_region(A, hA, donor=B, donor_valid=(1 - hB))                 # her A spot: B's pixels (the wall)
+    if "donor_box_b" in step:                                               # at her B spot the donor A shows someone else: exclude him
+        db = _box_px(step["donor_box_b"], W, H); mD = grabcut_matte(A, db)
+        valid = 1 - cv2.dilate((mD > 0.5).astype(np.uint8), np.ones((g, g), np.uint8))
+    else:
+        valid = np.ones((H, W), np.uint8)
+    if step.get("fill", "vertical") == "vertical":
+        B2 = fill_vertical(B, hB, step.get("floor_y"))                      # her B spot: the wall from above, the floor from below
+    else:
+        B2 = fill_region(B, hB, donor=A, donor_valid=valid * (1 - hA))     # her B spot: A's background, else the wall extended
+    m_rest = change_matte(A2, B2, **matte_cfg); m3 = m_rest[..., None]
+    cA, cB = _centroid(mA), _centroid(mB)
+    w0, w1 = step.get("window", [0.2, 0.8])
+    cutA = A.astype(np.float32) * mA[..., None]; cutB = B.astype(np.float32) * mB[..., None]
+    import rife_probe as R
+    out = []; prev_p = None
+    for i in range(n):
+        t = EASES[ease]((i + 1) / (n + 1))
+        X = _RIFE.at(A2, B2, t)
+        base = m3 * X + (1 - m3) * blend(A2, B2, t)
+        q = min(1.0, max(0.0, (t - w0) / (w1 - w0)))
+        e = EASES[step.get("slide_ease", "sine")](q)
+        p = cA + e * (cB - cA)
+        speed = 0.0 if prev_p is None else float(np.hypot(*(p - prev_p)))
+        prev_p = p
+        # the two cutouts, each moved so its centroid sits at p; a crossfade between them over the window
+        layA = _shift(cutA, p - cA); alA = _shift(mA, p - cA)
+        layB = _shift(cutB, p - cB); alB = _shift(mB, p - cB)
+        f = e
+        lay = (1 - f) * layA + f * layB; al = (1 - f) * alA + f * alB
+        if step.get("blur", True) and speed > 2:
+            bl_k = speed * float(step.get("blur_k", 0.5))
+            lay = _hblur(lay, bl_k); al = _hblur(al, bl_k)
+        if i == n - 1:                                                      # the last in-between: B's own pixels cover the fill, with a soft edge
+            cover = cv2.GaussianBlur(hB.astype(np.float32), (0, 0), max(1.0, 0.004 * W))
+            lay = np.where((cover > al)[..., None], B.astype(np.float32), lay) if f >= 0.999 else lay
+            al = np.maximum(al, cover * (f >= 0.999))
+        al3 = np.clip(al, 0, 1)[..., None]
+        frame = base * (1 - al3) + lay * (al3 / np.maximum(al3, 1e-6)) * al3
+        out.append(np.clip(frame, 0, 255).round().astype(np.uint8))
+        out_rows.append({"t": round(t, 4), "generated": "rife (the base) + an inpaint at her destination", "slide": round(e, 3), "speed_px": round(speed, 1),
+                         "dexp_rest": R.dexp_share(X, A2, B2, m_rest)})
+    return out, {"cA": cA.tolist(), "cB": cB.tolist(), "mA_share": round(float((mA > 0.5).mean()), 4), "mB_share": round(float((mB > 0.5).mean()), 4)}
+
+
+def frames_rise(A, B, n, ease, step, matte_cfg, out_rows):
+    """A person present only in B (the ghoul) comes up from behind another person (the man): B's cutout of the
+    ghoul travels from its B position plus `start_offset` to its B position inside the window, drawn on the
+    base (RIFE between A and B', B with the ghoul replaced by A's pixels) and then occluded by the man's own
+    cutout from the base. `direction: down` reverses the move (the sink at the end)."""
+    H, W = A.shape[:2]
+    gb = _box_px(step["ghoul_box"], W, H); mb = _box_px(step["man_box"], W, H)
+    src = B if step.get("direction", "up") == "up" else A         # the still that holds the ghoul
+    other = A if src is B else B
+    mG = _matte_for(src, other, gb, step.get("matte_ghoul", {"kind": "grabcut"}))
+    mM = _matte_for(src, other, mb, step.get("matte_man", {"kind": "grabcut"}))
+    g = max(3, int(0.012 * W)) | 1
+    hG = cv2.dilate((mG > 0.5).astype(np.uint8), np.ones((g, g), np.uint8))
+    if "man_box_other" in step:                                        # the other still shows the man where the ghoul stands: exclude him
+        ob = _box_px(step["man_box_other"], W, H); mO = grabcut_matte(other, ob)
+        valid = 1 - cv2.dilate((mO > 0.5).astype(np.uint8), np.ones((g, g), np.uint8))
+    else:
+        valid = np.ones((H, W), np.uint8)
+    if step.get("fill", "vertical") == "vertical":
+        src2 = fill_vertical(src, hG, step.get("floor_y"))              # the ghoul's spot: the wall from above
+    else:
+        src2 = fill_region(src, hG, donor=other, donor_valid=valid)    # the ghoul's spot: the other still's background, else the wall extended
+    A2, B2 = (A, src2) if src is B else (src2, B)
+    m_rest = change_matte(A2, B2, **matte_cfg); m3 = m_rest[..., None]
+    off = np.array(step.get("start_offset", [0, 0.1]), np.float32) * np.array([W, H], np.float32)
+    w0, w1 = step.get("window", [0.35, 1.0])
+    cut = src.astype(np.float32) * mG[..., None]
+    import rife_probe as R
+    out = []
+    for i in range(n):
+        t = EASES[ease]((i + 1) / (n + 1))
+        X = _RIFE.at(A2, B2, t)
+        base = m3 * X + (1 - m3) * blend(A2, B2, t)
+        q = min(1.0, max(0.0, (t - w0) / (w1 - w0)))
+        e = EASES[step.get("rise_ease", "smooth")](q)
+        vis = e if src is B else 1 - e                                   # how far the ghoul has risen
+        d = off * (1 - vis)
+        lay = _shift(cut, d); al = _shift(mG, d)[..., None]
+        frame = base * (1 - al) + lay
+        man = mM[..., None]                                              # the man in front, from the base
+        frame = frame * (1 - man) + base * man
+        out.append(np.clip(frame, 0, 255).round().astype(np.uint8))
+        out_rows.append({"t": round(t, 4), "generated": "rife (the base)", "rise": round(vis, 3), "dexp_rest": R.dexp_share(X, A2, B2, m_rest)})
+    return out, {"mG_share": round(float((mG > 0.5).mean()), 4), "mM_share": round(float((mM > 0.5).mean()), 4)}
+
+
 def apply_breath(frames, eff):
     """A push-in about (cx, cy) (canvas fractions) by 1 + z sin²(πu) over the loop; frame 0 untouched."""
     n = len(frames); H, W = frames[0].shape[:2]
@@ -489,7 +756,10 @@ def render_plan(plan, out, fps, draft=0):
         j = int(step["to"]); n = int(step.get("n", 0)); method = step.get("method", "rife"); ease = step.get("ease", "smooth")
         A, B = keys[cur], keys[j]
         seg_rows = []
-        if method == "rife":
+        if "through" in step:
+            knots = [cur] + [int(k) for k in step["through"]] + [j]
+            fr = frames_chain(keys, knots, n, step.get("weights"), ease, float(step.get("soft", 0.0)), method, matte_cfg, seg_rows)
+        elif method == "rife":
             fr, _ = frames_rife(A, B, n, ease, matte_cfg, seg_rows)
         elif method == "dissolve":
             fr = frames_dissolve(A, B, n, ease, seg_rows)
@@ -497,6 +767,10 @@ def render_plan(plan, out, fps, draft=0):
             fr = frames_morph(A, B, n, ease, fps, step, seg_rows)
         elif method == "teleport":
             fr, _ = frames_teleport(A, B, n, ease, step, matte_cfg, seg_rows)
+        elif method == "slide":
+            fr, info = frames_slide(A, B, n, ease, step, matte_cfg, seg_rows); log(f"render: slide {info}")
+        elif method == "rise":
+            fr, info = frames_rise(A, B, n, ease, step, matte_cfg, seg_rows); log(f"render: rise {info}")
         elif method == "cut":
             fr = []
         elif method == "rewind":

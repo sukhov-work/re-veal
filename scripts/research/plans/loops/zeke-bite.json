@@ -1,7 +1,8 @@
 {
  "seq": "zeke-bite",
  "in": "benchmarks/runs/2026-10-30/halloween/in/zeke-bite",
- "gag": "The vampire lunges for the neck; the victim whips round (the real motion-blur still, three in-betweens each way so the turn flashes by) and settles back.",
+ "title": "round 3b: three in-betweens each way (four doubled the ghost) with a sine ease",
+ "gag": "The vampire lunges for the neck; the victim whips round (the real motion-blur still) and settles back.",
  "timeline": [
   {
    "key": 0,
@@ -11,17 +12,17 @@
    "to": 1,
    "n": 3,
    "method": "rife",
-   "ease": "accel"
+   "ease": "sine"
   },
   {
    "key": 1,
-   "hold": 7
+   "hold": 6
   },
   {
    "to": 0,
    "n": 3,
    "method": "rife",
-   "ease": "smooth"
+   "ease": "sine"
   }
  ],
  "effects": [

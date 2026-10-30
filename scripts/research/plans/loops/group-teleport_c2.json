@@ -1,8 +1,8 @@
 {
  "seq": "group-teleport",
  "in": "benchmarks/runs/2026-10-30/halloween/in/group-teleport",
- "title": "director A's version: she squeezes out on the right, a 3-frame beat with her nowhere, and squeezes in on the left (the left box stops at x 0.25, short of the leopard-mask man); everyone else by RIFE; the boxes' content by the change matte",
- "gag": "The woman in green teleports from the right end of the group to the left end: she squeezes into a bright line, a beat with her nowhere, the line opens on the left into her; the loop beams her back.",
+ "title": "round 3b: the slide with her mattes eroded by 0.4 % of the width (the halo at the landing) and the flight blur at 0.45 of her speed",
+ "gag": "The woman in green zips from the right end of the group to the left end while everyone shuffles to make room; then back.",
  "timeline": [
   {
    "key": 0,
@@ -10,59 +10,96 @@
   },
   {
    "to": 1,
-   "n": 12,
-   "method": "teleport",
+   "n": 16,
+   "method": "slide",
    "ease": "linear",
-   "out_box": [
-    0.795,
-    0.13,
-    0.945,
-    0.84
+   "box_a": [
+    0.79,
+    0.124,
+    0.953,
+    0.852
    ],
-   "in_box": [
-    0.135,
-    0.14,
+   "box_b": [
+    0.129,
+    0.139,
+    0.297,
+    0.824
+   ],
+   "matte_a": {
+    "kind": "box",
+    "thr": 24,
+    "erode": 0.004
+   },
+   "matte_b": {
+    "kind": "grabcut",
+    "exclude": [
+     [
+      0.239,
+      0.139,
+      0.31,
+      0.74
+     ]
+    ],
+    "erode": 0.004
+   },
+   "window": [
     0.25,
-    0.8
+    0.75
    ],
-   "span": 0.45,
-   "glow": 0.6,
-   "box_mode": "change"
+   "slide_ease": "sine",
+   "floor_y": 0.76,
+   "blur": true,
+   "blur_k": 0.45
   },
   {
    "key": 1,
-   "hold": 18
+   "hold": 12
   },
   {
    "to": 0,
-   "n": 12,
-   "method": "teleport",
+   "n": 16,
+   "method": "slide",
    "ease": "linear",
-   "out_box": [
-    0.135,
-    0.14,
+   "box_a": [
+    0.129,
+    0.139,
+    0.297,
+    0.824
+   ],
+   "box_b": [
+    0.79,
+    0.124,
+    0.953,
+    0.852
+   ],
+   "matte_a": {
+    "kind": "grabcut",
+    "exclude": [
+     [
+      0.239,
+      0.139,
+      0.31,
+      0.74
+     ]
+    ],
+    "erode": 0.004
+   },
+   "matte_b": {
+    "kind": "box",
+    "thr": 24,
+    "erode": 0.004
+   },
+   "window": [
     0.25,
-    0.8
+    0.75
    ],
-   "in_box": [
-    0.795,
-    0.13,
-    0.945,
-    0.84
-   ],
-   "span": 0.45,
-   "glow": 0.6,
-   "box_mode": "change"
+   "slide_ease": "sine",
+   "floor_y": 0.76,
+   "blur": true,
+   "blur_k": 0.45
   }
  ],
- "effects": [
-  {
-   "kind": "breath",
-   "z": 0.015,
-   "cx": 0.5,
-   "cy": 0.45
-  }
- ],
+ "effects": [],
  "matte": {
   "thr": 14,
   "grow": 0.015,
