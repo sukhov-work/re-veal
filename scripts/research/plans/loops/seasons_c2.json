@@ -1,0 +1,67 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "zipper: 14 bands at 62\u00b0, neighbours enter from opposite sides, the cascade runs from the middle band outward",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Diagonal cards slide the next season into place; every border lands on the registered pixels, so the city continues across each cut.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 30
+  },
+  {
+   "to": 1,
+   "method": "slices",
+   "angle": 62,
+   "bands": 14,
+   "slide": "across",
+   "order": "centre",
+   "dir": 1,
+   "dur": 14,
+   "stagger": 2,
+   "ease": "smooth",
+   "samples": 6,
+   "shutter": 0.8,
+   "alternate": true
+  },
+  {
+   "key": 1,
+   "hold": 30
+  },
+  {
+   "to": 2,
+   "method": "slices",
+   "angle": 62,
+   "bands": 14,
+   "slide": "across",
+   "order": "centre",
+   "dir": -1,
+   "dur": 14,
+   "stagger": 2,
+   "ease": "smooth",
+   "samples": 6,
+   "shutter": 0.8,
+   "alternate": true
+  },
+  {
+   "key": 2,
+   "hold": 30
+  },
+  {
+   "to": 0,
+   "method": "slices",
+   "angle": 62,
+   "bands": 14,
+   "slide": "across",
+   "order": "centre",
+   "dir": 1,
+   "dur": 14,
+   "stagger": 2,
+   "ease": "smooth",
+   "samples": 6,
+   "shutter": 0.8,
+   "alternate": true
+  }
+ ],
+ "crf": 14,
+ "gif_long": 540
+}

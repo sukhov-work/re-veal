@@ -1,0 +1,34 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "wave: no holds; 12 bands at 62\u00b0 cycle summer \u2192 early autumn \u2192 late autumn \u2192 summer every 36 frames with a 3-frame stagger, so two fronts share the frame and three seasons show at once",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Diagonal cards slide the next season into place; every border lands on the registered pixels, so the city continues across each cut.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 1
+  },
+  {
+   "to": 0,
+   "method": "slices",
+   "angle": 62,
+   "bands": 12,
+   "slide": "across",
+   "order": "up",
+   "dir": 1,
+   "dur": 12,
+   "stagger": 3,
+   "ease": "smooth",
+   "samples": 6,
+   "shutter": 0.8,
+   "through": [
+    1,
+    2
+   ],
+   "period": 36,
+   "flip_each": false
+  }
+ ],
+ "crf": 14,
+ "gif_long": 540
+}

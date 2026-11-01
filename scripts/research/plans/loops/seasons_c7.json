@@ -1,0 +1,45 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "the classic loop: RIFE in-betweens (24 per leg) between the registered stills, 1.2 s holds; the probe showed the DIS morph tearing the sky, so RIFE carries the change",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Diagonal cards slide the next season into place; every border lands on the registered pixels, so the city continues across each cut.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 30
+  },
+  {
+   "to": 1,
+   "n": 24,
+   "method": "rife",
+   "ease": "smooth"
+  },
+  {
+   "key": 1,
+   "hold": 30
+  },
+  {
+   "to": 2,
+   "n": 24,
+   "method": "rife",
+   "ease": "smooth"
+  },
+  {
+   "key": 2,
+   "hold": 30
+  },
+  {
+   "to": 0,
+   "n": 24,
+   "method": "rife",
+   "ease": "smooth"
+  }
+ ],
+ "crf": 14,
+ "gif_long": 540,
+ "matte": {
+  "thr": 14,
+  "grow": 0.015,
+  "feather": 0.01
+ }
+}

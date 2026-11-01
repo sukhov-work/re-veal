@@ -1,0 +1,73 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "streak: 10 bands at 62\u00b0, the whole band's content rolls along the band (0.4 of the diagonal, over the mirrored canvas) and locks; neighbours roll opposite ways; a 3-frame ramp at the start of each band",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Diagonal cards slide the next season into place; every border lands on the registered pixels, so the city continues across each cut.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 30
+  },
+  {
+   "to": 1,
+   "method": "slices",
+   "angle": 62,
+   "bands": 10,
+   "slide": "along",
+   "order": "up",
+   "dir": 1,
+   "dur": 16,
+   "stagger": 1,
+   "ease": "decel",
+   "samples": 8,
+   "shutter": 1.0,
+   "alternate": true,
+   "travel": 0.4,
+   "ramp": 3
+  },
+  {
+   "key": 1,
+   "hold": 30
+  },
+  {
+   "to": 2,
+   "method": "slices",
+   "angle": 62,
+   "bands": 10,
+   "slide": "along",
+   "order": "down",
+   "dir": -1,
+   "dur": 16,
+   "stagger": 1,
+   "ease": "decel",
+   "samples": 8,
+   "shutter": 1.0,
+   "alternate": true,
+   "travel": 0.4,
+   "ramp": 3
+  },
+  {
+   "key": 2,
+   "hold": 30
+  },
+  {
+   "to": 0,
+   "method": "slices",
+   "angle": 62,
+   "bands": 10,
+   "slide": "along",
+   "order": "up",
+   "dir": 1,
+   "dur": 16,
+   "stagger": 1,
+   "ease": "decel",
+   "samples": 8,
+   "shutter": 1.0,
+   "alternate": true,
+   "travel": 0.4,
+   "ramp": 3
+  }
+ ],
+ "crf": 14,
+ "gif_long": 540
+}

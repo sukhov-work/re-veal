@@ -1,0 +1,73 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "lattice: two families of lines at 45\u00b0 cut the frame into diamonds; even diamonds slide along one diagonal, odd ones along the other, the start runs down the lattice diagonal",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Diagonal cards slide the next season into place; every border lands on the registered pixels, so the city continues across each cut.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 30
+  },
+  {
+   "to": 1,
+   "method": "slices",
+   "angle": 45,
+   "bands": 8,
+   "slide": "across",
+   "order": "diag",
+   "dir": 1,
+   "dur": 12,
+   "stagger": 1,
+   "ease": "smooth",
+   "samples": 6,
+   "shutter": 0.8,
+   "families": 2,
+   "lattice_axis": "alt",
+   "alternate": true
+  },
+  {
+   "key": 1,
+   "hold": 30
+  },
+  {
+   "to": 2,
+   "method": "slices",
+   "angle": 45,
+   "bands": 8,
+   "slide": "across",
+   "order": "antidiag",
+   "dir": -1,
+   "dur": 12,
+   "stagger": 1,
+   "ease": "smooth",
+   "samples": 6,
+   "shutter": 0.8,
+   "families": 2,
+   "lattice_axis": "alt",
+   "alternate": true
+  },
+  {
+   "key": 2,
+   "hold": 30
+  },
+  {
+   "to": 0,
+   "method": "slices",
+   "angle": 45,
+   "bands": 8,
+   "slide": "across",
+   "order": "diag",
+   "dir": 1,
+   "dur": 12,
+   "stagger": 1,
+   "ease": "smooth",
+   "samples": 6,
+   "shutter": 0.8,
+   "families": 2,
+   "lattice_axis": "alt",
+   "alternate": true
+  }
+ ],
+ "crf": 14,
+ "gif_long": 540
+}

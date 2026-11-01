@@ -45,3 +45,48 @@ Outputs per render: `loop.mp4` (libx264, the plan's `crf`, yuv420p), `loop.gif` 
 edge, a two-pass palette, 40 ms per frame), `sheet.jpg`, `frames.json` (what each frame is), `measure.json`
 (the step series on the decoded mp4, the seam step, faces per frame, the double-exposure share per generated frame,
 the md5s), `plan.json` (the plan as rendered).
+
+## `slices` (2026-11-01, the seasons sequence): diagonal cards that slide into place
+
+`{"to": k, "method": "slices", ...}` cuts the canvas into cells and slides the next still into each cell as a card;
+with `"through": [..]` the cells cycle on through the listed stills (a wave) and `n` is computed from the schedule
+(the plan's `n` is overwritten in `plan.json`). Nothing is generated: a landed cell is the next still's pixels, the
+borders are 1 px soft, the moving content is motion-blurred by temporal sub-samples.
+- Geometry: `angle` (degrees of the band lines from the horizontal; 62 crosses the wire of the seasons view at about
+  88°), `bands` (count across the canvas) or `widths` (relative), `families` 1 (bands) or 2 (a lattice: a second family
+  along the band axis, `width2` px, cells indexed i, j), `mirror` (the bands folded about the centre column: chevrons;
+  each band is a left and a right half-cell with mirrored slide directions).
+- Slide: `slide` `across` (the card enters from the neighbouring side over the cell's width) or `along` (the whole
+  band's content rolls along the band by `travel` × the canvas diagonal over the mirrored canvas (`wrap: true` rolls the canvas round instead; the canvas edge then shows as a hard line inside the band) and locks; `ramp` frames of
+  alpha at the start of each band). `dir` ±1 the entry side; `alternate` flips it on odd cells; `lattice_axis`
+  `alt` | 1 | 2 (which family's normal the lattice cells slide along; `alt` by parity).
+- Schedule: `order` `up` | `down` | `centre` | `edges` | `random` (`seed`) | `diag` | `antidiag` (families 2) gives
+  each cell a rank; a cell starts at rank × `stagger` frames and takes `dur` frames under `ease`; `period` frames
+  between the cell's successive transitions when `through` is given (default: one transition's span, no overlap);
+  `flip_each` (default true) reverses the entry side on every second transition, `reverse_each` the rank order.
+- Blur: `samples` sub-frames (at least; raised to one per 2 px of the frame's displacement, at most `samples_max` 48)
+  over `shutter` of the frame's motion. `shadow` (0–1) and `shadow_px` darken the uncovered side of a card's leading
+  edge (default off).
+
+## `sheets` (2026-11-01, round 2 of the seasons): whole pictures that slide across each other
+
+`{"to": k, "method": "sheets", "n": 90, "sheets": [...]}` with `to` = the current still (the base, the only still held): the
+listed stills slide across the base as sheets, back to front, over `n` frames, and leave; nothing is generated.
+- A sheet: `{"key": k, "side": "+" | "-", "width": 0.8, "carry": 1.0, "lag": 0, "scale": 0.0}`: a band `width` × the
+  canvas extent along the slide normal, bounded by edges at `angle`, home at the canvas centre, entering from its `side`
+  and leaving at the other under `ease` (`lag` frames late); its content moves with it by `carry` (1: the picture slides and
+  is registered with the base only at home; 0: a wipe over the static still; between: a drift behind the edge); `scale`
+  enlarges the content about the centre (a depth cue; it misregisters the sheet by scale × the half-size at the edges).
+- The sheets travel the VISIBLE extent: with a plan-level `crop` (the centre fraction of the canvas that is output) a sheet
+  enters as a sliver under the slow end of the ease and leaves by the step's end. `valid_feather` px softens a picture's own
+  edge inside a carried sheet (default 1).
+- Step keys: `angle` (62), `ease` (`sine`), `feather` px (1.5), `overlap_alpha` (the front sheet's opacity where it covers
+  a back sheet; 0.5 shows both), `shadow` and `shadow_px` (a contact shadow ahead of the front sheet's leading edge onto what lies beneath, faded while the sheet is a sliver; `shadow_from` "all" casts from every sheet's leading edge, which turns the gap between two facing edges into a tube),
+  `parallax` (the content's move scaled by 1 + parallax × (2 depth − 1) from `in/<seq>/depth_k<i>.npy`, the depth model's
+  map saved by the session; near more than far), `shutter` and `samples_max` (motion blur by sub-samples over the frame's
+  edge motion, forward window, one per 2 px).
+- `objects` (on the base): `[{"name": ..., "box": [x0, y0, x1, y1], "lead": 8, "linger": 14, "seasons": [1, 2]}]`, with
+  `object_feather` px: per object a GrabCut matte on the base still from the box, and per season the object Poisson-blended
+  into the base once (`cv2.seamlessClone`); the plate fades in `lead` frames before that season's sheet reaches the object's
+  centre and out `linger` frames after the sheet leaves it. Static plates: no flicker, no per-frame Poisson cost. Boxes and
+  pixel knobs are in prep-canvas px; a draft scales them.

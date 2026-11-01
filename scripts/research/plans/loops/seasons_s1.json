@@ -1,0 +1,43 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "photos: the two pictures slide in whole from opposite corners, each cut only at its leading diagonal edge, early autumn in front and opaque, with a contact shadow ahead of its edge; they cross at the centre, where all three are registered; a picture shows its own edges as it slides on, softened over 24 px (nothing beyond the frame exists, so nothing is mirrored or invented)",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Summer holds; the two other seasons slide in from opposite corners along a 62\u00b0 diagonal, pass each other over summer, and leave; summer remains, so the clip loops. The output is the centre 75 % of the registered canvas (3600 px prep), so a drifting picture never runs out of pixels.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 30
+  },
+  {
+   "to": 0,
+   "method": "sheets",
+   "n": 90,
+   "angle": 62,
+   "ease": "sine",
+   "feather": 1.5,
+   "shadow": 0.25,
+   "shadow_px": 40,
+   "overlap_alpha": 1.0,
+   "shutter": 0.0,
+   "parallax": 0.0,
+   "sheets": [
+    {
+     "key": 2,
+     "side": "-",
+     "carry": 1.0,
+     "width": "photo"
+    },
+    {
+     "key": 1,
+     "side": "+",
+     "carry": 1.0,
+     "width": "photo"
+    }
+   ],
+   "valid_feather": 24
+  }
+ ],
+ "crop": 0.75,
+ "crf": 14,
+ "gif_long": 540
+}

@@ -1,0 +1,42 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "drift with depth: the sheet edges sweep the frame while the pictures inside drift 12 % of the way (inside the crop margin, so no edge or mirror ever shows), nearer things a little more than the skyline (depth parallax 0.06 from the depth model's map); the front sheet half-transparent over the back one (all three seasons around the crossing); no blur",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Summer holds; the two other seasons slide in from opposite corners along a 62\u00b0 diagonal, pass each other over summer, and leave; summer remains, so the clip loops. The output is the centre 75 % of the registered canvas (3600 px prep), so a drifting picture never runs out of pixels.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 30
+  },
+  {
+   "to": 0,
+   "method": "sheets",
+   "n": 90,
+   "angle": 62,
+   "ease": "sine",
+   "feather": 1.5,
+   "shadow": 0.25,
+   "shadow_px": 40,
+   "overlap_alpha": 0.5,
+   "shutter": 0.0,
+   "parallax": 0.06,
+   "sheets": [
+    {
+     "key": 2,
+     "side": "-",
+     "carry": 0.12,
+     "width": 0.8
+    },
+    {
+     "key": 1,
+     "side": "+",
+     "carry": 0.12,
+     "width": 0.8
+    }
+   ]
+  }
+ ],
+ "crop": 0.75,
+ "crf": 14,
+ "gif_long": 540
+}

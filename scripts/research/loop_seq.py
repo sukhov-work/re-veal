@@ -24,7 +24,9 @@ Subcommands
       `dissolve` (a plain blend inside the change matte; for content that exists in one frame only),
       `teleport` (a region's content squeezed out and another region's squeezed in; `mode: fade` fades the
       region's content in place instead, for a ghost that materializes while the rest moves by RIFE), or `rewind` (the
-      frames of an earlier segment played backward, every k-th). Post effects: `breath` (a push-in about a
+      frames of an earlier segment played backward, every k-th), or `slices` (2026-11-01: diagonal cells that slide
+      the next still into place as cards, a lattice or chevrons, a wave through several stills, temporal motion blur;
+      nothing generated). Post effects: `breath` (a push-in about a
       point, sin² over the loop, the endpoints untouched). Writes OUT/loop.mp4, OUT/loop.gif (two-pass
       palette, 40 ms per frame at 25 fps), OUT/sheet.jpg, OUT/frames.json (what each frame is) and
       OUT/measure.json (the step series, the seam step, faces per frame, the double-exposure share per
@@ -754,6 +756,357 @@ def frames_snap(A, B, n, step, out_rows):
     return out
 
 
+# ------------------------------------------------------------------ slices: diagonal cards that slide into place (2026-11-01, the seasons)
+
+def _soft(u, lo, hi):
+    """The weight of the interval [lo, hi) with a 1 px linear edge; adjacent intervals sum to 1."""
+    return np.clip(u - lo + 0.5, 0.0, 1.0) * np.clip(hi - u + 0.5, 0.0, 1.0)
+
+
+def _cell_bbox(m):
+    ys = np.flatnonzero(m.any(1)); xs = np.flatnonzero(m.any(0))
+    return int(xs[0]), int(ys[0]), int(xs[-1]) + 1, int(ys[-1]) + 1
+
+
+def slices_cells(W, H, step):
+    """The cells of the canvas for `slices`: bands between parallel lines at `angle` degrees from the horizontal
+    (family 1, index i; `bands` of them, or relative `widths`), optionally crossed by a second family along the
+    band axis (`families` 2: a lattice, index j), optionally folded about the centre column (`mirror`: a chevron,
+    each band split into a left and a right half-cell with mirrored directions). Returns the coordinate fields
+    u1 (across the bands) and u2 (along them), the unit vectors, and one dict per cell: its edges, its static
+    soft mask on its bounding box, the static factor of the other family, its order index and its sign."""
+    th = math.radians(float(step.get("angle", 62.0)))
+    ys, xs = np.mgrid[0:H, 0:W].astype(np.float32)
+    mirror = bool(step.get("mirror", False))
+    xm = np.abs(xs - (W - 1) / 2.0) if mirror else xs
+    u1 = -xm * math.sin(th) + ys * math.cos(th)
+    u2 = xm * math.cos(th) + ys * math.sin(th)
+    n1 = (-math.sin(th), math.cos(th)); d1 = (math.cos(th), math.sin(th))
+    families = int(step.get("families", 1))
+    nb = int(step.get("bands", 12))
+    lo1, hi1 = float(u1.min()), float(u1.max()) + 1e-3
+    widths = step.get("widths")
+    if widths:
+        wv = np.array(widths, np.float64); wv = wv / wv.sum() * (hi1 - lo1); nb = len(wv)
+    else:
+        wv = np.full(nb, (hi1 - lo1) / nb)
+    e1 = np.concatenate([[lo1], lo1 + np.cumsum(wv)]); e1t = e1.copy(); e1[0] -= 1e4; e1[-1] += 1e4   # e1t: the true edges (the card's interval); e1: membership reaches past the canvas
+    if families == 2:
+        lo2, hi2 = float(u2.min()), float(u2.max()) + 1e-3
+        w2 = float(step.get("width2", 0)) or float(np.mean(wv))
+        nb2 = max(1, int(math.ceil((hi2 - lo2) / w2)))
+        e2 = lo2 + np.arange(nb2 + 1) * w2; e2t = e2.copy(); e2[0] -= 1e4; e2[-1] += 1e4
+    else:
+        nb2, e2, e2t = 1, None, None
+    pattern = step.get("order", "up")
+    rng = np.random.default_rng(int(step.get("seed", 1)))
+    perm = rng.permutation(nb * nb2)
+    alternate = bool(step.get("alternate", False)); base_dir = 1 if int(step.get("dir", 1)) >= 0 else -1
+    lattice_axis = str(step.get("lattice_axis", "alt"))
+    cells = []
+    halves = (("L", xs < (W - 1) / 2.0), ("R", xs >= (W - 1) / 2.0)) if mirror else ((None, None),)
+    for i in range(nb):
+        for j in range(nb2):
+            if pattern == "up": idx = i if families == 1 else i + j
+            elif pattern == "down": idx = (nb - 1 - i) if families == 1 else (nb - 1 - i) + (nb2 - 1 - j)
+            elif pattern == "centre": idx = abs(2 * i - (nb - 1)) // 2
+            elif pattern == "edges": idx = (nb - 1) // 2 - abs(2 * i - (nb - 1)) // 2
+            elif pattern == "random": idx = int(perm[i * nb2 + j])
+            elif pattern == "diag": idx = i + j
+            elif pattern == "antidiag": idx = i + (nb2 - 1 - j)
+            else: sys.exit(f"slices: unknown order {pattern}")
+            par = (i + j) if families == 2 else i
+            sgn = base_dir * (-1 if (alternate and par % 2) else 1)
+            if families == 2:
+                axis = (1 if par % 2 == 0 else 2) if lattice_axis == "alt" else int(lattice_axis)
+            else:
+                axis = 1
+            w1 = _soft(u1, e1[i], e1[i + 1])
+            f2 = _soft(u2, e2[j], e2[j + 1]) if families == 2 else None
+            for hname, hmask in halves:
+                m = w1 if f2 is None else w1 * f2
+                other = None if f2 is None else (f2 if axis == 1 else w1)   # the card's interval runs along its own family; the other family bounds it
+                if hmask is not None:
+                    m = m * hmask; other = hmask.astype(np.float32) if other is None else other * hmask
+                if not m.any():
+                    continue
+                x0, y0, x1, y1 = _cell_bbox(m > 0)
+                hs = 1.0 if hname in (None, "R") else -1.0       # the mirrored half slides the other way in x
+                cells.append({"i": i, "j": j, "half": hname, "bbox": (x0, y0, x1, y1), "mask": m[y0:y1, x0:x1].copy(),
+                              "other": None if other is None else other[y0:y1, x0:x1].copy(),
+                              "e1": (float(e1t[i]), float(e1t[i + 1])), "e2": None if e2t is None else (float(e2t[j]), float(e2t[j + 1])),
+                              "width": float(wv[i]) if axis == 1 else w2, "idx": int(idx), "sign": sgn, "axis": axis,
+                              "vec": (hs * (n1[0] if axis == 1 else d1[0]), (n1[1] if axis == 1 else d1[1]))})
+    ranks = {r: k for k, r in enumerate(sorted(set(c["idx"] for c in cells)))}
+    for c in cells:
+        c["idx"] = ranks[c["idx"]]
+    return u1, u2, n1, d1, cells
+
+
+def frames_slices(keys, knots, step, out_rows):
+    """The canvas cut into diagonal cells; each cell's content slides from the current still to the next as a
+    card that enters its cell (`slide` across: the card comes in from the neighbouring side over the cell's
+    width; `slide` along: the whole band's content rolls along the band axis by `travel` × the canvas diagonal
+    over the mirrored canvas and locks). Cells start in `order` with `stagger` frames between ranks, each over `dur`
+    frames under `ease`; with `through` the cells cycle on through the stills every `period` frames (a wave).
+    The moving content is motion-blurred by `samples` sub-frames over `shutter` of the frame's own motion (forward, so the
+    last in-flight frame is blurred over the few px left); the borders are 1 px soft; a landed cell is the next still's
+    pixels exactly. No generated pixels."""
+    H, W = keys[knots[0]].shape[:2]
+    u1, u2, n1, d1, cells = slices_cells(W, H, step)
+    slide = step.get("slide", "across")
+    dur = int(step.get("dur", 12)); stagger = int(step.get("stagger", 2)); ease = EASES[step.get("ease", "smooth")]
+    K = max(1, int(step.get("samples", 6))); K_MAX = int(step.get("samples_max", 48)); shutter = float(step.get("shutter", 0.8))
+    ramp = int(step.get("ramp", 3)); shadow = float(step.get("shadow", 0.0)); shadow_px = float(step.get("shadow_px", 24))
+    flip_each = bool(step.get("flip_each", True)); reverse_each = bool(step.get("reverse_each", False))
+    T = len(knots) - 1
+    max_idx = max(c["idx"] for c in cells)
+    period = int(step.get("period", max_idx * stagger + dur))
+    diag = math.hypot(W, H); travel = float(step.get("travel", 0.4)) * diag
+    # the schedule: per cell and transition m the start frame; the cell is in flight on (start, start + dur)
+    def start_of(c, m):
+        idx = (max_idx - c["idx"]) if (reverse_each and m % 2) else c["idx"]
+        return m * period + idx * stagger
+    n_total = max(start_of(c, m) + dur for c in cells for m in range(T))
+    # the padded stills (mirrored beyond the canvas; `wrap: true` rolls the canvas round instead, which puts the canvas
+    # edge as a hard line inside a rolling band) for content that comes from beyond the canvas
+    pad = int(math.ceil(travel if slide == "along" else max(c["width"] for c in cells))) + 4
+    border = cv2.BORDER_WRAP if (slide == "along" and step.get("wrap", False)) else cv2.BORDER_REFLECT_101
+    if border == cv2.BORDER_REFLECT_101:
+        pad = min(pad, min(H, W) - 2)
+    padded = {k: cv2.copyMakeBorder(keys[k].astype(np.float32), pad, pad, pad, pad, border) for k in set(knots)}
+    keysf = {k: keys[k].astype(np.float32) for k in set(knots)}
+    out = []
+    for f in range(1, n_total):
+        frame = np.zeros((H, W, 3), np.float32)
+        active = 0; disp_max = 0.0
+        for c in cells:
+            x0, y0, x1, y1 = c["bbox"]; m = c["mask"]
+            done = sum(1 for mm in range(T) if f >= start_of(c, mm) + dur)
+            cur = knots[done]
+            frame[y0:y1, x0:x1] += m[..., None] * keysf[cur][y0:y1, x0:x1]
+            if done >= T:
+                continue
+            st = start_of(c, done)
+            if not (st < f < st + dur):
+                continue
+            active += 1
+            nxt = knots[done + 1]
+            sgn = c["sign"] * (-1 if (flip_each and done % 2) else 1)
+            s0 = sgn * (travel if slide == "along" else c["width"])
+            p_now, p_next = ease((f - st) / dur), ease(min(1.0, (f + 1 - st) / dur))
+            s_now, s_next = s0 * (1 - p_now), s0 * (1 - p_next)
+            disp_max = max(disp_max, abs(s_next - s_now))
+            vx, vy = c["vec"]
+            cx = (x0 + x1 - 1) / 2.0 + pad; cy = (y0 + y1 - 1) / 2.0 + pad
+            bw, bh = x1 - x0, y1 - y0
+            u1c = u1[y0:y1, x0:x1] if c["axis"] == 1 else u2[y0:y1, x0:x1]
+            lo, hi = c["e1"] if c["axis"] == 1 else c["e2"]
+            curc = keysf[cur][y0:y1, x0:x1]
+            acc = np.zeros((bh, bw, 3), np.float32)
+            alpha = min(1.0, (f - st) / ramp) if (slide == "along" and ramp > 0) else 1.0
+            Kf = int(min(K_MAX, max(K, math.ceil(shutter * abs(s_next - s_now) / 2.0))))   # a sample every <= 2 px, or a thin line becomes a comb
+            for k in range(Kf):
+                tau = shutter * (k + 0.5) / Kf                      # forward: the window [f, f + shutter] of this frame's motion
+                s = s_now + tau * (s_next - s_now)
+                patch = cv2.getRectSubPix(padded[nxt], (bw, bh), (cx - s * vx, cy - s * vy))
+                if slide == "along":
+                    mk = m * alpha
+                else:
+                    mk = _soft(u1c, lo + max(s, 0.0), hi + min(s, 0.0))
+                    if c["other"] is not None:
+                        mk = mk * c["other"]
+                acc += mk[..., None] * (patch - curc)
+            frame[y0:y1, x0:x1] += acc / Kf
+            if shadow > 0 and slide == "across":
+                edge = lo + s_now if s_now > 0 else hi + s_now
+                dist = (edge - u1c) if s_now > 0 else (u1c - edge)
+                sh = shadow * np.clip(1.0 - dist / shadow_px, 0.0, 1.0) * (dist > 0) * m
+                frame[y0:y1, x0:x1] *= (1.0 - sh)[..., None]
+        out.append(np.clip(frame, 0, 255).round().astype(np.uint8))
+        out_rows.append({"t": round(f / n_total, 4), "generated": "none (slices)", "active": active, "disp_px": round(disp_max, 1)})
+    info = {"cells": len(cells), "frames": len(out), "period": period, "n_total": n_total, "slide": slide,
+            "pad": pad, "width_px": round(float(np.mean([c["width"] for c in cells])), 1)}
+    return out, info
+
+
+# ------------------------------------------------------------------ sheets: whole pictures that slide across each other (2026-11-01, round 2)
+
+def object_plates(keys, base_key, objects, feather_px):
+    """Per object (a box read off the base still): a soft matte by GrabCut on the base still (feathered by
+    `feather_px`), and per other season the object Poisson-blended into the base still once (`cv2.seamlessClone`,
+    NORMAL_CLONE): static plates, so a frame costs one blend inside the matte and nothing flickers."""
+    base = keys[base_key]; H, W = base.shape[:2]
+    out = []
+    for ob in objects:
+        box = [int(v) for v in ob["box"]]
+        m = grabcut_matte(base, box, feather=0.0005)
+        hard = (m > 0.5).astype(np.uint8) * 255
+        if hard.sum() == 0:                                   # GrabCut found nothing: the box itself
+            hard[box[1]:box[3], box[0]:box[2]] = 255
+        hard[:2, :] = 0; hard[-2:, :] = 0; hard[:, :2] = 0; hard[:, -2:] = 0    # seamlessClone needs the mask's box inside the image
+        soft = cv2.GaussianBlur((hard / 255.0).astype(np.float32), (0, 0), feather_px)
+        soft = np.clip(np.maximum(soft, (hard > 0) * soft), 0, 1)
+        ys, xs = np.nonzero(hard); x0, x1, y0, y1 = int(xs.min()), int(xs.max()) + 1, int(ys.min()), int(ys.max()) + 1
+        centre = (x0 + (x1 - x0) // 2, y0 + (y1 - y0) // 2)        # OpenCV places the mask's box at centre - size // 2: the identity
+        plates = {}
+        for k in ob.get("seasons", [k for k in keys if k != base_key]):
+            plates[int(k)] = cv2.seamlessClone(keys[int(k)], base, hard, centre, cv2.NORMAL_CLONE)
+        cx, cy = float(xs.mean()), float(ys.mean())
+        out.append({"name": ob.get("name", str(box)), "box": box, "matte": soft, "plates": plates, "centre": (cx, cy),
+                    "share": round(float((hard > 0).mean()), 4), "lead": int(ob.get("lead", 6)), "linger": int(ob.get("linger", 10))})
+    return out
+
+
+def frames_sheets(keys, cur, step, out_rows, src):
+    """Whole pictures as sheets that slide across the base still at once and pass each other. Each sheet is a
+    band (`width` × the canvas extent along the slide normal) bounded by edges at `angle`, home at the canvas
+    centre, entering from its `side` and leaving at the other over the step's `n` frames under `ease`; its content
+    moves with it by `carry` (1: the picture slides and is registered only at home; 0: a wipe over the static still).
+    Sheets are listed back to front; where the front sheet covers a back one it shows at `overlap_alpha`. Depth
+    cues: `shadow` (a contact shadow beyond a sheet's edges onto what lies beneath, `shadow_px` wide), `parallax`
+    (the content's move scaled by 1 + parallax × (2 depth − 1) from the depth model's map, near more than far,
+    zero where the sheet is home), `scale` per sheet (the front a little larger). `objects` on the base: per object
+    a Poisson plate per season, faded in `lead` frames before a sheet reaches the object and out `linger` frames
+    after it leaves. Motion blur by sub-samples over `shutter` of the frame's edge motion (forward window,
+    one sample per 2 px, at most `samples_max`). A sheet's content exists only where its source lies inside its picture
+    (a validity mask, no border fill): a carried picture shows its own edges, and a drift stays clean inside the plan's
+    `crop` margin. The base still is the only one held; nothing is generated."""
+    H, W = keys[cur].shape[:2]
+    W0 = json.loads((Path(src) / "prep.json").read_text())["canvas"][0]
+    sc_draft = W / float(W0)                                     # pixel knobs and boxes are in prep-canvas px; a draft scales them
+    th = math.radians(float(step.get("angle", 62.0)))
+    nx, ny = -math.sin(th), math.cos(th)
+    ys, xs = np.mgrid[0:H, 0:W].astype(np.float32)
+    u = xs * nx + ys * ny
+    cf = float(step.get("_crop", 1.0))                           # the plan's centre crop: the sheets travel the VISIBLE extent
+    cw, ch = int(round(W * cf)) & ~1, int(round(H * cf)) & ~1; cx1, cy1 = (W - cw) // 2, (H - ch) // 2
+    uv = u[cy1:cy1 + ch, cx1:cx1 + cw]
+    u_min, u_max = float(uv.min()), float(uv.max()); E = u_max - u_min; home = 0.5 * (u_min + u_max)
+    E_full = float(u.max()) - float(u.min())                     # a whole picture spans the canvas extent, not the visible one
+    n = int(step["n"]); ease = EASES[step.get("ease", "linear")]
+    vfeather = max(0.5, float(step.get("valid_feather", 1.0)) * sc_draft)   # the softness of a picture's own edge inside a sheet
+    feather = max(0.5, float(step.get("feather", 1.5)) * sc_draft); shadow = float(step.get("shadow", 0.0)); shadow_px = float(step.get("shadow_px", 40)) * sc_draft
+    overlap_alpha = float(step.get("overlap_alpha", 1.0)); shutter = float(step.get("shutter", 0.0)); K_MAX = int(step.get("samples_max", 24))
+    parallax = float(step.get("parallax", 0.0)); shadow_from = str(step.get("shadow_from", "front"))
+    sheets = step["sheets"]
+    keysf = {k: keys[k].astype(np.float32) for k in set([cur] + [int(s["key"]) for s in sheets])}
+    depth = {}
+    if parallax:
+        for s in sheets:
+            k = int(s["key"]); D = np.load(Path(src) / f"depth_k{k}.npy")
+            if D.shape != (H, W):
+                D = cv2.resize(D, (W, H), interpolation=cv2.INTER_AREA)
+            depth[k] = (2.0 * D - 1.0).astype(np.float32)            # -1 far .. +1 near
+    cx0, cy0 = (W - 1) / 2.0, (H - 1) / 2.0
+
+    def band(s, f):
+        """The sheet's displacement along the normal at (fractional) frame f, and its width in px (`width` "photo":
+        the whole picture behind its leading diagonal edge; the picture's own edges then bound the sheet)."""
+        sign = 1.0 if str(s.get("side", "+")) == "+" else -1.0
+        if s.get("width") == "photo":                                 # the whole picture: its rectangle must clear the window
+            Wb = E_full
+            if sign > 0:
+                reach = min((W - cx1) / abs(nx), (cy1 + ch) / abs(ny)) + 2.0
+            else:
+                reach = min((cx1 + cw) / abs(nx), (H - cy1) / abs(ny)) + 2.0
+        else:
+            Wb = float(s.get("width", 0.8)) * E; reach = E / 2 + Wb / 2 + 2.0
+        lag = int(s.get("lag", 0)); span = max(1, n - lag)
+        t = min(1.0, max(0.0, (f - lag) / span))
+        return sign * reach * (1.0 - 2.0 * ease(t)), Wb
+
+    objs = []
+    if step.get("objects"):
+        obs = [dict(ob, box=[v * sc_draft for v in ob["box"]]) for ob in step["objects"]]
+        objs = object_plates(keys, cur, obs, max(1.0, float(step.get("object_feather", 6.0)) * sc_draft))
+    for ob in objs:                                              # when each sheet covers the object's centre
+        uo = ob["centre"][0] * nx + ob["centre"][1] * ny
+        ob["cover"] = {}
+        for s in sheets:
+            k = int(s["key"])
+            if k not in ob["plates"]:
+                continue
+            fr = [f for f in range(0, n + 1) if abs(home + band(s, f)[0] - uo) <= band(s, f)[1] / 2]
+            if fr:
+                ob["cover"][k] = (fr[0], fr[-1] + 1)
+    def object_alpha(ob, k, f):
+        if k not in ob.get("cover", {}):
+            return 0.0
+        f_in, f_out = ob["cover"][k]; lead, linger = ob["lead"], ob["linger"]
+        if f < f_in:
+            return EASES["smooth"](max(0.0, 1.0 - (f_in - f) / lead)) if lead > 0 else 0.0
+        if f < f_out:
+            return 1.0
+        return EASES["smooth"](max(0.0, 1.0 - (f - f_out) / linger)) if linger > 0 else 0.0
+
+    def composite(f):
+        frame = keysf[cur].copy()
+        for ob in objs:
+            for s in sheets:
+                k = int(s["key"]); a = object_alpha(ob, k, f)
+                if a > 0 and k in ob["plates"]:
+                    am = (a * ob["matte"])[..., None]
+                    frame = ob["plates"][k].astype(np.float32) * am + frame * (1.0 - am)
+        under = None
+        for s in sheets:
+            d, Wb = band(s, f); k = int(s["key"]); carry = float(s.get("carry", 1.0)); sc = 1.0 + float(s.get("scale", 0.0))
+            sign = 1.0 if str(s.get("side", "+")) == "+" else -1.0
+            lo, hi = home + d - Wb / 2, home + d + Wb / 2
+            if s.get("width") == "photo":                             # the leading edge only; the picture's edges bound the rest
+                lo, hi = (lo, 1e9) if sign > 0 else (-1e9, hi)
+            if hi < u_min - feather or lo > u_max + feather:
+                continue
+            m = np.clip((u - lo) / feather + 0.5, 0.0, 1.0) * np.clip((hi - u) / feather + 0.5, 0.0, 1.0)
+            off = carry * d
+            if off != 0.0 or sc != 1.0:
+                mult = (1.0 + parallax * depth[k]) if parallax else 1.0
+                mapx = cx0 + (xs - cx0) / sc - off * nx * mult
+                mapy = cy0 + (ys - cy0) / sc - off * ny * mult
+                content = cv2.remap(keysf[k], mapx, mapy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+                # the picture exists only where its source is inside it: never a mirrored or padded pixel (a soft edge)
+                def _valid(px, py):
+                    return (np.clip((px + 0.5) / vfeather, 0.0, 1.0) * np.clip((W - 0.5 - px) / vfeather, 0.0, 1.0)
+                            * np.clip((py + 0.5) / vfeather, 0.0, 1.0) * np.clip((H - 0.5 - py) / vfeather, 0.0, 1.0))
+                valid = _valid(mapx, mapy)
+                m = m * valid
+            else:
+                content = keysf[k]; _valid = None
+            if shadow > 0 and m.max() > 0.01 and (shadow_from == "all" or s is sheets[-1]):
+                # a contact shadow from the front sheet's leading edge only (two facing shadows turn the gap into a tube),
+                # onto the uncovered side, only where the casting sheet pixel exists; faded while the sheet is a sliver
+                dist = (lo - u) if sign > 0 else (u - hi)
+                gain = min(1.0, float(m.mean()) / 0.02)
+                sh = shadow * gain * np.clip(1.0 - dist / shadow_px, 0.0, 1.0) * (dist > 0)
+                if _valid is not None:                           # the casting pixel: `dist` back along the normal, then its source
+                    sh = sh * _valid(mapx + dist * sign * nx, mapy + dist * sign * ny)
+                frame *= (1.0 - sh)[..., None]
+            alpha = m if (under is None or overlap_alpha >= 1.0) else m * (1.0 - (1.0 - overlap_alpha) * under)
+            a3 = alpha[..., None]
+            frame = content * a3 + frame * (1.0 - a3)
+            under = m if under is None else np.maximum(under, m)
+        return frame
+
+    out = []
+    for f in range(1, n):
+        dmax = max(abs(band(s, f + 1)[0] - band(s, f)[0]) for s in sheets)
+        K = int(min(K_MAX, max(1, math.ceil(shutter * dmax / 2.0)))) if shutter > 0 else 1
+        if K == 1:
+            fr = composite(f)
+        else:
+            acc = np.zeros((H, W, 3), np.float32)
+            for k in range(K):
+                acc += composite(f + shutter * (k + 0.5) / K)
+            fr = acc / K
+        out.append(np.clip(fr, 0, 255).round().astype(np.uint8))
+        out_rows.append({"t": round(f / n, 4), "generated": "none (sheets)", "d": [round(band(s, f)[0], 1) for s in sheets],
+                         "edge_px": round(dmax, 1), "samples": K,
+                         "objects": {ob["name"]: {int(s["key"]): round(object_alpha(ob, int(s["key"]), f), 3) for s in sheets} for ob in objs} if objs else None})
+    info = {"frames": len(out), "extent_px": round(E, 1), "crop": cf, "widths_px": [round(band(s, 0)[1], 1) for s in sheets],
+            "objects": [{"name": ob["name"], "share": ob["share"], "cover": ob.get("cover")} for ob in objs]}
+    return out, info
+
+
 def apply_breath(frames, eff):
     """A push-in about (cx, cy) (canvas fractions) by 1 + z sin²(πu) over the loop; frame 0 untouched."""
     n = len(frames); H, W = frames[0].shape[:2]
@@ -794,7 +1147,14 @@ def render_plan(plan, out, fps, draft=0):
         j = int(step["to"]); n = int(step.get("n", 0)); method = step.get("method", "rife"); ease = step.get("ease", "smooth")
         A, B = keys[cur], keys[j]
         seg_rows = []
-        if "through" in step:
+        if method == "sheets":
+            assert j == cur, "sheets: the step returns to the base still (`to` = the current key)"
+            step["_crop"] = float(plan.get("crop", 1.0))
+            fr, info = frames_sheets(keys, cur, step, seg_rows, src); log(f"render: sheets {info}")
+        elif method == "slices":
+            knots = [cur] + [int(k) for k in step.get("through", [])] + [j]
+            fr, info = frames_slices(keys, knots, step, seg_rows); step["n"] = len(fr); log(f"render: slices {info}")
+        elif "through" in step:
             knots = [cur] + [int(k) for k in step["through"]] + [j]
             fr = frames_chain(keys, knots, n, step.get("weights"), ease, float(step.get("soft", 0.0)), method, matte_cfg, seg_rows, margin=float(step.get("knot_margin", 0.0)))
         elif method == "rife":
@@ -830,6 +1190,12 @@ def render_plan(plan, out, fps, draft=0):
             frames = apply_breath(frames, eff)
         else:
             sys.exit(f"unknown effect {eff['kind']}")
+    if plan.get("crop"):                                             # the centre `crop` of the canvas (a fraction), even sides
+        cf = float(plan["crop"]); cw, ch = int(round(W * cf)) & ~1, int(round(H * cf)) & ~1
+        x0, y0 = (W - cw) // 2, (H - ch) // 2
+        frames = [np.ascontiguousarray(f[y0:y0 + ch, x0:x0 + cw]) for f in frames]
+        log(f"render: crop {cf} -> {cw}x{ch} at ({x0}, {y0})")
+        W, H = cw, ch
     render_s = round(time.time() - t_render, 1)
     N = len(frames)
     # the mp4 and the gif
