@@ -1,0 +1,266 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "bands on s6: 16 narrow lateral bands (0.22-0.38 of the frame) in random order (seed 3) carrying all three seasons, starting every 10 frames and each sweeping for 120, so about 12 move at once; each band limited to a depth layer of the scene (sky, far, mid, near, or all) so seasons cross by layer; edges feathered over 80 px and half-transparent where bands overlap; the depth bend 120 px; the objects, the crop and the lateral motion as in s6; summer is the base, so the loop closes when the last band leaves",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Summer holds; the two other seasons slide in from opposite corners along a 62\u00b0 diagonal, pass each other over summer, and leave; summer remains, so the clip loops. The output is the centre 75 % of the registered canvas (3600 px prep), so a drifting picture never runs out of pixels.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 30
+  },
+  {
+   "to": 0,
+   "method": "sheets",
+   "n": 270,
+   "angle": 62,
+   "ease": "sine",
+   "feather": 80.0,
+   "shadow": 0.15,
+   "shadow_px": 40,
+   "overlap_alpha": 0.5,
+   "shutter": 0.0,
+   "parallax": 0.0,
+   "sheets": [
+    {
+     "key": 1,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.279,
+     "lag": 0,
+     "dur": 120,
+     "name": "b0_early_near",
+     "layer": [
+      0.56,
+      2.0
+     ]
+    },
+    {
+     "key": 2,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.317,
+     "lag": 10,
+     "dur": 120,
+     "name": "b1_late_all"
+    },
+    {
+     "key": 2,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.251,
+     "lag": 20,
+     "dur": 120,
+     "name": "b2_late_near",
+     "layer": [
+      0.56,
+      2.0
+     ]
+    },
+    {
+     "key": 2,
+     "side": "-",
+     "carry": 0.0,
+     "width": 0.284,
+     "lag": 30,
+     "dur": 120,
+     "name": "b3_late_all"
+    },
+    {
+     "key": 1,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.359,
+     "lag": 40,
+     "dur": 120,
+     "name": "b4_early_mid",
+     "layer": [
+      0.26,
+      0.62
+     ]
+    },
+    {
+     "key": 2,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.246,
+     "lag": 50,
+     "dur": 120,
+     "name": "b5_late_all"
+    },
+    {
+     "key": 1,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.352,
+     "lag": 60,
+     "dur": 120,
+     "name": "b6_early_far",
+     "layer": [
+      0.04,
+      0.3
+     ]
+    },
+    {
+     "key": 2,
+     "side": "-",
+     "carry": 0.0,
+     "width": 0.334,
+     "lag": 70,
+     "dur": 120,
+     "name": "b7_late_all"
+    },
+    {
+     "key": 1,
+     "side": "-",
+     "carry": 0.0,
+     "width": 0.374,
+     "lag": 80,
+     "dur": 120,
+     "name": "b8_early_sky",
+     "layer": [
+      -1.0,
+      0.06
+     ],
+     "layer_y": [
+      0,
+      1190
+     ]
+    },
+    {
+     "key": 1,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.242,
+     "lag": 90,
+     "dur": 120,
+     "name": "b9_early_far",
+     "layer": [
+      0.04,
+      0.3
+     ]
+    },
+    {
+     "key": 0,
+     "side": "-",
+     "carry": 0.0,
+     "width": 0.345,
+     "lag": 100,
+     "dur": 120,
+     "name": "b10_summer_all",
+     "shadow": 0.0
+    },
+    {
+     "key": 2,
+     "side": "-",
+     "carry": 0.0,
+     "width": 0.312,
+     "lag": 110,
+     "dur": 120,
+     "name": "b11_late_mid",
+     "layer": [
+      0.26,
+      0.62
+     ]
+    },
+    {
+     "key": 2,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.365,
+     "lag": 120,
+     "dur": 120,
+     "name": "b12_late_near",
+     "layer": [
+      0.56,
+      2.0
+     ]
+    },
+    {
+     "key": 0,
+     "side": "-",
+     "carry": 0.0,
+     "width": 0.379,
+     "lag": 130,
+     "dur": 120,
+     "name": "b13_summer_near",
+     "layer": [
+      0.56,
+      2.0
+     ],
+     "shadow": 0.0
+    },
+    {
+     "key": 1,
+     "side": "-",
+     "carry": 0.0,
+     "width": 0.374,
+     "lag": 140,
+     "dur": 120,
+     "name": "b14_early_all"
+    },
+    {
+     "key": 2,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.321,
+     "lag": 150,
+     "dur": 120,
+     "name": "b15_late_all"
+    }
+   ],
+   "objects": [
+    {
+     "name": "tower",
+     "box": [
+      1513,
+      1230,
+      2019,
+      1367
+     ],
+     "lead": 4,
+     "linger": 14
+    },
+    {
+     "name": "apartments",
+     "box": [
+      2947,
+      1395,
+      3517,
+      1864
+     ],
+     "lead": 4,
+     "linger": 14
+    },
+    {
+     "name": "house",
+     "box": [
+      1847,
+      1504,
+      2147,
+      1639
+     ],
+     "lead": 4,
+     "linger": 14
+    },
+    {
+     "name": "left_blocks",
+     "box": [
+      450,
+      1198,
+      975,
+      1461
+     ],
+     "lead": 4,
+     "linger": 14
+    }
+   ],
+   "object_feather": 10.0,
+   "motion": "lateral",
+   "edge_depth": 120.0,
+   "shadow_from": "all"
+  }
+ ],
+ "crop": 0.75,
+ "crf": 14,
+ "gif_long": 540
+}

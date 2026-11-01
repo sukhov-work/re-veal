@@ -94,3 +94,10 @@ listed stills slide across the base as sheets, back to front, over `n` frames, a
   `angle`, the sheet moves along x; `side` "+" enters from the right). `edge_depth` px: the wipe edge bends with the base still's
   depth map (`in/<seq>/depth_k<i>.npy`, blurred 8 px), near pixels reached later than far ones by up to that much; the content
   never moves, so every border stays registered (a depth cue with no misalignment).
+- Per sheet (2026-11-01, round 4): `dur` (its own sweep length in frames; default the step's remainder after `lag`) and
+  `layer` `[lo, hi]` (the sheet applies only where the base still's depth map lies in that range, 0 far .. 1 near, soft over
+  `layer_soft` 0.06: sky about [-1, 0.06], far [0.04, 0.3], mid [0.26, 0.62], near [0.56, 2]), so seasons cross by layer.
+  `gen_seasons_bands.py` writes a plan of many narrow lateral bands in a seeded random order from the accepted s6.
+- Per sheet (round 4b): `layer_y` `[y0, y1]` (prep-canvas rows; the sky layer stops above the skyline, which the depth map
+  cannot separate from the far buildings) and `shadow` (its own contact-shadow strength; 0 for a summer band over summer,
+  which would otherwise show only as its shadow). The travel includes the feather's half width, so nothing is left at the end.

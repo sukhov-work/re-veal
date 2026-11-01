@@ -63,6 +63,11 @@ and the Halloween loops of 2026-10-30 (ten sequences of 2–6 handheld stills, f
   wrong anchors bend a straight rail (glide4, 29 anchors, not graded better).
 - "funny (but technically sophisticated and nice looking)": one idea per clip, the joke in the timing, the
   technique invisible.
+- A seasons or landscape sequence of one view (2026-11-01, the Ivano-Frankivsk stills): the registered wipe is the piece.
+  Content never moves inside a sheet ("all other example are horribly misaligned" on carried and drifting pictures); the
+  edges keep a slant and move laterally ("lateral should be movement itself"); the depth cue bends the EDGE by the depth map
+  (`edge_depth`), never the pixels; buildings take the coming season early and keep it late by Poisson plates ("very subtly");
+  a pattern of cells (bands, a lattice, chevrons) is "simple 2d … junky". s6 of that day ("perfect") is the reference plan.
 
 ## 4. Recipes by situation (what to render first)
 | Situation | First candidate | Knobs that matter | Do not |
@@ -76,6 +81,7 @@ and the Halloween loops of 2026-10-30 (ten sequences of 2–6 handheld stills, f
 | A thin rotating prop (a wand) | accept the half-fade at n 3, or a per-person layer (T63) | — | anchors through the morph (both people doubled) |
 | Many people (a group photo) | RIFE at n 8 with the ghosts, or hard cuts (spot the difference), both on the page | the pace he names | expecting any in-between to carry 14 people |
 | A repaint of fixed objects (the boxes) | the `draw` of 2026-10-09: the objects pinned on their own features, one dissolve with a per-pixel order, no segment boundary | 3 s + a 3 s hold; 4:5 for Instagram | joined per-pair clips (visible stops) |
+| Three stills of one view across seasons (a landscape) | `sheets`: two diagonal sheets entering from opposite sides over the held base still, `motion: lateral`, `carry` 0, `overlap_alpha` 0.5, a contact shadow, `edge_depth` 120 from the depth model's map, buildings as Poisson plates with lead 4 / linger 14, a 75 % output crop on a 3600 px prep (`seasons_s6.json`) | `n` (135), `hold` (30), `edge_depth`, `shadow_px`, `lead`/`linger`; many narrow bands by `gen_seasons_bands.py` with depth `layer`s | content motion inside a sheet (`carry` above 0), a pattern of cells, the DIS morph (tears the sky), a reflect or wrap fill beyond the canvas |
 | Any loop | the gif at 25 fps (40 ms exact), the mp4 at crf 14, the seam a still or a declared cut | `gif_long` 540 | 30 fps gifs (33 ms is not storable; they run 10 % fast) |
 
 ## 5. What failed; reopen only with new evidence

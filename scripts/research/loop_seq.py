@@ -1006,7 +1006,7 @@ def frames_sheets(keys, cur, step, out_rows, src):
             depth[k] = (2.0 * D - 1.0).astype(np.float32)            # -1 far .. +1 near
     edge_depth = float(step.get("edge_depth", 0.0)) * sc_draft    # px: the wipe edge reaches near pixels later than far ones
     D0 = None
-    if edge_depth:
+    if edge_depth or any(s.get("layer") for s in step["sheets"]):
         D0 = np.load(Path(src) / f"depth_k{cur}.npy")
         if D0.shape != (H, W):
             D0 = cv2.resize(D0, (W, H), interpolation=cv2.INTER_AREA)
@@ -1026,9 +1026,25 @@ def frames_sheets(keys, cur, step, out_rows, src):
             Wb = float(s.get("width", 0.8)) * E; reach = E / 2 + Wb / 2 + 2.0
         if D0 is not None:
             reach += edge_depth * float(D0.max())                    # a bent edge trails behind on near pixels: travel that much more
-        lag = int(s.get("lag", 0)); span = max(1, n - lag)
+        reach += feather / 2.0                                       # and the soft edge's half width, so nothing is left at the end
+        lag = int(s.get("lag", 0)); span = max(1, int(s.get("dur", n - lag)))   # the sheet's own sweep length
         t = min(1.0, max(0.0, (f - lag) / span))
         return sign * reach * (1.0 - 2.0 * ease(t)), Wb
+
+    layer_soft = float(step.get("layer_soft", 0.06))
+    def layer_weight(s):
+        """A sheet limited to a depth range [lo, hi] of the base still's map (0 far .. 1 near), soft at both ends."""
+        lay = s.get("layer")
+        if not lay or D0 is None:
+            return None
+        lo, hi = float(lay[0]), float(lay[1])
+        w = 1.0 / (1.0 + np.exp(-(D0 - lo) / layer_soft)) * (1.0 / (1.0 + np.exp(-(hi - D0) / layer_soft)))
+        if s.get("layer_y"):                                           # a row bound in prep-canvas px (the sky above the skyline)
+            y0, y1 = float(s["layer_y"][0]) * sc_draft, float(s["layer_y"][1]) * sc_draft
+            soft_y = max(2.0, 24.0 * sc_draft)
+            w = w * np.clip((ys - y0) / soft_y + 0.5, 0, 1) * np.clip((y1 - ys) / soft_y + 0.5, 0, 1)
+        return w.astype(np.float32)
+    layers = [layer_weight(s) for s in step["sheets"]]
 
     objs = []
     if step.get("objects"):
@@ -1037,17 +1053,20 @@ def frames_sheets(keys, cur, step, out_rows, src):
     for ob in objs:                                              # when each sheet covers the object's centre
         uo = (ob["centre"][0] - (ob["centre"][1] - cy0) * (math.cos(th) / math.sin(th))) if motion == "lateral" else (ob["centre"][0] * nx + ob["centre"][1] * ny)
         ob["cover"] = {}
-        for s in sheets:
+        for si, s in enumerate(sheets):
             k = int(s["key"])
             if k not in ob["plates"]:
                 continue
+            lw = layers[si]
+            if lw is not None and lw[int(ob["centre"][1]), int(ob["centre"][0])] < 0.5:
+                continue                                           # this sheet does not touch the object's depth layer
             fr = [f for f in range(0, n + 1) if abs(home + band(s, f)[0] - uo) <= band(s, f)[1] / 2]
             if fr:
-                ob["cover"][k] = (fr[0], fr[-1] + 1)
-    def object_alpha(ob, k, f):
-        if k not in ob.get("cover", {}):
+                ob["cover"][si] = (fr[0], fr[-1] + 1)
+    def object_alpha(ob, si, f):
+        if si not in ob.get("cover", {}):
             return 0.0
-        f_in, f_out = ob["cover"][k]; lead, linger = ob["lead"], ob["linger"]
+        f_in, f_out = ob["cover"][si]; lead, linger = ob["lead"], ob["linger"]
         if f < f_in:
             return EASES["smooth"](max(0.0, 1.0 - (f_in - f) / lead)) if lead > 0 else 0.0
         if f < f_out:
@@ -1057,13 +1076,13 @@ def frames_sheets(keys, cur, step, out_rows, src):
     def composite(f):
         frame = keysf[cur].copy()
         for ob in objs:
-            for s in sheets:
-                k = int(s["key"]); a = object_alpha(ob, k, f)
+            for si, s in enumerate(sheets):
+                k = int(s["key"]); a = object_alpha(ob, si, f)
                 if a > 0 and k in ob["plates"]:
                     am = (a * ob["matte"])[..., None]
                     frame = ob["plates"][k].astype(np.float32) * am + frame * (1.0 - am)
         under = None
-        for s in sheets:
+        for si, s in enumerate(sheets):
             d, Wb = band(s, f); k = int(s["key"]); carry = float(s.get("carry", 1.0)); sc = 1.0 + float(s.get("scale", 0.0))
             sign = 1.0 if str(s.get("side", "+")) == "+" else -1.0
             lo, hi = home + d - Wb / 2, home + d + Wb / 2
@@ -1073,6 +1092,8 @@ def frames_sheets(keys, cur, step, out_rows, src):
                 continue
             ue = u if D0 is None else u - sign * edge_depth * D0    # near pixels are reached later by the edge
             m = np.clip((ue - lo) / feather + 0.5, 0.0, 1.0) * np.clip((hi - ue) / feather + 0.5, 0.0, 1.0)
+            if layers[si] is not None:
+                m = m * layers[si]
             off = carry * d
             if off != 0.0 or sc != 1.0:
                 mult = (1.0 + parallax * depth[k]) if parallax else 1.0
@@ -1087,12 +1108,13 @@ def frames_sheets(keys, cur, step, out_rows, src):
                 m = m * valid
             else:
                 content = keysf[k]; _valid = None
-            if shadow > 0 and m.max() > 0.01 and (shadow_from == "all" or s is sheets[-1]):
+            sh_k = float(s.get("shadow", shadow))                     # a sheet may cast no shadow (a summer band over summer)
+            if sh_k > 0 and m.max() > 0.01 and (shadow_from == "all" or s is sheets[-1]):
                 # a contact shadow from the front sheet's leading edge only (two facing shadows turn the gap into a tube),
                 # onto the uncovered side, only where the casting sheet pixel exists; faded while the sheet is a sliver
                 dist = (lo - ue) if sign > 0 else (ue - hi)
                 gain = min(1.0, float(m.mean()) / 0.02)
-                sh = shadow * gain * np.clip(1.0 - dist / shadow_px, 0.0, 1.0) * (dist > 0)
+                sh = sh_k * gain * np.clip(1.0 - dist / shadow_px, 0.0, 1.0) * (dist > 0)
                 if _valid is not None:                           # the casting pixel: `dist` back along the normal, then its source
                     sh = sh * _valid(mapx + dist * sign * nx, mapy + dist * sign * ny)
                 frame *= (1.0 - sh)[..., None]
@@ -1116,7 +1138,7 @@ def frames_sheets(keys, cur, step, out_rows, src):
         out.append(np.clip(fr, 0, 255).round().astype(np.uint8))
         out_rows.append({"t": round(f / n, 4), "generated": "none (sheets)", "d": [round(band(s, f)[0], 1) for s in sheets],
                          "edge_px": round(dmax, 1), "samples": K,
-                         "objects": {ob["name"]: {int(s["key"]): round(object_alpha(ob, int(s["key"]), f), 3) for s in sheets} for ob in objs} if objs else None})
+                         "objects": {ob["name"]: {si: round(object_alpha(ob, si, f), 3) for si in range(len(sheets)) if object_alpha(ob, si, f) > 0} for ob in objs} if objs else None})
     info = {"frames": len(out), "extent_px": round(E, 1), "crop": cf, "motion": motion, "edge_depth_px": round(edge_depth, 1), "widths_px": [round(band(s, 0)[1], 1) for s in sheets],
             "objects": [{"name": ob["name"], "share": ob["share"], "cover": ob.get("cover")} for ob in objs]}
     return out, info
