@@ -90,3 +90,7 @@ listed stills slide across the base as sheets, back to front, over `n` frames, a
   into the base once (`cv2.seamlessClone`); the plate fades in `lead` frames before that season's sheet reaches the object's
   centre and out `linger` frames after the sheet leaves it. Static plates: no flicker, no per-frame Poisson cost. Boxes and
   pixel knobs are in prep-canvas px; a draft scales them.
+- `motion` (2026-11-01, round 3): `normal` (the sheets move along the edge's normal) or `lateral` (the edge keeps its slant at
+  `angle`, the sheet moves along x; `side` "+" enters from the right). `edge_depth` px: the wipe edge bends with the base still's
+  depth map (`in/<seq>/depth_k<i>.npy`, blurred 8 px), near pixels reached later than far ones by up to that much; the content
+  never moves, so every border stays registered (a depth cue with no misalignment).

@@ -1,0 +1,91 @@
+{
+ "seq": "seasons",
+ "in": "benchmarks/runs/2026-11-01/seasons/in/seasons",
+ "title": "the same as s5 with the depth bend doubled (up to 120 px)",
+ "gag": "Three seasons from one balcony in Ivano-Frankivsk (his order: 1 summer, 2 early autumn, 3 late autumn). Summer holds; the two other seasons slide in from opposite corners along a 62\u00b0 diagonal, pass each other over summer, and leave; summer remains, so the clip loops. The output is the centre 75 % of the registered canvas (3600 px prep), so a drifting picture never runs out of pixels.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 30
+  },
+  {
+   "to": 0,
+   "method": "sheets",
+   "n": 135,
+   "angle": 62,
+   "ease": "sine",
+   "feather": 1.5,
+   "shadow": 0.25,
+   "shadow_px": 40,
+   "overlap_alpha": 0.5,
+   "shutter": 0.0,
+   "parallax": 0.0,
+   "sheets": [
+    {
+     "key": 2,
+     "side": "+",
+     "carry": 0.0,
+     "width": 0.8
+    },
+    {
+     "key": 1,
+     "side": "-",
+     "carry": 0.0,
+     "width": 0.8
+    }
+   ],
+   "objects": [
+    {
+     "name": "tower",
+     "box": [
+      1513,
+      1230,
+      2019,
+      1367
+     ],
+     "lead": 4,
+     "linger": 14
+    },
+    {
+     "name": "apartments",
+     "box": [
+      2947,
+      1395,
+      3517,
+      1864
+     ],
+     "lead": 4,
+     "linger": 14
+    },
+    {
+     "name": "house",
+     "box": [
+      1847,
+      1504,
+      2147,
+      1639
+     ],
+     "lead": 4,
+     "linger": 14
+    },
+    {
+     "name": "left_blocks",
+     "box": [
+      450,
+      1198,
+      975,
+      1461
+     ],
+     "lead": 4,
+     "linger": 14
+    }
+   ],
+   "object_feather": 10.0,
+   "motion": "lateral",
+   "edge_depth": 120
+  }
+ ],
+ "crop": 0.75,
+ "crf": 14,
+ "gif_long": 540
+}

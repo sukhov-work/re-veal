@@ -976,9 +976,15 @@ def frames_sheets(keys, cur, step, out_rows, src):
     W0 = json.loads((Path(src) / "prep.json").read_text())["canvas"][0]
     sc_draft = W / float(W0)                                     # pixel knobs and boxes are in prep-canvas px; a draft scales them
     th = math.radians(float(step.get("angle", 62.0)))
-    nx, ny = -math.sin(th), math.cos(th)
     ys, xs = np.mgrid[0:H, 0:W].astype(np.float32)
-    u = xs * nx + ys * ny
+    cx0, cy0 = (W - 1) / 2.0, (H - 1) / 2.0
+    motion = str(step.get("motion", "normal"))
+    if motion == "lateral":                                        # the edge keeps its slant; the sheet moves along x
+        nx, ny = 1.0, 0.0
+        u = xs - (ys - cy0) * (math.cos(th) / math.sin(th))         # the edge line's x at the centre row
+    else:
+        nx, ny = -math.sin(th), math.cos(th)
+        u = xs * nx + ys * ny
     cf = float(step.get("_crop", 1.0))                           # the plan's centre crop: the sheets travel the VISIBLE extent
     cw, ch = int(round(W * cf)) & ~1, int(round(H * cf)) & ~1; cx1, cy1 = (W - cw) // 2, (H - ch) // 2
     uv = u[cy1:cy1 + ch, cx1:cx1 + cw]
@@ -998,7 +1004,13 @@ def frames_sheets(keys, cur, step, out_rows, src):
             if D.shape != (H, W):
                 D = cv2.resize(D, (W, H), interpolation=cv2.INTER_AREA)
             depth[k] = (2.0 * D - 1.0).astype(np.float32)            # -1 far .. +1 near
-    cx0, cy0 = (W - 1) / 2.0, (H - 1) / 2.0
+    edge_depth = float(step.get("edge_depth", 0.0)) * sc_draft    # px: the wipe edge reaches near pixels later than far ones
+    D0 = None
+    if edge_depth:
+        D0 = np.load(Path(src) / f"depth_k{cur}.npy")
+        if D0.shape != (H, W):
+            D0 = cv2.resize(D0, (W, H), interpolation=cv2.INTER_AREA)
+        D0 = cv2.GaussianBlur(D0.astype(np.float32), (0, 0), max(1.0, 8.0 * sc_draft))
 
     def band(s, f):
         """The sheet's displacement along the normal at (fractional) frame f, and its width in px (`width` "photo":
@@ -1007,11 +1019,13 @@ def frames_sheets(keys, cur, step, out_rows, src):
         if s.get("width") == "photo":                                 # the whole picture: its rectangle must clear the window
             Wb = E_full
             if sign > 0:
-                reach = min((W - cx1) / abs(nx), (cy1 + ch) / abs(ny)) + 2.0
+                reach = min((W - cx1) / abs(nx) if nx else 1e9, (cy1 + ch) / abs(ny) if ny else 1e9) + 2.0
             else:
-                reach = min((cx1 + cw) / abs(nx), (H - cy1) / abs(ny)) + 2.0
+                reach = min((cx1 + cw) / abs(nx) if nx else 1e9, (H - cy1) / abs(ny) if ny else 1e9) + 2.0
         else:
             Wb = float(s.get("width", 0.8)) * E; reach = E / 2 + Wb / 2 + 2.0
+        if D0 is not None:
+            reach += edge_depth * float(D0.max())                    # a bent edge trails behind on near pixels: travel that much more
         lag = int(s.get("lag", 0)); span = max(1, n - lag)
         t = min(1.0, max(0.0, (f - lag) / span))
         return sign * reach * (1.0 - 2.0 * ease(t)), Wb
@@ -1021,7 +1035,7 @@ def frames_sheets(keys, cur, step, out_rows, src):
         obs = [dict(ob, box=[v * sc_draft for v in ob["box"]]) for ob in step["objects"]]
         objs = object_plates(keys, cur, obs, max(1.0, float(step.get("object_feather", 6.0)) * sc_draft))
     for ob in objs:                                              # when each sheet covers the object's centre
-        uo = ob["centre"][0] * nx + ob["centre"][1] * ny
+        uo = (ob["centre"][0] - (ob["centre"][1] - cy0) * (math.cos(th) / math.sin(th))) if motion == "lateral" else (ob["centre"][0] * nx + ob["centre"][1] * ny)
         ob["cover"] = {}
         for s in sheets:
             k = int(s["key"])
@@ -1055,9 +1069,10 @@ def frames_sheets(keys, cur, step, out_rows, src):
             lo, hi = home + d - Wb / 2, home + d + Wb / 2
             if s.get("width") == "photo":                             # the leading edge only; the picture's edges bound the rest
                 lo, hi = (lo, 1e9) if sign > 0 else (-1e9, hi)
-            if hi < u_min - feather or lo > u_max + feather:
+            if hi < u_min - feather - edge_depth or lo > u_max + feather + edge_depth:
                 continue
-            m = np.clip((u - lo) / feather + 0.5, 0.0, 1.0) * np.clip((hi - u) / feather + 0.5, 0.0, 1.0)
+            ue = u if D0 is None else u - sign * edge_depth * D0    # near pixels are reached later by the edge
+            m = np.clip((ue - lo) / feather + 0.5, 0.0, 1.0) * np.clip((hi - ue) / feather + 0.5, 0.0, 1.0)
             off = carry * d
             if off != 0.0 or sc != 1.0:
                 mult = (1.0 + parallax * depth[k]) if parallax else 1.0
@@ -1075,7 +1090,7 @@ def frames_sheets(keys, cur, step, out_rows, src):
             if shadow > 0 and m.max() > 0.01 and (shadow_from == "all" or s is sheets[-1]):
                 # a contact shadow from the front sheet's leading edge only (two facing shadows turn the gap into a tube),
                 # onto the uncovered side, only where the casting sheet pixel exists; faded while the sheet is a sliver
-                dist = (lo - u) if sign > 0 else (u - hi)
+                dist = (lo - ue) if sign > 0 else (ue - hi)
                 gain = min(1.0, float(m.mean()) / 0.02)
                 sh = shadow * gain * np.clip(1.0 - dist / shadow_px, 0.0, 1.0) * (dist > 0)
                 if _valid is not None:                           # the casting pixel: `dist` back along the normal, then its source
@@ -1102,7 +1117,7 @@ def frames_sheets(keys, cur, step, out_rows, src):
         out_rows.append({"t": round(f / n, 4), "generated": "none (sheets)", "d": [round(band(s, f)[0], 1) for s in sheets],
                          "edge_px": round(dmax, 1), "samples": K,
                          "objects": {ob["name"]: {int(s["key"]): round(object_alpha(ob, int(s["key"]), f), 3) for s in sheets} for ob in objs} if objs else None})
-    info = {"frames": len(out), "extent_px": round(E, 1), "crop": cf, "widths_px": [round(band(s, 0)[1], 1) for s in sheets],
+    info = {"frames": len(out), "extent_px": round(E, 1), "crop": cf, "motion": motion, "edge_depth_px": round(edge_depth, 1), "widths_px": [round(band(s, 0)[1], 1) for s in sheets],
             "objects": [{"name": ob["name"], "share": ob["share"], "cover": ob.get("cover")} for ob in objs]}
     return out, info
 
