@@ -75,6 +75,9 @@ and the Halloween loops of 2026-10-30 (ten sequences of 2–6 handheld stills, f
   edges keep a slant and move laterally ("lateral should be movement itself"); the depth cue bends the EDGE by the depth map
   (`edge_depth`), never the pixels; buildings take the coming season early and keep it late by Poisson plates ("very subtly");
   a pattern of cells (bands, a lattice, chevrons) is "simple 2d … junky". s6 of that day ("perfect") is the reference plan.
+- A portrait pair with a gag object (2026-11-04, the angel loop): a breath about the object with a depth sway around its plane
+  (a2) and the same with the object's light blooming in step (a3) are "fine" (his word; the effort closed). The lock on the gag
+  object (`--lock-window`), whole-frame RIFE with a 4 % margin and the mouth on its own `snap` ease are the registered base.
 
 ## 4. Recipes by situation (what to render first)
 | Situation | First candidate | Knobs that matter | Do not |
@@ -89,6 +92,7 @@ and the Halloween loops of 2026-10-30 (ten sequences of 2–6 handheld stills, f
 | Many people (a group photo) | RIFE at n 8 with the ghosts, or hard cuts (spot the difference), both on the page | the pace he names | expecting any in-between to carry 14 people |
 | A repaint of fixed objects (the boxes) | the `draw` of 2026-10-09: the objects pinned on their own features, one dissolve with a per-pixel order, no segment boundary | 3 s + a 3 s hold; 4:5 for Instagram | joined per-pair clips (visible stops) |
 | Three stills of one view across seasons (a landscape) | `sheets`: two diagonal sheets entering from opposite sides over the held base still, `motion: lateral`, `carry` 0, `overlap_alpha` 0.5, a contact shadow, `edge_depth` 120 from the depth model's map, buildings as Poisson plates with lead 4 / linger 14, a 75 % output crop on a 3600 px prep (`seasons_s6.json`) | `n` (135), `hold` (30), `edge_depth`, `shadow_px`, `lead`/`linger`; many narrow bands by `gen_seasons_bands.py` with depth `layer`s | content motion inside a sheet (`carry` above 0), a pattern of cells, the DIS morph (tears the sky), a reflect or wrap fill beyond the canvas |
+| Two portrait stills with a gag object (a lamp as a halo) | `angel_a2.json` (accepted 2026-11-04): the gag locked by `prep --lock-window` on three windows drawn on the still, whole-frame RIFE (`matte.all`) with `margin` 0.04 and the mouth on a `local` `snap` ease, holds 14 and 12 with 12 in-betweens each way, a 1.8 % `breath` about the object, a `parallax` sway of 1.4 % of W at depth distance 1 with the object's plane as the reference; `angel_a3.json` adds the `glow` at 15 % | `breath.z`, `parallax.amp` and `amp2`, `glow.gain`, the holds and `n`, the local box | a far-field or all-keypoint registration when the gag object moved between the shots (it changes shape or doubles); an ECC inside a ring; a depth-blended two-fit warp |
 | Any loop | the gif at 25 fps (40 ms exact), the mp4 at crf 14, the seam a still or a declared cut | `gif_long` 540 | 30 fps gifs (33 ms is not storable; they run 10 % fast) |
 
 ## 5. What failed; reopen only with new evidence
