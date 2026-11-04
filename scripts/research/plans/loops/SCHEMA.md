@@ -80,12 +80,12 @@ listed stills slide across the base as sheets, back to front, over `n` frames, a
 - The sheets travel the VISIBLE extent: with a plan-level `crop` (the centre fraction of the canvas that is output) a sheet
   enters as a sliver under the slow end of the ease and leaves by the step's end. `valid_feather` px softens a picture's own
   edge inside a carried sheet (default 1).
-- Step keys: `angle` (62), `ease` (`sine`), `feather` px (1.5), `overlap_alpha` (the front sheet's opacity where it covers
+- Step keys: `angle` (62), `ease` (the code's default is `linear`; the seasons plans set `sine`), `feather` px (1.5), `overlap_alpha` (the front sheet's opacity where it covers
   a back sheet; 0.5 shows both), `shadow` and `shadow_px` (a contact shadow ahead of the front sheet's leading edge onto what lies beneath, faded while the sheet is a sliver; `shadow_from` "all" casts from every sheet's leading edge, which turns the gap between two facing edges into a tube),
   `parallax` (the content's move scaled by 1 + parallax × (2 depth − 1) from `in/<seq>/depth_k<i>.npy`, the depth model's
   map saved by the session; near more than far), `shutter` and `samples_max` (motion blur by sub-samples over the frame's
   edge motion, forward window, one per 2 px).
-- `objects` (on the base): `[{"name": ..., "box": [x0, y0, x1, y1], "lead": 8, "linger": 14, "seasons": [1, 2]}]`, with
+- `objects` (on the base): `[{"name": ..., "box": [x0, y0, x1, y1], "lead": 8, "linger": 14, "seasons": [1, 2]}]` (the code's defaults are lead 6 and linger 10; the seasons plans set 4 and 14), with
   `object_feather` px: per object a GrabCut matte on the base still from the box, and per season the object Poisson-blended
   into the base once (`cv2.seamlessClone`); the plate fades in `lead` frames before that season's sheet reaches the object's
   centre and out `linger` frames after the sheet leaves it. Static plates: no flicker, no per-frame Poisson cost. Boxes and
@@ -116,9 +116,10 @@ listed stills slide across the base as sheets, back to front, over `n` frames, a
 - `prep --lock-window "x0,y0,x1,y1;..."` (reference-frame px; the windows drawn on the still and looked at first): after the fit,
   each map gains the translation that zeroes the windows' mean offset, measured by template match (sub-pixel). The gag object is
   the anchor (the angel pair: three windows on the ring light, within 2.1 px after the lock); the room's drift is RIFE's.
-- `matte: {"all": true}`: `rife` runs on the whole frame (no change matte, no plain blend outside it); a locked or far-field
-  registration leaves the rest of the scene's drift as motion, and RIFE carries it with the pose change.
-- A `rife` step's `margin` (t runs over [margin, 1 − margin]: no in-between hugs a still; 0.04) and `local`
+- `matte: {"all": true}`: a `rife` LEG runs on the whole frame (no change matte, no plain blend outside it); a locked or far-field
+  registration leaves the rest of the scene's drift as motion, and RIFE carries it with the pose change. A `through` chain, a
+  teleport, a slide and a rise keep the change matte (the key is dropped for them; 2026-11-04).
+- A `rife` step's `margin` (t runs over [margin, 1 − margin]: no in-between hugs a still; the code's default is 0, the angel plans set 0.04) and `local`
   (`[{"box": [x0, y0, x1, y1], "ease": "snap", "feather": 0.01}]`, canvas fractions): inside each box the in-between is RIFE at
   the box's own ease of u, blended over a feathered edge (two RIFE calls per frame per box). A mouth that opens crosses its
   half-open state, which RIFE draws as teeth through closed lips, in about 3 frames under `snap` while the lean keeps `sine`.

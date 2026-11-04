@@ -28,3 +28,6 @@ __pycache__/
 # (99 MB, near GitHub's per-file limit; ./setup.sh --learned rebuilds them)
 /models/depth/
 /models/DEPTH_MANIFEST.json
+
+# the Playwright MCP tools write page snapshots here
+.playwright-mcp/

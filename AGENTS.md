@@ -7,7 +7,8 @@ the change between two photos as a transition video (harness `transitions_harnes
 modules never import each other. Design docs live under `.claude/claude-docs/` (moved there
 2026-09-13 by owner ruling): `HANDOFF.md` (Reveal design of record — invariants, pipeline, 27-row
 decision log, harness coverage, risks, amendments §11), `TRANSITIONS.md` (transitions design of
-record), `EXPLORATION_PLAN.md` (work plan, ranked by the owner on 2026-09-13). A bare `HANDOFF.md §N`
+record), `EXPLORATION_PLAN.md` (work plan, ranked by the owner on 2026-09-13), `STUDIO.md` (the studio UI's design of
+record, 2026-11-04; `PRODUCT.md` and `DESIGN.md` at the repo root are its impeccable records). A bare `HANDOFF.md §N`
 or `TRANSITIONS.md §N` in any doc means that file there.
 Authority: `HANDOFF.md` wins over the plan; any new decision
 EXTENDS `.claude/claude-docs/DECISIONS.md` or supersedes a prior line by date — it never edits

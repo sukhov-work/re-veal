@@ -12,7 +12,7 @@ Subcommands
       Reads the developed JPGs of SEQ_DIR (sorted by name = capture order; ARW and XMP ignored), decodes them
       as the tool does (EXIF orientation, ICC to sRGB), scales each to the long edge, and registers every
       frame onto frame 0 by a background homography: SIFT + MAGSAC on a 1200 px proxy, accepted when the
-      inliers are >= 40 and the map is sane (scale 0.85–1.15, corner moves < 15 % of the size); otherwise an
+      inliers are >= 40 and the map is sane (scale 0.5–2.0, corner moves below 0.6 of the size: a photographer may step closer); otherwise an
       ECC affine on blurred 600 px proxies (the motion-blurred frames); otherwise identity, said on the log.
       Frame 0 is never warped. All frames are cropped to the common valid rectangle (even sides). Writes
       OUT/k<i>.png and OUT/prep.json (the method, inliers, residual, the map and the crop per frame).
@@ -354,7 +354,8 @@ def cmd_prep(args):
     for r in regs:
         r.pop("_pts_ref", None)
     rep = {"date": datetime.datetime.now().isoformat(timespec="seconds"), "seq": src.parent.name if src.name == "raw" else src.name,
-           "sources": meta, "long": args.long, "cuts": list(cuts), "bg_depth": args.bg_depth, "depth_blend": bool(args.depth_blend),
+           "sources": meta, "long": args.long, "cuts": list(cuts), "bg_depth": args.bg_depth, "depth_blend": args.depth_blend or False,
+           "min_inliers": args.min_inliers, "ecc_refine": bool(args.ecc_refine), "ref_requested": args.ref, "lock_window": args.lock_window or "",
            "reference": ref_i, "reference_size": [W0, H0], "crop": crop,
            "canvas": [x1 - x0, y1 - y0], "frames": regs}
     (out / "prep.json").write_text(json.dumps(rep, indent=1))
@@ -1315,7 +1316,8 @@ def apply_camera(frames, rows, effects, src, draft_scale=1.0):
             D = np.load(p).astype(np.float32)
             if D.shape != (H, W):
                 D = cv2.resize(D, (W, H), interpolation=cv2.INTER_LINEAR)
-            depths[int(p.stem[7:])] = cv2.GaussianBlur(D, (0, 0), float(px[0].get("sigma", 3.0)) * draft_scale)
+            sigma = float((px[0] if px else br[0]).get("sigma", 3.0))        # a breath by depth without a parallax reads its own sigma
+            depths[int(p.stem[7:])] = cv2.GaussianBlur(D, (0, 0), sigma * draft_scale)
         assert depths, f"depth effects: no depth_k*.npy under {src} (prep --bg-depth writes them)"
         e = px[0] if px else br[0]
         if "ref_at" in e:
@@ -1382,6 +1384,7 @@ def render_plan(plan, out, fps, draft=0):
         keys[int(p.stem[1:])] = im
     H, W = keys[0].shape[:2]
     matte_cfg = plan.get("matte", {})
+    matte_kw = {k: v for k, v in matte_cfg.items() if k != "all"}    # `all` is read by `rife` only; the other methods take the change matte's keys
     frames, rows = [], []
     cur = None
     t_render = time.time()
@@ -1404,7 +1407,7 @@ def render_plan(plan, out, fps, draft=0):
             fr, info = frames_slices(keys, knots, step, seg_rows); step["n"] = len(fr); log(f"render: slices {info}")
         elif "through" in step:
             knots = [cur] + [int(k) for k in step["through"]] + [j]
-            fr = frames_chain(keys, knots, n, step.get("weights"), ease, float(step.get("soft", 0.0)), method, matte_cfg, seg_rows, margin=float(step.get("knot_margin", 0.0)))
+            fr = frames_chain(keys, knots, n, step.get("weights"), ease, float(step.get("soft", 0.0)), method, matte_kw, seg_rows, margin=float(step.get("knot_margin", 0.0)))
         elif method == "rife":
             fr, _ = frames_rife(A, B, n, ease, matte_cfg, seg_rows, step)
         elif method == "dissolve":
@@ -1412,11 +1415,11 @@ def render_plan(plan, out, fps, draft=0):
         elif method == "morph":
             fr = frames_morph(A, B, n, ease, fps, step, seg_rows)
         elif method == "teleport":
-            fr, _ = frames_teleport(A, B, n, ease, step, matte_cfg, seg_rows)
+            fr, _ = frames_teleport(A, B, n, ease, step, matte_kw, seg_rows)
         elif method == "slide":
-            fr, info = frames_slide(A, B, n, ease, step, matte_cfg, seg_rows); log(f"render: slide {info}")
+            fr, info = frames_slide(A, B, n, ease, step, matte_kw, seg_rows); log(f"render: slide {info}")
         elif method == "rise":
-            fr, info = frames_rise(A, B, n, ease, step, matte_cfg, seg_rows); log(f"render: rise {info}")
+            fr, info = frames_rise(A, B, n, ease, step, matte_kw, seg_rows); log(f"render: rise {info}")
         elif method == "snap":
             fr = frames_snap(A, B, n, step, seg_rows)
         elif method == "cut":
@@ -1439,8 +1442,9 @@ def render_plan(plan, out, fps, draft=0):
     if unknown:
         sys.exit(f"unknown effect {unknown[0]}")
     draft_scale = W / float(json.loads((src / "prep.json").read_text())["canvas"][0]) if (src / "prep.json").exists() else 1.0
-    if "parallax" in kinds:
-        frames = apply_camera(frames, rows, effects, src, draft_scale)     # breath and parallax in one remap
+    breath_by_depth = any(e["kind"] == "breath" and float(e.get("depth_k", 0.0)) > 0 for e in effects)
+    if "parallax" in kinds or breath_by_depth:
+        frames = apply_camera(frames, rows, effects, src, draft_scale)     # breath and parallax in one remap (a breath by depth needs the maps too)
     elif "breath" in kinds:
         frames = apply_breath(frames, [e for e in effects if e["kind"] == "breath"][0])
     for eff in effects:
