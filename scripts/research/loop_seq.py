@@ -109,13 +109,16 @@ def _scale_of(H):
     return math.sqrt(abs(np.linalg.det(np.asarray(H)[:2, :2])))
 
 
-def register_sift(ref_bgr, bgr):
-    """Homography bgr -> ref on the proxies, returned at full scale, with its diagnostics."""
+def register_sift(ref_bgr, bgr, mask_ref=None, mask=None):
+    """Homography bgr -> ref on the proxies, returned at full scale, with its diagnostics. A mask (full-scale
+    uint8, nonzero where keypoints may lie: the far field under `prep --bg-depth`) restricts the fit."""
     g0, s = _proxy_gray(ref_bgr, PROXY_LONG)
     g1, s1 = _proxy_gray(bgr, PROXY_LONG)
     sift = cv2.SIFT_create(6000)
-    k0, d0 = sift.detectAndCompute(g0, None)
-    k1, d1 = sift.detectAndCompute(g1, None)
+    m0 = None if mask_ref is None else cv2.resize(mask_ref, (g0.shape[1], g0.shape[0]), interpolation=cv2.INTER_NEAREST)
+    m1 = None if mask is None else cv2.resize(mask, (g1.shape[1], g1.shape[0]), interpolation=cv2.INTER_NEAREST)
+    k0, d0 = sift.detectAndCompute(g0, m0)
+    k1, d1 = sift.detectAndCompute(g1, m1)
     if d0 is None or d1 is None or len(k0) < 8 or len(k1) < 8:
         return None, {"method": "sift", "inliers": 0, "why": "too few keypoints"}
     m = cv2.BFMatcher().knnMatch(d1, d0, k=2)
@@ -134,52 +137,75 @@ def register_sift(ref_bgr, bgr):
     res = float(np.median(np.hypot(*(proj - p0[sel]).T))) / s if inl else None
     S0 = np.diag([1 / s, 1 / s, 1.0]); S1 = np.diag([1 / s1, 1 / s1, 1.0])
     Hf = S0 @ H @ np.linalg.inv(S1)
-    info = {"method": "sift+magsac", "inliers": inl, "matches": len(good), "sane": ok, "why": why,
-            "residual_px": None if res is None else round(res, 2)}
+    info = {"method": "sift+magsac" + ("" if mask_ref is None else " (masked)"), "inliers": inl, "matches": len(good), "sane": ok, "why": why,
+            "residual_px": None if res is None else round(res, 2), "_pts_ref": (p0[sel] / s).tolist()}
     if inl < MIN_INLIERS or not ok:
         return None, info
     return Hf, info
 
 
-def register_ecc(ref_bgr, bgr, seed=None):
+def register_ecc(ref_bgr, bgr, seed=None, mask=None, long=ECC_LONG, blur=3.0):
     """ECC affine on blurred proxies, seeded by a map bgr -> ref at full scale (the previous frame's):
-    the path for a motion-blurred frame."""
-    g0, s = _proxy_gray(ref_bgr, ECC_LONG)
-    g1, s1 = _proxy_gray(bgr, ECC_LONG)
-    g0 = cv2.GaussianBlur(g0, (0, 0), 3).astype(np.float32) / 255
-    g1 = cv2.GaussianBlur(g1, (0, 0), 3).astype(np.float32) / 255
+    the path for a motion-blurred frame. `mask` (full-scale uint8 of bgr, the INPUT image) restricts the fit to those pixels."""
+    g0, s = _proxy_gray(ref_bgr, long)
+    g1, s1 = _proxy_gray(bgr, long)
+    m1 = None if mask is None else cv2.resize(mask, (g1.shape[1], g1.shape[0]), interpolation=cv2.INTER_NEAREST)
+    g0 = cv2.GaussianBlur(g0, (0, 0), blur).astype(np.float32) / 255
+    g1 = cv2.GaussianBlur(g1, (0, 0), blur).astype(np.float32) / 255
     S0 = np.diag([1 / s, 1 / s, 1.0]); S1 = np.diag([1 / s1, 1 / s1, 1.0])
     Hs = np.eye(3) if seed is None else np.linalg.inv(S0) @ seed @ S1     # bgr -> ref on the proxies
     # findTransformECC maps the TEMPLATE (ref) to the INPUT (bgr): seed it with the inverse and invert back
     M = np.linalg.inv(Hs)[:2].astype(np.float32)
     try:
         cc, M = cv2.findTransformECC(g0, g1, M, cv2.MOTION_AFFINE,
-                                     (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 300, 1e-6), None, 5)
+                                     (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 300, 1e-6), m1, 5)
     except cv2.error as e:
         return None, {"method": "ecc-affine", "cc": None, "why": str(e).splitlines()[-1][:80]}
     H = np.linalg.inv(np.vstack([M, [0, 0, 1]]).astype(np.float64))
     ok, why = _sane_h(H, g0.shape[1], g0.shape[0])
-    info = {"method": "ecc-affine", "cc": round(float(cc), 4), "sane": ok, "why": why, "seeded": seed is not None}
+    info = {"method": "ecc-affine" + ("" if mask is None else " (masked)"), "cc": round(float(cc), 4), "sane": ok, "why": why, "seeded": seed is not None}
     if cc < ECC_MIN_CC or not ok:
         return None, info
     return S0 @ H @ np.linalg.inv(S1), info
 
 
-def register_all(frames, cuts=()):
+def _window_shift(a, b, box, margin=30):
+    """Where the window `box` (x0, y0, x1, y1 px of a) sits in b: a template match of a's window inside b's box grown
+    by `margin`, sub-pixel by a parabola on the peak. Returns (dx, dy, peak correlation)."""
+    x0, y0, x1, y1 = box
+    t = cv2.cvtColor(a[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
+    ox, oy = max(0, x0 - margin), max(0, y0 - margin)
+    reg = cv2.cvtColor(b[oy:y1 + margin, ox:x1 + margin], cv2.COLOR_BGR2GRAY)
+    r = cv2.matchTemplate(reg, t, cv2.TM_CCOEFF_NORMED)
+    _, mx, _, (px, py) = cv2.minMaxLoc(r)
+    def sub(ax):
+        if ax == 0 and 0 < px < r.shape[1] - 1:
+            l, c, rr = r[py, px - 1], r[py, px], r[py, px + 1]
+        elif ax == 1 and 0 < py < r.shape[0] - 1:
+            l, c, rr = r[py - 1, px], r[py, px], r[py + 1, px]
+        else:
+            return 0.0
+        d = l - 2 * c + rr
+        return 0.0 if abs(d) < 1e-9 else float(0.5 * (l - rr) / d)
+    return px - (x0 - ox) + sub(0), py - (y0 - oy) + sub(1), float(mx)
+
+
+def register_all(frames, cuts=(), masks=None, ecc_refine=False):
     """Maps frame i -> frame 0 for every frame: direct SIFT, else SIFT to the previous frame composed with
     its map, else ECC seeded by the previous frame's map, else identity (said on the log). A frame listed
     in cuts is not registered at all (identity, untrusted): the plan joins it by a cut."""
     ref = frames[0]
+    mk = (lambda i: None) if masks is None else (lambda i: masks[i])
     maps = [np.eye(3)]; regs = [{"method": "reference", "trusted": True}]
     for i, f in enumerate(frames[1:], 1):
         if i in cuts:
             maps.append(np.eye(3)); regs.append({"method": "cut (identity, excluded from the crop)", "trusted": False})
             log(f"prep: frame {i} is a cut: identity, excluded from the crop")
             continue
-        H, info = register_sift(ref, f)
+        H, info = register_sift(ref, f, mk(0), mk(i))
         if H is None:
             log(f"prep: frame {i} direct sift rejected ({info.get('inliers')} inliers, {info.get('why')}); chaining")
-            Hc, infoc = register_sift(frames[i - 1], f)
+            Hc, infoc = register_sift(frames[i - 1], f, mk(i - 1), mk(i))
             if Hc is not None and regs[i - 1]["trusted"]:
                 H = maps[i - 1] @ Hc
                 info = {"method": "sift+magsac via frame %d" % (i - 1), "direct": info, **{k: v for k, v in infoc.items() if k != "method"}}
@@ -194,6 +220,12 @@ def register_all(frames, cuts=()):
             H = np.eye(3); info["method"] = "identity"; info["trusted"] = False
         else:
             info["trusted"] = True
+            if ecc_refine and masks is not None and info["method"].startswith("sift"):
+                He, infoe = register_ecc(ref, f, seed=H, mask=mk(i), long=PROXY_LONG, blur=2.0)
+                if He is not None:
+                    H = He; info["method"] += " + ecc (masked)"; info["ecc_cc"] = infoe["cc"]
+                else:
+                    log(f"prep: frame {i} masked ECC refinement rejected ({infoe.get('why')}, cc {infoe.get('cc')}); the SIFT fit kept")
         maps.append(H); regs.append(info)
         log(f"prep: frame {i} {info['method']} inliers {info.get('inliers', '-')} {info.get('why', '')}")
     return maps, regs
@@ -215,7 +247,35 @@ def cmd_prep(args):
                      "native": [rgb.shape[1], rgb.shape[0]], "scaled": [frames[-1].shape[1], frames[-1].shape[0]]})
         log(f"prep: {p.name} {rgb.shape[1]}x{rgb.shape[0]} -> {frames[-1].shape[1]}x{frames[-1].shape[0]}")
     cuts = tuple(int(c) for c in args.cut.split(",") if c != "")
-    maps, regs = register_all(frames, cuts)
+    depths, masks = None, None
+    if args.bg_depth > 0:
+        # the far field by the depth model (offline): keypoints only where the relative depth is below the gate
+        depths = [T.model_disparity(cv2.cvtColor(f, cv2.COLOR_BGR2RGB)) for f in frames]
+        masks = [((D < args.bg_depth) * 255).astype(np.uint8) for D in depths]
+        log(f"prep: bg-depth {args.bg_depth}: far-field shares " + ", ".join(f"{(m > 0).mean():.2f}" for m in masks))
+    global MIN_INLIERS
+    MIN_INLIERS = args.min_inliers
+    maps, regs = register_all(frames, cuts, masks, ecc_refine=args.ecc_refine)
+    if args.lock_window:
+        # the gag object stays put: each frame's map gains the translation that zeroes the mean offset of the listed
+        # windows (reference-frame px) between the reference and the warped frame, measured by template match (sub-pixel)
+        wins = [tuple(int(v) for v in w.split(",")) for w in args.lock_window.split(";")]
+        for i in range(1, len(frames)):
+            if not regs[i]["trusted"]:
+                continue
+            wf = cv2.warpPerspective(frames[i], maps[i], (frames[0].shape[1], frames[0].shape[0]), flags=cv2.INTER_CUBIC)
+            offs = [_window_shift(frames[0], wf, w) for w in wins]
+            dx = float(np.mean([o[0] for o in offs])); dy = float(np.mean([o[1] for o in offs]))
+            maps[i] = np.array([[1, 0, -dx], [0, 1, -dy], [0, 0, 1.0]]) @ maps[i]
+            regs[i]["lock"] = {"windows": wins, "offsets_px": [[round(o[0], 2), round(o[1], 2)] for o in offs], "shift_px": [round(-dx, 2), round(-dy, 2)],
+                               "corr": [round(o[2], 3) for o in offs]}
+            regs[i]["method"] += " + lock"
+            log(f"prep: frame {i} lock: the windows sat at " + ", ".join(f"({o[0]:+.1f}, {o[1]:+.1f})" for o in offs) + f" px; shifted by ({-dx:+.2f}, {-dy:+.2f})")
+    near = None
+    if args.depth_blend:
+        # a second fit on every keypoint (the subject plane); the warp blends the two by the reference frame's depth
+        assert depths is not None, "--depth-blend needs --bg-depth"
+        near = [(np.eye(3), {"method": "reference"})] + [register_sift(frames[0], f) for f in frames[1:]]
     # the canvas: the trusted frame with the closest framing (the largest background scale), so no frame is upscaled
     scales = [_scale_of(H) if r["trusted"] else 0.0 for H, r in zip(maps, regs)]
     ref_i = int(np.argmax(scales)) if args.ref < 0 else args.ref
@@ -234,6 +294,43 @@ def cmd_prep(args):
         else:
             f2 = f
         ones = np.ones(f2.shape[:2], np.uint8) * 255
+        Hn = None if near is None or near[i][0] is None or not regs[i]["trusted"] else Hr @ near[i][0]
+        if Hn is not None and i != ref_i:
+            # the depth-blended warp: far pixels follow the far-field fit, near pixels the subject-plane fit, linear in the
+            # reference frame's relative depth between the two fits' median inlier depths (parallax is linear in disparity)
+            Hn = Hn @ np.diag([1 / sc, 1 / sc, 1.0]) if sc < 0.98 else Hn
+            Dr = depths[ref_i]
+            # the fits' inlier points lie in frame 0; the canvas is frame ref_i: map them by Hr (a chained fit's points lie elsewhere: no blend)
+            to_canvas = lambda pts: (cv2.perspectiveTransform(np.float32(pts).reshape(-1, 1, 2), Hr).reshape(-1, 2) if len(pts) else np.zeros((0, 2), np.float32))
+            direct = regs[i]["method"].startswith("sift+magsac") and "via" not in regs[i]["method"]
+            pf = np.int32(np.round(to_canvas(regs[i].get("_pts_ref", [])))) if direct else np.zeros((0, 2), np.int32)
+            pn = np.int32(np.round(to_canvas(near[i][1].get("_pts_ref", []))))
+            def med_depth(pts):
+                pts = pts[(pts[:, 0] >= 0) & (pts[:, 0] < Dr.shape[1]) & (pts[:, 1] >= 0) & (pts[:, 1] < Dr.shape[0])]
+                return float(np.median(Dr[pts[:, 1], pts[:, 0]])) if len(pts) else float("nan")
+            d_far, d_near = med_depth(pf), med_depth(pn)
+            if args.depth_blend != "auto":
+                d_far, d_near = (float(v) for v in args.depth_blend.split(","))
+            if not (d_near > d_far + 0.05):
+                log(f"prep: frame {i} depth-blend: the fits' depths do not separate (far {d_far:.3f}, near {d_near:.3f}); far fit only")
+                Hn = None
+            else:
+                w = np.clip((Dr - d_far) / (d_near - d_far), 0, 1).astype(np.float32)
+                w = cv2.GaussianBlur(w, (0, 0), 3)
+                ys, xs = np.mgrid[0:H0, 0:W0].astype(np.float32)
+                grid = np.stack([xs, ys], -1).reshape(-1, 1, 2)
+                sf = cv2.perspectiveTransform(grid, np.linalg.inv(H)).reshape(H0, W0, 2)
+                sn = cv2.perspectiveTransform(grid, np.linalg.inv(Hn)).reshape(H0, W0, 2)
+                src_xy = (1 - w[..., None]) * sf + w[..., None] * sn
+                mx, my = np.ascontiguousarray(src_xy[..., 0]), np.ascontiguousarray(src_xy[..., 1])
+                warped.append(cv2.remap(f2, mx, my, cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT))
+                valids.append((cv2.remap(ones, mx, my, cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT) > 0).astype(np.uint8))
+                sep = float(np.percentile(np.hypot(*(sf - sn).reshape(-1, 2).T), 95))
+                regs[i]["depth_blend"] = {"d_far": round(d_far, 3), "d_near": round(d_near, 3), "near_fit": {k: v for k, v in near[i][1].items() if not k.startswith("_")},
+                                          "fit_separation_p95_px": round(sep, 1)}
+                regs[i]["H_to_canvas"] = np.round(H, 6).tolist(); regs[i]["H_near_to_canvas"] = np.round(Hn, 6).tolist()
+                log(f"prep: frame {i} depth-blend: far fit (depth {d_far:.3f}) to near fit (depth {d_near:.3f}, {near[i][1].get('inliers')} inliers); the fits differ by up to {sep:.0f} px (p95)")
+                continue
         warped.append(cv2.warpPerspective(f2, H, (W0, H0), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT))
         valids.append((cv2.warpPerspective(ones, H, (W0, H0), flags=cv2.INTER_NEAREST) > 0).astype(np.uint8))
         regs[i]["H_to_canvas"] = np.round(H, 6).tolist()
@@ -252,8 +349,13 @@ def cmd_prep(args):
     log(f"prep: canvas = frame {ref_i}; common crop {crop} of {W0}x{H0} -> {x1 - x0}x{y1 - y0}")
     for i, wf in enumerate(warped):
         cv2.imwrite(str(out / f"k{i}.png"), wf[y0:y1, x0:x1])
+        if depths is not None or args.depth_maps:   # the registered still's own map, for the depth effects of a plan
+            np.save(str(out / f"depth_k{i}.npy"), T.model_disparity(cv2.cvtColor(wf[y0:y1, x0:x1], cv2.COLOR_BGR2RGB)))
+    for r in regs:
+        r.pop("_pts_ref", None)
     rep = {"date": datetime.datetime.now().isoformat(timespec="seconds"), "seq": src.parent.name if src.name == "raw" else src.name,
-           "sources": meta, "long": args.long, "cuts": list(cuts), "reference": ref_i, "reference_size": [W0, H0], "crop": crop,
+           "sources": meta, "long": args.long, "cuts": list(cuts), "bg_depth": args.bg_depth, "depth_blend": bool(args.depth_blend),
+           "reference": ref_i, "reference_size": [W0, H0], "crop": crop,
            "canvas": [x1 - x0, y1 - y0], "frames": regs}
     (out / "prep.json").write_text(json.dumps(rep, indent=1))
     print(json.dumps({"seq": rep["seq"], "n": len(frames), "ref": ref_i, "canvas": rep["canvas"],
@@ -322,15 +424,38 @@ class Rife:
 _RIFE = Rife()
 
 
-def frames_rife(A, B, n, ease, matte_cfg, out_rows):
-    """n in-betweens: RIFE inside the change matte, the plain blend outside. Generated content inside."""
-    m = change_matte(A, B, **matte_cfg); m3 = m[..., None]
+def frames_rife(A, B, n, ease, matte_cfg, out_rows, step=None):
+    """n in-betweens: RIFE inside the change matte, the plain blend outside. Generated content inside.
+    `matte: {"all": true}` runs RIFE on the whole frame (a camera parallax between the stills is then motion too).
+    Step keys: `margin` (t runs over [margin, 1 − margin], so no in-between hugs a still); `local`
+    ([{"box": [x0, y0, x1, y1] (canvas fractions), "ease": "snap", "feather": 0.01}]: inside each box the in-between
+    is RIFE at that box's own ease of u, blended over a feathered edge; a mouth that opens crosses its ambiguous half
+    in fewer frames while the lean keeps the leg's ease)."""
+    step = step or {}
+    if matte_cfg.get("all"):
+        m = np.ones(A.shape[:2], np.float32)
+    else:
+        m = change_matte(A, B, **{k: v for k, v in matte_cfg.items() if k != "all"})
+    m3 = m[..., None]
+    mg = float(step.get("margin", 0.0))
+    H, W = A.shape[:2]
+    locals_ = []
+    for lc in step.get("local", []):
+        x0, y0, x1, y1 = lc["box"]; bm = np.zeros((H, W), np.float32)
+        bm[int(y0 * H):int(y1 * H), int(x0 * W):int(x1 * W)] = 1.0
+        bm = cv2.GaussianBlur(bm, (0, 0), max(1.0, float(lc.get("feather", 0.01)) * W))
+        locals_.append((bm[..., None], EASES[lc.get("ease", "snap")]))
     import rife_probe as R
     out = []
     for i in range(n):
-        t = EASES[ease]((i + 1) / (n + 1))
+        u = (i + 1) / (n + 1)
+        t = mg + (1 - 2 * mg) * EASES[ease](u)
         t0 = time.perf_counter()
         X = _RIFE.at(A, B, t)
+        for bm, le in locals_:
+            tl = mg + (1 - 2 * mg) * le(u)
+            Xl = _RIFE.at(A, B, tl)
+            X = (bm * Xl.astype(np.float32) + (1 - bm) * X.astype(np.float32)).round().astype(np.uint8)
         sec = time.perf_counter() - t0
         bl = blend(A, B, t)
         f = (m3 * X + (1 - m3) * bl).round().astype(np.uint8)
@@ -1159,6 +1284,92 @@ def apply_breath(frames, eff):
     return out
 
 
+def _depth_of_row(row, depths):
+    """The frame's depth map: a still's own, or the two stills' maps blended by the in-between's t."""
+    if "key" in row:
+        return depths[int(row["key"])]
+    a, b, t = int(row.get("from", 0)), int(row.get("to", 0)), float(row.get("t", 0.0))
+    return (1 - t) * depths[a] + t * depths[b]
+
+
+def _wave(shape, u):
+    return math.sin(2 * math.pi * u) if shape == "sin" else math.sin(math.pi * u) ** 2
+
+
+def apply_camera(frames, rows, effects, src, draft_scale=1.0):
+    """One remap per frame composing `breath` (a push-in about (cx, cy) by 1 + z sin²(πu)) and `parallax` (a sway by
+    depth: a pixel at relative depth d moves by amp·W·(d − ref)·wave(u) along `dir`, plus an optional second axis
+    `dir2` with its own `shape2` and `amp2` share; the plane at depth `ref` (or the depth read at `ref_at`) stays put;
+    the maps are the stills' `depth_k<i>.npy` blended by the frame's t). A breath with `depth_k` above 0 pushes in by depth
+    (a dolly: the zoom at a pixel is z · (1 + depth_k · clip(d − ref, ±`depth_clip`)), so near content grows more than the
+    reference plane and far content less). Frame 0 is untouched (the seam is a still)."""
+    n = len(frames); H, W = frames[0].shape[:2]
+    ys, xs = np.mgrid[0:H, 0:W].astype(np.float32)
+    br = [e for e in effects if e["kind"] == "breath"]
+    px = [e for e in effects if e["kind"] == "parallax"]
+    bd = br and float(br[0].get("depth_k", 0.0)) > 0
+    depths = None
+    if px or bd:
+        depths = {}
+        for p in sorted(Path(src).glob("depth_k*.npy")):
+            D = np.load(p).astype(np.float32)
+            if D.shape != (H, W):
+                D = cv2.resize(D, (W, H), interpolation=cv2.INTER_LINEAR)
+            depths[int(p.stem[7:])] = cv2.GaussianBlur(D, (0, 0), float(px[0].get("sigma", 3.0)) * draft_scale)
+        assert depths, f"depth effects: no depth_k*.npy under {src} (prep --bg-depth writes them)"
+        e = px[0] if px else br[0]
+        if "ref_at" in e:
+            fx, fy = e["ref_at"]; ref = float(depths[0][int(fy * H), int(fx * W)])
+        else:
+            ref = float(e.get("ref", 0.0))
+        e["_ref_depth"] = round(ref, 4)
+        if px:
+            log(f"camera: parallax amp {e['amp']} of W ({e['amp'] * W:.1f} px at depth distance 1), reference depth {ref:.3f}")
+        if bd:
+            log(f"camera: breath by depth: z {br[0]['z']} × (1 + {br[0]['depth_k']} × clip(d − {ref:.3f}, ±{br[0].get('depth_clip', 0.6)}))")
+    out = [frames[0]]
+    for i in range(1, n):
+        u = i / n
+        mx, my = xs.copy(), ys.copy()
+        if br:
+            e = br[0]; cx, cy = e.get("cx", 0.5) * W, e.get("cy", 0.5) * H
+            sc = 1 + float(e["z"]) * math.sin(math.pi * u) ** 2
+            if bd:
+                c = float(e.get("depth_clip", 0.6))
+                sc = 1 + (sc - 1) * (1 + float(e["depth_k"]) * np.clip(_depth_of_row(rows[i], depths) - ref, -c, c))
+            mx = cx + (mx - cx) / sc; my = cy + (my - cy) / sc
+        if px:
+            e = px[0]; D = _depth_of_row(rows[i], depths)
+            d1 = np.float32(e.get("dir", [1, 0])); d1 /= max(1e-6, float(np.hypot(*d1)))
+            disp = e["amp"] * W * _wave(e.get("shape", "sin"), u) * d1
+            if "dir2" in e:
+                d2 = np.float32(e["dir2"]); d2 /= max(1e-6, float(np.hypot(*d2)))
+                disp = disp + e["amp"] * W * float(e.get("amp2", 0.5)) * _wave(e.get("shape2", "pulse"), u) * d2
+            rel = (D - ref)
+            mx = mx - disp[0] * rel; my = my - disp[1] * rel
+        out.append(cv2.remap(frames[i], mx, my, cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT))
+    return out
+
+
+def apply_glow(frames, eff, draft_scale=1.0):
+    """A light source breathing: the frame's bright pixels (above `thr`, inside `box` in canvas fractions) blurred at
+    two radii (`sigma`, fractions of W; `mix` their shares) are added back at `gain`·wave(u) (a bloom; luminance only,
+    no pixel moves). Frame 0 untouched."""
+    n = len(frames); H, W = frames[0].shape[:2]
+    x0, y0, x1, y1 = [int(round(v * (W if k % 2 == 0 else H))) for k, v in enumerate(eff.get("box", [0, 0, 1, 1]))]
+    thr = float(eff.get("thr", 235)); sig = [float(v) * W for v in eff.get("sigma", [0.012, 0.05])]; mix = eff.get("mix", [0.6, 0.4])
+    out = [frames[0]]
+    for i in range(1, n):
+        g = float(eff.get("gain", 0.15)) * _wave(eff.get("shape", "pulse"), i / n)
+        f = frames[i].astype(np.float32)
+        m = np.zeros((H, W), np.float32); sub = f[y0:y1, x0:x1]
+        m[y0:y1, x0:x1] = (sub.max(2) > thr).astype(np.float32)
+        light = f * m[..., None]
+        bloom = sum(w * cv2.GaussianBlur(light, (0, 0), s) for w, s in zip(mix, sig))
+        out.append(np.clip(f + g * bloom, 0, 255).round().astype(np.uint8))
+    return out
+
+
 def render_plan(plan, out, fps, draft=0):
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     src = ROOT / plan["in"]
@@ -1195,7 +1406,7 @@ def render_plan(plan, out, fps, draft=0):
             knots = [cur] + [int(k) for k in step["through"]] + [j]
             fr = frames_chain(keys, knots, n, step.get("weights"), ease, float(step.get("soft", 0.0)), method, matte_cfg, seg_rows, margin=float(step.get("knot_margin", 0.0)))
         elif method == "rife":
-            fr, _ = frames_rife(A, B, n, ease, matte_cfg, seg_rows)
+            fr, _ = frames_rife(A, B, n, ease, matte_cfg, seg_rows, step)
         elif method == "dissolve":
             fr = frames_dissolve(A, B, n, ease, seg_rows)
         elif method == "morph":
@@ -1222,11 +1433,19 @@ def render_plan(plan, out, fps, draft=0):
         frames.extend(fr); rows.extend(seg_rows)
         log(f"render: step {si} {cur}->{j} {method} n {len(fr)} ({time.time() - t_render:.0f} s so far)")
         cur = j
-    for eff in plan.get("effects", []):
-        if eff["kind"] == "breath":
-            frames = apply_breath(frames, eff)
-        else:
-            sys.exit(f"unknown effect {eff['kind']}")
+    effects = plan.get("effects", [])
+    kinds = [e["kind"] for e in effects]
+    unknown = [k for k in kinds if k not in ("breath", "parallax", "glow")]
+    if unknown:
+        sys.exit(f"unknown effect {unknown[0]}")
+    draft_scale = W / float(json.loads((src / "prep.json").read_text())["canvas"][0]) if (src / "prep.json").exists() else 1.0
+    if "parallax" in kinds:
+        frames = apply_camera(frames, rows, effects, src, draft_scale)     # breath and parallax in one remap
+    elif "breath" in kinds:
+        frames = apply_breath(frames, [e for e in effects if e["kind"] == "breath"][0])
+    for eff in effects:
+        if eff["kind"] == "glow":
+            frames = apply_glow(frames, eff, draft_scale)
     if plan.get("crop"):                                             # the centre `crop` of the canvas (a fraction), even sides
         cf = float(plan["crop"]); cw, ch = int(round(W * cf)) & ~1, int(round(H * cf)) & ~1
         x0, y0 = (W - cw) // 2, (H - ch) // 2
@@ -1336,7 +1555,7 @@ def _timeline_text(plan):
             parts.append(f"k{st['key']} ×{st.get('hold', 1)}")
         else:
             parts.append(f"→k{st['to']} {st.get('method', 'rife')} n{st.get('n', 0)} {st.get('ease', 'smooth')}")
-    eff = ", ".join(f"{e['kind']} {e.get('z', '')}" for e in plan.get("effects", []))
+    eff = ", ".join(f"{e['kind']} {e.get('z', e.get('amp', e.get('gain', '')))}" for e in plan.get("effects", []))
     return " · ".join(parts) + (f" · effects: {eff}" if eff else " · no effects")
 
 
@@ -1396,7 +1615,14 @@ def main():
     sp = ap.add_subparsers(dest="cmd", required=True)
     p = sp.add_parser("prep"); p.add_argument("seq_dir"); p.add_argument("--out", required=True)
     p.add_argument("--long", type=int, default=1920); p.add_argument("--ref", type=int, default=-1, help="the canvas frame (default: the widest trusted framing, so nothing is upscaled)")
-    p.add_argument("--cut", default="", help="frame indices joined by a cut, not registered (e.g. 4,5)"); p.set_defaults(fn=cmd_prep)
+    p.add_argument("--cut", default="", help="frame indices joined by a cut, not registered (e.g. 4,5)")
+    p.add_argument("--bg-depth", type=float, default=0.0, help="register on the far field only: keypoints where the depth model's relative depth is below this (0 = off)")
+    p.add_argument("--depth-blend", default="", help="with --bg-depth: warp near pixels by a second, all-keypoint fit, blended by the reference frame's depth from the far fit to the near fit over 'lo,hi' (or 'auto': the fits' median inlier depths); a camera parallax between the shots is undone per layer")
+    p.add_argument("--min-inliers", type=int, default=MIN_INLIERS, help="the SIFT fit's inlier floor (a far field of a plain wall may hold 30)")
+    p.add_argument("--ecc-refine", action="store_true", help="with --bg-depth: refine the far-field fit by a masked ECC on the far pixels")
+    p.add_argument("--depth-maps", action="store_true", help="write depth_k<i>.npy (the depth model, offline) for the registered stills even without --bg-depth")
+    p.add_argument("--lock-window", default="", help="windows of the reference frame (px, 'x0,y0,x1,y1;...') that must stay put: each map gains the translation that zeroes their mean measured offset (the gag object as the anchor)")
+    p.set_defaults(fn=cmd_prep)
     p = sp.add_parser("render"); p.add_argument("plan"); p.add_argument("--out", required=True)
     p.add_argument("--fps", type=int, default=25); p.add_argument("--draft", type=int, default=0, help="render at this long edge (0 = the prep canvas)")
     p.add_argument("--set", action="append", help="override a top-level plan key: key=<json>"); p.set_defaults(fn=cmd_render)

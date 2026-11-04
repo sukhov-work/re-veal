@@ -22,7 +22,14 @@ and the Halloween loops of 2026-10-30 (ten sequences of 2–6 handheld stills, f
 1. `prep` every sequence (`loop_seq.py prep <raw dir> --out <run>/in/<seq>`): SIFT + MAGSAC to one still, chained
    SIFT, ECC seeded by the chain, else a declared cut (`--cut i,j`). Check the inlier counts and look at a montage of
    the registered stills. A still the subject fills against a plain wall cannot be registered (5–9 inliers; ECC fits
-   the subject): join it by a cut or a snap, or read three background anchors by hand (T64).
+   the subject): join it by a cut or a snap, or read three background anchors by hand (T64). A subject-filled
+   pair in a room has no one plane to register on: the all-keypoint fit (the angel portrait, 2026-11-04: 467 inliers) holds the
+   people and lets the far field drift 16 px; a far-field fit (`prep --bg-depth 0.15 --min-inliers 25`, 31 inliers on the wall)
+   holds the wall and lets a lamp that moved between the shots change shape by 7 px. When one object is the gag, lock it:
+   `prep --lock-window "x0,y0,x1,y1;..."` (windows on the object in the reference frame, drawn on the still and looked at first)
+   adds the translation that zeroes their measured offset (the ring within 2 px), and the room's drift (12–27 px there) rides
+   with the pose change through whole-frame RIFE (`matte: {"all": true}`). Measured dead ends on that pair: a masked ECC on the
+   far field or on the ring, and a depth-blended two-fit warp (the thin ring sits inside the depth map's transition).
 2. Probe the in-between methods on every adjacent pair before planning (the morph and RIFE strips side by side,
    about ten minutes for twenty pairs). The DIS morph doubles a subject on a large motion; RIFE inside the change
    matte does not; on small motions they are alike. Rule 7's double-exposure share per RIFE in-between runs 3–11 %
@@ -122,6 +129,11 @@ and the Halloween loops of 2026-10-30 (ten sequences of 2–6 handheld stills, f
 - `git add` with a gitignored path aborts the whole add; the run folders are gitignored, the plans and the script are not.
 - The sanity range of a background map must allow a photographer stepping closer (scale 0.5–2.0); a few dozen
   inliers on a subject-filled frame can fit a wrong model: look at the overlay.
+- `cv2.findTransformECC`'s mask argument masks the INPUT image (the frame being registered), not the template; a template-sized
+  mask raises a size assertion (2026-11-04).
+- The prep's canvas choice (the largest background scale) flips between frames when the scale is about 1.00: pass `--ref 0`
+  when two registrations are compared (2026-11-04).
+- YuNet counts a cookie's printed face: `faces_keyframes` above the people count is the props, not a doubled face (2026-11-04).
 
 ## 9. The record (every round)
 His grades verbatim in the sheet · the DECISIONS line with the order verbatim, the md5s and the tiers · the sheet's

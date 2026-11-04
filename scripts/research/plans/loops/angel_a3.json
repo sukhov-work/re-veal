@@ -1,0 +1,104 @@
+{
+ "seq": "angel",
+ "in": "benchmarks/runs/2026-11-04/angel/in/angel",
+ "matte": {
+  "all": true
+ },
+ "crf": 14,
+ "gif_long": 540,
+ "title": "a2 plus the halo breathing: the ring's own light bloomed at two radii (1.2 % and 5 % of the width) and added back at up to 15 % in step with the breath; luminance only, no pixel of the ring moves. Round 1b: the stills registered with the ring light locked (three windows on the ring; its arcs within 2 px), RIFE legs with a 4 % margin from the stills and the left mouth on its own snap ease (the teeth cross their half-open state in about 3 frames).",
+ "gag": "As they lean in and smile, the halo swells a little, as if it answered; it settles with them.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 14
+  },
+  {
+   "to": 1,
+   "n": 12,
+   "method": "rife",
+   "ease": "sine",
+   "margin": 0.04,
+   "local": [
+    {
+     "box": [
+      0.26,
+      0.52,
+      0.41,
+      0.59
+     ],
+     "ease": "snap",
+     "feather": 0.01
+    }
+   ]
+  },
+  {
+   "key": 1,
+   "hold": 12
+  },
+  {
+   "to": 0,
+   "n": 12,
+   "method": "rife",
+   "ease": "sine",
+   "margin": 0.04,
+   "local": [
+    {
+     "box": [
+      0.26,
+      0.52,
+      0.41,
+      0.59
+     ],
+     "ease": "snap",
+     "feather": 0.01
+    }
+   ]
+  }
+ ],
+ "effects": [
+  {
+   "kind": "breath",
+   "z": 0.018,
+   "cx": 0.374,
+   "cy": 0.31
+  },
+  {
+   "kind": "parallax",
+   "amp": 0.014,
+   "ref": 0.15,
+   "dir": [
+    1,
+    0
+   ],
+   "shape": "sin",
+   "dir2": [
+    0,
+    -1
+   ],
+   "shape2": "pulse",
+   "amp2": 0.5,
+   "sigma": 3
+  },
+  {
+   "kind": "glow",
+   "box": [
+    0.135,
+    0.19,
+    0.611,
+    0.488
+   ],
+   "thr": 235,
+   "sigma": [
+    0.012,
+    0.05
+   ],
+   "mix": [
+    0.6,
+    0.4
+   ],
+   "gain": 0.15,
+   "shape": "pulse"
+  }
+ ]
+}

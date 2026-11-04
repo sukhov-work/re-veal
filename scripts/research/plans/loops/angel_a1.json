@@ -1,0 +1,67 @@
+{
+ "seq": "angel",
+ "in": "benchmarks/runs/2026-11-04/angel/in/angel",
+ "matte": {
+  "all": true
+ },
+ "crf": 14,
+ "gif_long": 540,
+ "title": "the playbook's two-still recipe: RIFE in-betweens over the whole frame (the camera's own drift between the shots is motion too), sine ease, 12 up and 12 back, a 1.8 % breath about the halo's centre. Round 1b: the stills registered with the ring light locked (three windows on the ring; its arcs within 2 px), RIFE legs with a 4 % margin from the stills and the left mouth on its own snap ease (the teeth cross their half-open state in about 3 frames).",
+ "gag": "Two friends with Halloween cookies; the ring light behind the left one is her halo. They lean, smile, and settle back; the halo never moves.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 14
+  },
+  {
+   "to": 1,
+   "n": 12,
+   "method": "rife",
+   "ease": "sine",
+   "margin": 0.04,
+   "local": [
+    {
+     "box": [
+      0.26,
+      0.52,
+      0.41,
+      0.59
+     ],
+     "ease": "snap",
+     "feather": 0.01
+    }
+   ]
+  },
+  {
+   "key": 1,
+   "hold": 12
+  },
+  {
+   "to": 0,
+   "n": 12,
+   "method": "rife",
+   "ease": "sine",
+   "margin": 0.04,
+   "local": [
+    {
+     "box": [
+      0.26,
+      0.52,
+      0.41,
+      0.59
+     ],
+     "ease": "snap",
+     "feather": 0.01
+    }
+   ]
+  }
+ ],
+ "effects": [
+  {
+   "kind": "breath",
+   "z": 0.018,
+   "cx": 0.374,
+   "cy": 0.31
+  }
+ ]
+}

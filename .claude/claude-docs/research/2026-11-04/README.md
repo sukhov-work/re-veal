@@ -1,0 +1,9 @@
+# Research reports of 2026-11-04 (the angel portrait loop; DECISIONS 2026-11-04; `TRANSITIONS.md §13.28`)
+
+Copied verbatim from `benchmarks/runs/2026-11-04/angel/agents/` (gitignored) with a provenance header, on the owner's standing order of 2026-10-17 ("record useful researches … as persistent documents"). Research artifacts: their claims carry the author's own confidence and gaps; not re-verified at the copy.
+
+| file | author | what |
+|---|---|---|
+| `director.md` | the director track (Opus 5.5) | what moves between the stills (the second still brighter, its ring clipped, the wall +3.7 levels); two ideas: a resting-breath tempo (holds 8 and 6, 30 and 40 RIFE frames, 3.4 s; drafted at 640 px) and a breath pushed in by depth; both rendered by the main thread as a4 and a5 |
+| `skeptic1.md` | the skeptic, pass 1 (Opus 5.5) | the pass on the round-1a renders a1–a3 (the far-field registration): the ring's top 7.9 px off between the stills (the main thread's "ring" windows had sat off the ring), the teeth dissolving through closed lips, a1's whole-frame stall at frames 24–26, a3's glow box ending at two-thirds of the ring, the sources refocused between the shots (near 3–4× sharper, far half), a landing tick, couch sharpness flutter under the breath; a2 READY WITH A NOTE, a3 and a1 NOT READY |
+| `skeptic2.md` | the skeptic, pass 2 (Opus 5.5) | the pass on the round-1b renders a1–a5 (the page's renders): a2, a3, a5, a4 READY WITH A NOTE, a1 NOT READY (a one-frame stall as the breath peaks into the smile hold); the teeth fade 1–2 frames each way (3–4 in a4); a hair lock over the cheek dissolving at frames 44–46; the glow's spill on the ring's rim (+11 levels) and the right woman's hair edge (+8); a5's depth push barely measurable (1–2 px); a4's seam step 1.20 against 0.5 neighbours; the far field's drift carried without a tear; rank a2, a3, a5, a4, a1 |

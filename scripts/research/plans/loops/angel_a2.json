@@ -1,0 +1,84 @@
+{
+ "seq": "angel",
+ "in": "benchmarks/runs/2026-11-04/angel/in/angel",
+ "matte": {
+  "all": true
+ },
+ "crf": 14,
+ "gif_long": 540,
+ "title": "a1 plus a depth sway: the camera drifts on a small orbit (1.4 % of the width sideways at depth distance 1 from the halo's plane, half that upward) with the halo's plane held still, so the laptop, hands and faces move more than the wall (the depth model's maps, blended per frame). Round 1b: the stills registered with the ring light locked (three windows on the ring; its arcs within 2 px), RIFE legs with a 4 % margin from the stills and the left mouth on its own snap ease (the teeth cross their half-open state in about 3 frames).",
+ "gag": "The same lean and smile under a slow handheld drift: the halo hangs in its own depth while the room moves around it.",
+ "timeline": [
+  {
+   "key": 0,
+   "hold": 14
+  },
+  {
+   "to": 1,
+   "n": 12,
+   "method": "rife",
+   "ease": "sine",
+   "margin": 0.04,
+   "local": [
+    {
+     "box": [
+      0.26,
+      0.52,
+      0.41,
+      0.59
+     ],
+     "ease": "snap",
+     "feather": 0.01
+    }
+   ]
+  },
+  {
+   "key": 1,
+   "hold": 12
+  },
+  {
+   "to": 0,
+   "n": 12,
+   "method": "rife",
+   "ease": "sine",
+   "margin": 0.04,
+   "local": [
+    {
+     "box": [
+      0.26,
+      0.52,
+      0.41,
+      0.59
+     ],
+     "ease": "snap",
+     "feather": 0.01
+    }
+   ]
+  }
+ ],
+ "effects": [
+  {
+   "kind": "breath",
+   "z": 0.018,
+   "cx": 0.374,
+   "cy": 0.31
+  },
+  {
+   "kind": "parallax",
+   "amp": 0.014,
+   "ref": 0.15,
+   "dir": [
+    1,
+    0
+   ],
+   "shape": "sin",
+   "dir2": [
+    0,
+    -1
+   ],
+   "shape2": "pulse",
+   "amp2": 0.5,
+   "sigma": 3
+  }
+ ]
+}

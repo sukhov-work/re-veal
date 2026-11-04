@@ -101,3 +101,34 @@ listed stills slide across the base as sheets, back to front, over `n` frames, a
 - Per sheet (round 4b): `layer_y` `[y0, y1]` (prep-canvas rows; the sky layer stops above the skyline, which the depth map
   cannot separate from the far buildings) and `shadow` (its own contact-shadow strength; 0 for a summer band over summer,
   which would otherwise show only as its shadow). The travel includes the feather's half width, so nothing is left at the end.
+
+## The portrait pair (2026-11-04, the angel loop): far-field registration, whole-frame RIFE, a depth sway, a glow
+
+- `prep --bg-depth T [--min-inliers N] [--ecc-refine]`: the SIFT fit uses only keypoints whose relative depth (the depth model's
+  map of each scaled still, 0 far .. 1 near) is below T, so a handheld pair of a subject-filled frame registers on the wall,
+  not on the people (on the angel pair the all-keypoint fit, 467 inliers, held the people and let the far field drift 16 px; the
+  far fit at T 0.15, 31 inliers, held the wall; neither held the lamp, which had moved between the shots). `--min-inliers` lowers
+  the fit's floor (40) for a plain wall. `--ecc-refine` refines the far fit by a masked ECC on the far pixels (measured worse on the
+  angel pair; off by default). With `--bg-depth` or `--depth-maps` the prep writes `depth_k<i>.npy` for every registered still.
+  `--depth-blend lo,hi|auto` warps near pixels by a second, all-keypoint fit, blended from the far fit to the near fit over the
+  reference frame's depth range (the camera's parallax between the shots undone per layer): on the angel pair the depth model
+  puts the thin ring inside the transition (0.14–0.16), so no range held it; not usable there.
+- `prep --lock-window "x0,y0,x1,y1;..."` (reference-frame px; the windows drawn on the still and looked at first): after the fit,
+  each map gains the translation that zeroes the windows' mean offset, measured by template match (sub-pixel). The gag object is
+  the anchor (the angel pair: three windows on the ring light, within 2.1 px after the lock); the room's drift is RIFE's.
+- `matte: {"all": true}`: `rife` runs on the whole frame (no change matte, no plain blend outside it); a locked or far-field
+  registration leaves the rest of the scene's drift as motion, and RIFE carries it with the pose change.
+- A `rife` step's `margin` (t runs over [margin, 1 − margin]: no in-between hugs a still; 0.04) and `local`
+  (`[{"box": [x0, y0, x1, y1], "ease": "snap", "feather": 0.01}]`, canvas fractions): inside each box the in-between is RIFE at
+  the box's own ease of u, blended over a feathered edge (two RIFE calls per frame per box). A mouth that opens crosses its
+  half-open state, which RIFE draws as teeth through closed lips, in about 3 frames under `snap` while the lean keeps `sine`.
+- Effects on the finished frames (frame 0 always untouched, so the seam is a still):
+  - `parallax`: `{"kind": "parallax", "amp": 0.014, "ref_at": [fx, fy] | "ref": d, "dir": [1, 0], "shape": "sin" | "pulse",
+    "dir2": [0, -1], "shape2": "pulse", "amp2": 0.5, "sigma": 3}`: one remap per frame in which a pixel at relative depth d
+    moves by `amp` × W × (d − ref) × wave(u) along `dir` (`sin`: sin 2πu, a sway; `pulse`: sin² πu, one excursion), plus
+    `amp2` × that along `dir2` with `shape2` (an orbit); the plane at depth `ref` (or the depth read at `ref_at` in frame 0's
+    map) stays put; the maps `depth_k<i>.npy` are blurred `sigma` px and blended per frame by the in-between's t. With a
+    `breath` present the two compose into ONE remap (a plan with `breath` alone keeps the old single-warp path, byte-identical).
+  - `glow`: `{"kind": "glow", "box": [x0, y0, x1, y1], "thr": 235, "sigma": [0.012, 0.05], "mix": [0.6, 0.4], "gain": 0.15,
+    "shape": "pulse"}`: the frame's pixels above `thr` inside `box` (canvas fractions) are blurred at the `sigma` radii
+    (fractions of W), mixed by `mix`, and added back at `gain` × wave(u): a light source breathing (a bloom); luminance only.
