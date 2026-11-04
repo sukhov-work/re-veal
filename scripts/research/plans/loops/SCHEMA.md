@@ -44,7 +44,8 @@ and `feather` the Gaussian feather, both as fractions of the width.
 Outputs per render: `loop.mp4` (libx264, the plan's `crf`, yuv420p), `loop.gif` (the plan's `gif_long` px long
 edge, a two-pass palette, 40 ms per frame), `sheet.jpg`, `frames.json` (what each frame is), `measure.json`
 (the step series on the decoded mp4, the seam step, faces per frame, the double-exposure share per generated frame,
-the md5s), `plan.json` (the plan as rendered).
+the md5s; since 2026-11-04 also `script_md5` and `rife_version`), `plan.json` (the plan as rendered), and with
+`--frames` the folder `frames/` (see the last section).
 
 ## `slices` (2026-11-01, the seasons sequence): diagonal cards that slide into place
 
@@ -133,3 +134,41 @@ listed stills slide across the base as sheets, back to front, over `n` frames, a
   - `glow`: `{"kind": "glow", "box": [x0, y0, x1, y1], "thr": 235, "sigma": [0.012, 0.05], "mix": [0.6, 0.4], "gain": 0.15,
     "shape": "pulse"}`: the frame's pixels above `thr` inside `box` (canvas fractions) are blurred at the `sigma` radii
     (fractions of W), mixed by `mix`, and added back at `gain` × wave(u): a light source breathing (a bloom); luminance only.
+
+## Render flags and the `readers` command (2026-11-04 evening, for the studio)
+
+`--progress` and `--frames` are off by default. Without them a render writes the same mp4, gif and stderr as before
+(checked on 2026-11-04 with a2 and s6, whose md5s held with and without the flags).
+- `render … --progress` prints `PROGRESS i n phase` lines on stderr, each flushed. The phases come in this order:
+  - `frames`: `i` counts the timeline's frames produced so far, and `n` is the planned total: the holds plus every
+    step's `n`. A `slices` step replaces its `n` by its schedule's count when it starts, and a `rewind` adds its count
+    when it runs. `n` is therefore an estimate: s6 plans 165 and renders 164, because a `sheets` step of `n` 135
+    renders 134 frames. A line follows each in-between of a `rife` leg or a `through` chain, and every 10th frame of a
+    `sheets`, `slices`, `dissolve`, `morph` or `snap` step. Holds, `cut`, `rewind`, `teleport`, `slide` and `rise`
+    print no line of their own; the next line counts their frames.
+  - `effects`: a line per 10 frames of each breath, parallax or glow pass; `i` counts the frames of that pass.
+  - `encode`: `0 N` before the mp4 is encoded and `N N` after the gif.
+  - `measure`: one line after `measure.json` and the `--frames` JPEGs are written; `i` is the number of frames decoded
+    from the mp4.
+- `render … --frames` writes `OUT/frames/f0000.jpg`, `f0001.jpg`, … at JPEG quality 90: the frames decoded from
+  `loop.mp4`, the ones the measures read. Older `f*.jpg` in that folder are removed first. At s6's size the folder
+  takes 182 MB for 164 frames.
+- `measure.json` always records `script_md5` (the md5 of `loop_seq.py` as run) and `rife_version`: the `model` string
+  of `benchmarks/runs/2026-10-21/rife/RIFE_MANIFEST.json` when the render loaded RIFE, null when it did not (a
+  `sheets` plan).
+- `readers PREP_DIR [--out DIR]` reads what each still of a prep folder holds, before a plan is written. `DIR`
+  defaults to `PREP_DIR/readers`. It writes `DIR/readers.json`, `DIR/depth_k<i>.jpg` (each depth map stretched
+  min..max to 8-bit grey) and one summary line on stdout: `{"stills": n, "faces": [counts], "lab_above_14": [shares]}`.
+  `readers.json` holds `prep` (the folder as given), `stills` and `pairs`:
+  - a still: `{"still": "k0.png", "size": [W, H], "faces": [[x, y, w, h, score], …], "depth": "depth_k0.npy",
+    "depth_stats": {"min", "max", "mean"}, "mean_level", "clipped_high_px", "clipped_low_px", "laplacian_var"}`. The
+    faces come from YuNet through `rife_probe.faces_of`, the call the render's measures use: an integer box and the
+    score to 3 places. `depth` names the prep folder's map. When `depth_k<i>.npy` is missing, the depth model computes
+    it offline and `readers` saves it into the prep folder as `prep` does, so a later `parallax` finds it. The depth
+    statistics are rounded to 3 places and `mean_level`, the grey mean, to 1. The clipped counts are the grey pixels
+    above 250 and below 5. `laplacian_var` is the variance of the grey still's Laplacian at full size (OpenCV's 3×3
+    aperture, `ksize` 1), to 1 place.
+  - a neighbouring pair: `{"a": 0, "b": 1, "lab_above_14", "lab_above_30"}`, the shares of pixels whose Lab distance
+    between the two stills exceeds 14 and 30, to 4 places. The distance is the one `change_matte` thresholds: on
+    2 px blurred copies, before the matte's opening and closing. The shares depend on the registration: the angel
+    pair reads 0.3021 on its locked canvas (`in/angel/`) and 0.1964 on the all-keypoint fit without the ring lock.

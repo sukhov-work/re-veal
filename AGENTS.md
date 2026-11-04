@@ -79,7 +79,8 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
 - **Prose gate** (`.claude/rules/prose.md`, owner order 2026-09-13): every dev-facing text — the
   final message, DECISIONS lines, handover, design docs, plan and backlog rows, memory, commit
   messages — passes the `no-slop` skill (load it with the `Skill` tool, run its pass) before it is
-  saved or shown.
+  saved or shown. The project copy under `.claude/skills/no-slop/` is v2.0 of the owner's global
+  skill (re-vendored 2026-11-04 from the ecom knowledge-base clone at commit 2cf813f); the two are kept identical.
 - **Ship** (owner ruling 2026-09-13): Phase 4 ends with a commit on `main` and `git push origin main`.
   No branches, no PRs. Never push with a red gate; never force-push.
 - **Fixtures** live in `fixtures/` inside the repo, gitignored except `fixtures/MANIFEST.md` (the

@@ -16,7 +16,7 @@ Subcommands
       ECC affine on blurred 600 px proxies (the motion-blurred frames); otherwise identity, said on the log.
       Frame 0 is never warped. All frames are cropped to the common valid rectangle (even sides). Writes
       OUT/k<i>.png and OUT/prep.json (the method, inliers, residual, the map and the crop per frame).
-  render PLAN.json --out OUT [--fps 25] [--draft 0]
+  render PLAN.json --out OUT [--fps 25] [--draft 0] [--progress] [--frames]
       Renders the loop the plan describes (see plans/loops/SCHEMA.md): keyframes by index into the prep
       folder, holds per visit, a `through` chain of stills under one global speed profile (the inner stills
       passed, never held; `weights` per segment, `soft` slows near a still), segments rendered by `morph` (transitions.py, the DIS flow
@@ -30,7 +30,19 @@ Subcommands
       point, sin² over the loop, the endpoints untouched). Writes OUT/loop.mp4, OUT/loop.gif (two-pass
       palette, 40 ms per frame at 25 fps), OUT/sheet.jpg, OUT/frames.json (what each frame is) and
       OUT/measure.json (the step series, the seam step, faces per frame, the double-exposure share per
-      generated frame, seconds).
+      generated frame, seconds, the md5 of this script as run, and the RIFE manifest's model string when the
+      render loaded RIFE, else null). `--progress` (2026-11-04, for the studio) prints `PROGRESS i n phase` lines
+      on stderr: `frames` (i of the planned total), `effects`, `encode`, `measure`; without it stderr is
+      unchanged. `--frames` also writes OUT/frames/f0000.jpg, f0001.jpg, ... (JPEG quality 90): the decoded
+      mp4's frames, the ones the measures read.
+  readers PREP_DIR [--out DIR]
+      What each still of a prep folder holds, read before a plan is written (2026-11-04): per k<i>.png its size,
+      the YuNet face boxes, the depth model's map (the prep folder's depth_k<i>.npy; computed and saved there
+      only when missing, as prep saves it), its min, max and mean, the grey mean, the counts of grey pixels
+      above 250 and below 5, and the variance of the grey still's Laplacian; per neighbouring pair the shares
+      of pixels whose Lab distance on 2 px blurred copies (the change matte's measure) is above 14 and above 30.
+      Writes DIR/readers.json and DIR/depth_k<i>.jpg (the map stretched min..max); DIR defaults to
+      PREP_DIR/readers.
 """
 import argparse
 import datetime
@@ -73,6 +85,32 @@ def sha256(p):
 
 def md5(p):
     return hashlib.md5(Path(p).read_bytes()).hexdigest()
+
+
+# `render --progress` (2026-11-04, for the studio): PROGRESS lines on stderr. The switch is off unless cmd_render sets
+# it, so a render without the flag writes the same stderr as before. `i` counts the timeline's frames produced so far,
+# `n` is the planned total (an estimate: the holds plus every step's `n`).
+_PROG = {"on": False, "i": 0, "n": 0}
+
+
+def progress(i, n, phase):
+    """`PROGRESS i n phase` on stderr, flushed, when the switch is on; nothing otherwise."""
+    if _PROG["on"]:
+        print(f"PROGRESS {int(i)} {int(n)} {phase}", file=sys.stderr, flush=True)
+
+
+def tick(k, every=1):
+    """Frame k (1-based) of a timeline step is done: the frame counter moves on by one, and every `every`-th frame of
+    the step prints a `frames` line."""
+    _PROG["i"] += 1
+    if k % every == 0:
+        progress(_PROG["i"], _PROG["n"], "frames")
+
+
+def replan(old, new):
+    """A step whose frame count is known only when it runs (`slices`, `rewind`): the planned total trades the plan's
+    `n` for the real count."""
+    _PROG["n"] += int(new) - int(old)
 
 
 # ------------------------------------------------------------------ prep: decode, scale, register, crop
@@ -425,6 +463,14 @@ class Rife:
 _RIFE = Rife()
 
 
+def _rife_version():
+    """The RIFE manifest's `model` string when this render loaded RIFE, else None (measure.json's `rife_version`)."""
+    if _RIFE.net is None:
+        return None
+    import rife_probe as R
+    return json.loads(Path(R.MANIFEST).read_text())["model"]
+
+
 def frames_rife(A, B, n, ease, matte_cfg, out_rows, step=None):
     """n in-betweens: RIFE inside the change matte, the plain blend outside. Generated content inside.
     `matte: {"all": true}` runs RIFE on the whole frame (a camera parallax between the stills is then motion too).
@@ -463,6 +509,7 @@ def frames_rife(A, B, n, ease, matte_cfg, out_rows, step=None):
         out.append(f)
         out_rows.append({"t": round(t, 4), "generated": "rife", "matte_share": round(float((m > 0.5).mean()), 4),
                          "dexp": R.dexp_share(X, A, B, m), "seconds": round(sec, 2)})
+        tick(i + 1)
     return out, m
 
 
@@ -497,6 +544,7 @@ def frames_chain(keys, knots, n, weights, ease, soft, method, matte_cfg, out_row
         out.append(f)
         row.update({"u": round(float(u), 4), "segment": [int(knots[i]), int(knots[i + 1])], "t": round(float(t), 4)})
         out_rows.append(row)
+        tick(j)
     return out
 
 
@@ -506,6 +554,7 @@ def frames_dissolve(A, B, n, ease, out_rows):
         t = EASES[ease]((i + 1) / (n + 1))
         out.append(blend(A, B, t).round().astype(np.uint8))
         out_rows.append({"t": round(t, 4), "generated": "none (blend)"})
+        tick(i + 1, 10)
     return out
 
 
@@ -519,7 +568,11 @@ def frames_morph(A, B, n, ease, fps, step, out_rows):
     spec = T.spec_from(step.get("preset", "morph"), **over)
     assert spec.n_frames() == n + 2, (spec.n_frames(), n)
     A2, B2, corr = T.prepare(cv2.cvtColor(A, cv2.COLOR_BGR2RGB), cv2.cvtColor(B, cv2.COLOR_BGR2RGB), spec)
-    fr = [cv2.cvtColor(f, cv2.COLOR_RGB2BGR) for f in T.iter_frames(A2, B2, spec, corr)]
+    fr = []
+    for k, f in enumerate(T.iter_frames(A2, B2, spec, corr)):
+        fr.append(cv2.cvtColor(f, cv2.COLOR_RGB2BGR))
+        if 0 < k <= n:                                   # the step's own frames (the first and the last are the stills)
+            tick(k, 10)
     assert fr[0].shape == A.shape, (fr[0].shape, A.shape)
     for i in range(n):
         out_rows.append({"t": round((i + 1) / (n + 1), 4), "generated": "none (morph)", "method": corr["method"]})
@@ -879,6 +932,7 @@ def frames_snap(A, B, n, step, out_rows):
             f = cv2.filter2D(f, -1, k, borderType=cv2.BORDER_REFLECT)
         out.append(np.clip(f, 0, 255).round().astype(np.uint8))
         out_rows.append({"t": round(t, 4), "generated": "none (blend + motion blur)", "blur_px": L})
+        tick(i + 1, 10)
     return out
 
 
@@ -994,6 +1048,7 @@ def frames_slices(keys, knots, step, out_rows):
         idx = (max_idx - c["idx"]) if (reverse_each and m % 2) else c["idx"]
         return m * period + idx * stagger
     n_total = max(start_of(c, m) + dur for c in cells for m in range(T))
+    replan(step.get("n", 0), n_total - 1)               # the schedule's count replaces the plan's `n` in the progress total
     # the padded stills (mirrored beyond the canvas; `wrap: true` rolls the canvas round instead, which puts the canvas
     # edge as a hard line inside a rolling band) for content that comes from beyond the canvas
     pad = int(math.ceil(travel if slide == "along" else max(c["width"] for c in cells))) + 4
@@ -1051,6 +1106,7 @@ def frames_slices(keys, knots, step, out_rows):
                 frame[y0:y1, x0:x1] *= (1.0 - sh)[..., None]
         out.append(np.clip(frame, 0, 255).round().astype(np.uint8))
         out_rows.append({"t": round(f / n_total, 4), "generated": "none (slices)", "active": active, "disp_px": round(disp_max, 1)})
+        tick(f, 10)
     info = {"cells": len(cells), "frames": len(out), "period": period, "n_total": n_total, "slide": slide,
             "pad": pad, "width_px": round(float(np.mean([c["width"] for c in cells])), 1)}
     return out, info
@@ -1265,6 +1321,7 @@ def frames_sheets(keys, cur, step, out_rows, src):
         out_rows.append({"t": round(f / n, 4), "generated": "none (sheets)", "d": [round(band(s, f)[0], 1) for s in sheets],
                          "edge_px": round(dmax, 1), "samples": K,
                          "objects": {ob["name"]: {si: round(object_alpha(ob, si, f), 3) for si in range(len(sheets)) if object_alpha(ob, si, f) > 0} for ob in objs} if objs else None})
+        tick(f, 10)
     info = {"frames": len(out), "extent_px": round(E, 1), "crop": cf, "motion": motion, "edge_depth_px": round(edge_depth, 1), "widths_px": [round(band(s, 0)[1], 1) for s in sheets],
             "objects": [{"name": ob["name"], "share": ob["share"], "cover": ob.get("cover")} for ob in objs]}
     return out, info
@@ -1282,6 +1339,8 @@ def apply_breath(frames, eff):
             out.append(f); continue
         M = np.float32([[s, 0, cx * (1 - s)], [0, s, cy * (1 - s)]])
         out.append(cv2.warpAffine(f, M, (W, H), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT))
+        if (i + 1) % 10 == 0:
+            progress(i + 1, n, "effects")
     return out
 
 
@@ -1350,6 +1409,8 @@ def apply_camera(frames, rows, effects, src, draft_scale=1.0):
             rel = (D - ref)
             mx = mx - disp[0] * rel; my = my - disp[1] * rel
         out.append(cv2.remap(frames[i], mx, my, cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT))
+        if (i + 1) % 10 == 0:
+            progress(i + 1, n, "effects")
     return out
 
 
@@ -1369,10 +1430,12 @@ def apply_glow(frames, eff, draft_scale=1.0):
         light = f * m[..., None]
         bloom = sum(w * cv2.GaussianBlur(light, (0, 0), s) for w, s in zip(mix, sig))
         out.append(np.clip(f + g * bloom, 0, 255).round().astype(np.uint8))
+        if (i + 1) % 10 == 0:
+            progress(i + 1, n, "effects")
     return out
 
 
-def render_plan(plan, out, fps, draft=0):
+def render_plan(plan, out, fps, draft=0, frames_jpg=False):
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     src = ROOT / plan["in"]
     keys = {}
@@ -1388,12 +1451,14 @@ def render_plan(plan, out, fps, draft=0):
     frames, rows = [], []
     cur = None
     t_render = time.time()
+    _PROG.update(i=0, n=sum(int(st.get("hold", 1)) if "key" in st else int(st.get("n", 0)) for st in plan["timeline"]))
     for si, step in enumerate(plan["timeline"]):
         if "key" in step:
             k = int(step["key"])
             for _ in range(int(step.get("hold", 1))):
                 frames.append(keys[k]); rows.append({"step": si, "key": k, "generated": "none (photo)"})
             cur = k
+            _PROG["i"] = len(frames)
             continue
         j = int(step["to"]); n = int(step.get("n", 0)); method = step.get("method", "rife"); ease = step.get("ease", "smooth")
         A, B = keys[cur], keys[j]
@@ -1429,11 +1494,13 @@ def render_plan(plan, out, fps, draft=0):
             back = frames[int(step.get("from", 0)):][::-1][stride::stride]
             fr = [f for f in back]
             seg_rows = [{"generated": "none (rewind)"} for _ in fr]
+            replan(step.get("n", 0), len(fr))
         else:
             sys.exit(f"unknown method {method}")
         for r in seg_rows:
             r.update({"step": si, "from": cur, "to": j, "method": method})
         frames.extend(fr); rows.extend(seg_rows)
+        _PROG["i"] = len(frames)
         log(f"render: step {si} {cur}->{j} {method} n {len(fr)} ({time.time() - t_render:.0f} s so far)")
         cur = j
     effects = plan.get("effects", [])
@@ -1462,6 +1529,7 @@ def render_plan(plan, out, fps, draft=0):
     import imageio_ffmpeg
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     mp4 = out / "loop.mp4"
+    progress(0, N, "encode")
     cmd = [ff, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(fps), "-i", "-",
            "-an", "-c:v", "libx264", "-preset", "medium", "-crf", str(plan.get("crf", 14)), "-pix_fmt", "yuv420p",
            "-movflags", "+faststart", str(mp4)]
@@ -1479,6 +1547,7 @@ def render_plan(plan, out, fps, draft=0):
     for f in frames:
         pr.stdin.write(np.ascontiguousarray(cv2.resize(f, (gw, gh), interpolation=cv2.INTER_AREA)).tobytes())
     pr.stdin.close(); assert pr.wait() == 0, "ffmpeg gif failed"
+    progress(N, N, "encode")
     # the sheet: every frame when short, else every 2nd, 8 per row
     every = 1 if N <= 48 else 2
     sel = list(range(0, N, every)); sc = 240 / W
@@ -1515,10 +1584,18 @@ def render_plan(plan, out, fps, draft=0):
             "dexp_max": max([r.get("dexp", r.get("dexp_rest", 0.0)) for r in gen], default=0.0),
             "rife_seconds_per_frame": round(float(np.mean([r["seconds"] for r in gen if "seconds" in r])), 2) if any("seconds" in r for r in gen) else None,
             "md5_mp4": md5(mp4), "md5_gif": md5(gif), "gif_bytes": gif.stat().st_size, "mp4_bytes": mp4.stat().st_size,
-            "draft": draft, "plan_sha256": hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()[:16]}
+            "draft": draft, "plan_sha256": hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()[:16],
+            "script_md5": md5(Path(__file__)), "rife_version": _rife_version()}
     (out / "frames.json").write_text(json.dumps(rows, indent=0))
     (out / "measure.json").write_text(json.dumps(meas, indent=1))
     (out / "plan.json").write_text(json.dumps(plan, indent=1))
+    if frames_jpg:                                                  # `--frames`: the decoded mp4's frames, for a scrubber by index
+        fd = out / "frames"; fd.mkdir(exist_ok=True)
+        for p in fd.glob("f*.jpg"):                                 # a shorter re-render into the same folder leaves no stale frame
+            p.unlink()
+        for i, f in enumerate(dec):
+            cv2.imwrite(str(fd / f"f{i:04d}.jpg"), f, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    progress(len(dec), N, "measure")
     print(json.dumps({k: meas[k] for k in ("frames", "seconds", "canvas", "render_s", "step_mean", "step_max", "step_max_at", "seam_step",
                                             "faces_keyframes", "generated_share", "dexp_max", "md5_mp4", "gif_bytes")}))
     return meas
@@ -1528,7 +1605,63 @@ def cmd_render(args):
     plan = json.loads(Path(args.plan).read_text())
     for kv in args.set or []:
         k, v = kv.split("=", 1); plan[k] = json.loads(v)
-    render_plan(plan, args.out, args.fps, args.draft)
+    _PROG["on"] = bool(args.progress)
+    render_plan(plan, args.out, args.fps, args.draft, frames_jpg=bool(args.frames))
+
+
+# ------------------------------------------------------------------ readers: what each still holds, beside the prep (2026-11-04, the studio)
+
+def _lab_distance(A, B):
+    """The per-pixel Lab distance between two stills on 2 px blurred copies: the measure `change_matte` thresholds."""
+    la = cv2.cvtColor(cv2.GaussianBlur(A, (0, 0), 2), cv2.COLOR_BGR2LAB).astype(np.float32)
+    lb = cv2.cvtColor(cv2.GaussianBlur(B, (0, 0), 2), cv2.COLOR_BGR2LAB).astype(np.float32)
+    return np.linalg.norm(la - lb, axis=2)
+
+
+def cmd_readers(args):
+    """Per still of a prep folder: the size, the YuNet faces, the depth map and its range, the exposure and focus
+    statistics; per neighbouring pair the Lab-difference shares. A missing depth_k<i>.npy is computed by the depth model
+    (offline) and saved into the prep folder as prep saves it, so a later plan's depth effects find it."""
+    import rife_probe as R
+    src = Path(args.prep_dir)
+    out = Path(args.out) if args.out else src / "readers"
+    stills = sorted((int(p.stem[1:]), p) for p in src.glob("k*.png") if p.stem[1:].isdigit())
+    if not stills:
+        sys.exit(f"{src}: no k<i>.png (loop_seq.py prep writes them)")
+    if not R.FACE_MODEL.exists():
+        sys.exit(f"refuse: no YuNet model at {R.FACE_MODEL}")
+    out.mkdir(parents=True, exist_ok=True)
+    entries, imgs = [], []
+    for i, p in stills:
+        bgr = cv2.imread(str(p)); H, W = bgr.shape[:2]
+        faces = [[int(f[0]), int(f[1]), int(f[2]), int(f[3]), round(float(f[14]), 3)] for f in R.faces_of(bgr)]
+        dp = src / f"depth_k{i}.npy"
+        if dp.exists():
+            D = np.load(dp); how = "read"
+        else:
+            import transitions as T
+            D = T.model_disparity(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+            np.save(str(dp), D); how = "missing: computed by the depth model and saved into the prep folder"
+        lo, hi = float(D.min()), float(D.max())
+        cv2.imwrite(str(out / f"depth_k{i}.jpg"), np.round((D - lo) / max(hi - lo, 1e-6) * 255).astype(np.uint8),
+                    [cv2.IMWRITE_JPEG_QUALITY, 90])
+        g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        e = {"still": p.name, "size": [W, H], "faces": faces, "depth": dp.name,
+             "depth_stats": {"min": round(lo, 3), "max": round(hi, 3), "mean": round(float(D.mean()), 3)},
+             "mean_level": round(float(g.mean()), 1), "clipped_high_px": int((g > 250).sum()), "clipped_low_px": int((g < 5).sum()),
+             "laplacian_var": round(float(cv2.Laplacian(g, cv2.CV_64F).var()), 1)}
+        entries.append(e); imgs.append(bgr)
+        log(f"readers: {p.name} {W}x{H}: {len(faces)} faces; {dp.name} {how} (mean {e['depth_stats']['mean']}); grey mean "
+            f"{e['mean_level']}, clipped {e['clipped_high_px']} high / {e['clipped_low_px']} low px; Laplacian variance {e['laplacian_var']}")
+    pairs = []
+    for (ia, pa), (ib, pb), A, B in zip(stills, stills[1:], imgs, imgs[1:]):
+        if A.shape != B.shape:
+            sys.exit(f"readers: {pa.name} ({A.shape[1]}x{A.shape[0]}) and {pb.name} ({B.shape[1]}x{B.shape[0]}) differ in size: not one prep canvas")
+        d = _lab_distance(A, B)
+        pairs.append({"a": ia, "b": ib, "lab_above_14": round(float((d > 14).mean()), 4), "lab_above_30": round(float((d > 30).mean()), 4)})
+        log(f"readers: k{ia}-k{ib}: the Lab distance is above 14 on {pairs[-1]['lab_above_14']:.4f} of the pixels, above 30 on {pairs[-1]['lab_above_30']:.4f}")
+    (out / "readers.json").write_text(json.dumps({"prep": str(src), "stills": entries, "pairs": pairs}, indent=1))
+    print(json.dumps({"stills": len(entries), "faces": [len(e["faces"]) for e in entries], "lab_above_14": [q["lab_above_14"] for q in pairs]}))
 
 
 # ------------------------------------------------------------------ page: the review page
@@ -1629,7 +1762,20 @@ def main():
     p.set_defaults(fn=cmd_prep)
     p = sp.add_parser("render"); p.add_argument("plan"); p.add_argument("--out", required=True)
     p.add_argument("--fps", type=int, default=25); p.add_argument("--draft", type=int, default=0, help="render at this long edge (0 = the prep canvas)")
-    p.add_argument("--set", action="append", help="override a top-level plan key: key=<json>"); p.set_defaults(fn=cmd_render)
+    p.add_argument("--set", action="append", help="override a top-level plan key: key=<json>")
+    p.add_argument("--progress", action="store_true", help="print `PROGRESS i n phase` lines on stderr: frames (i of the planned total, an "
+                   "estimate), effects, encode, measure; without the flag stderr is unchanged")
+    p.add_argument("--frames", action="store_true", help="also write OUT/frames/f0000.jpg, f0001.jpg, ... (JPEG quality 90): the decoded "
+                   "mp4's frames, after the measures; older f*.jpg there are removed first")
+    p.set_defaults(fn=cmd_render)
+    p = sp.add_parser("readers", description="Per still of a prep folder (k<i>.png): the size, the YuNet face boxes, the depth model's map "
+                      "(the prep folder's depth_k<i>.npy, computed and saved there only when missing), its min, max and mean, the grey "
+                      "mean, the counts of grey pixels above 250 and below 5, and the variance of the grey still's Laplacian; per "
+                      "neighbouring pair the shares of pixels whose Lab distance on 2 px blurred copies is above 14 and above 30. "
+                      "Writes readers.json and depth_k<i>.jpg (the map stretched min..max) into --out, and a one-line summary on stdout.")
+    p.add_argument("prep_dir", help="a folder written by `loop_seq.py prep` (k<i>.png, prep.json)")
+    p.add_argument("--out", default="", help="where readers.json and the depth previews go (default PREP_DIR/readers)")
+    p.set_defaults(fn=cmd_readers)
     p = sp.add_parser("page"); p.add_argument("--root", required=True); p.add_argument("--out", required=True)
     p.add_argument("--notes", default=""); p.add_argument("--order", default=""); p.add_argument("--title", default="Halloween loops")
     p.add_argument("--intro", default=""); p.add_argument("--footer", default=""); p.set_defaults(fn=cmd_page)
