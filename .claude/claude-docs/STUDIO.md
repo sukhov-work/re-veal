@@ -1,5 +1,7 @@
 # STUDIO.md — the studio: one local page over every flow (align, transition, director plan, loop), the design of record (2026-11-04)
 
+> Since 2026-11-05 the studio is the package `reveal-studio` under `studio/` (section 13). Where sections 1 to 12 say `studio.py`, read the package; the script was retired that day and its remains removed (DECISIONS 2026-11-05, seventh line). The owner's guide is `studio/GUIDE.md`.
+
 <!-- reader: the build session (cold) and the owner; shape: design doc; written by the Claude Code session of 2026-11-04 from the owner's order of that day (verbatim in DECISIONS 2026-11-04 second line), three research tracks (`research/2026-11-04/trackA_inventory.md`, `trackB_distill.md`, `trackC_design.md`), `PRODUCT.md` and `DESIGN.md` at the repo root, and the incumbent pages captured under `benchmarks/runs/2026-11-04/studio/incumbent/`. Supersedes the phases 2–4 of `research/2026-10-20/ui_design.md`; phase 1 (`scripts/research/director_ui.py`) stays the incumbent until the studio passes the acceptance check of §9. Every claim cites a source or carries UNVERIFIED. -->
 
 ## 0. The decision in one paragraph

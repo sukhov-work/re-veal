@@ -28,6 +28,9 @@ history. `HANDOFF.md §6` is the pre-bootstrap decision log; decisions from 2026
   "It ran here" ≠ verified; green gates ≠ the real surface — the harness has never seen a real
   HEIC, DNG or ARW file, and the first real pair only arrived at v1.3.1.
 - Done = change + gates + real-surface run + memory + DECISIONS line + handover + doc-sync.
+- Processes (owner order 2026-11-05): at the start and at the end of a session, run `scripts/session_sweep.sh`.
+  It lists every process a session started (studio servers off 8380, headless Chrome, pytest, the harnesses,
+  `loop_seq.py` renders), and `--stop` ends them. The owner's own server on 8380 is never touched.
 
 ## Reversibility (every behaviour change)
 Before the first edit, state how the change is turned off: a flag (default-off), a config default,

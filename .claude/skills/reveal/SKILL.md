@@ -80,6 +80,8 @@ Calibrate silently and record the tier as a tag in the DECISIONS line (`[tier: S
 failure shapes: ballooning a "see if" into an XL apparatus; under-scoping a Deep task into a thin pass.
 
 ### 0.3 Load
+First `scripts/session_sweep.sh`: it lists the processes an earlier session left (a studio server off
+8380, a headless Chrome, pytest, a harness, a render); `--stop` ends them (owner order 2026-11-05).
 `list_memories` → `mem:core` → its index; **`NEXT_SESSION_PROMPT.md` first** (freshest state), then the
 TOP of `DECISIONS.md` — read it **paged (offset/limit) or grepped**; a naive full read truncates.
 Then the `HANDOFF.md` section and the `EXPLORATION_PLAN.md` slice your task touches, and the
@@ -275,6 +277,8 @@ pins the catalogue so it cannot drift. Review benchmark results in batch (one sh
 at a time.
 
 ## Phase 4 — record (the bookend-out; don't skip)
+0. **Sweep** — `scripts/session_sweep.sh --stop`: no server, Chrome, pytest, harness or render of this
+   session outlives it (owner order 2026-11-05); the owner's own server on 8380 is never touched.
 
 1. **Memory** — write under the taxonomy (`architecture/ decisions/ patterns/ bugs/ project/`):
    decisions, paths, gotchas, measured numbers. Session narrative goes in the
