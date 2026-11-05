@@ -4,6 +4,9 @@ include_external_packages = True
 
 # Rule (AGENTS.md hard constraints; STUDIO.md §5): the studio imports neither tool (reveal, transitions) nor any
 # research script, nor anything that loads model weights; every heavy call is a subprocess of the main venv's python.
+# Phase B (2026-11-05) added the director flow's scripts and the research scripts they reach: director_render,
+# director_page, director_ui (the workbench phase B retires), chain_luma, layer_merge, matte_source, layered_probe,
+# nest_probe.
 [importlinter:contract:no-tool-or-script-import]
 name = no tool or script import
 type = forbidden
@@ -14,6 +17,14 @@ forbidden_modules =
     transitions
     loop_seq
     rife_probe
+    director_render
+    director_page
+    director_ui
+    chain_luma
+    layer_merge
+    matte_source
+    layered_probe
+    nest_probe
     torch
     transformers
     kornia

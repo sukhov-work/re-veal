@@ -1,27 +1,18 @@
 """The loop flow's stage registry (phase A1): one entry per process with its knobs, outputs and sentence.
 
 A stage: one process with inputs, outputs on disk, knobs, a wall time and a visual. A knob's range is null unless the
-script's --help or SCHEMA.md states one (no loop key states one); the sentences are the scripts' own.
+script's --help or SCHEMA.md states one (no loop key states one); the sentences are the scripts' own. A script stage
+also names the Settings key of the script it runs (`script`) and the file-name patterns whose md5s name its result
+(`identity`, fnmatch, for the "unchanged" rule of STUDIO.md §4; none for the probe, the measure and the page).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from reveal_studio.errors import StudioError
+from reveal_studio.registry.entries import K
 
-
-def K(
-    key: str,
-    typ: str,
-    default: Any,
-    what: str,
-    flag: str | None = None,
-    choices: list[str] | None = None,
-    rng: list[float] | None = None,
-) -> dict[str, Any]:
-    """A knob: the literal key, its type, default and sentence, the script flag it becomes, its choices and range."""
-    return {"key": key, "type": typ, "default": default, "what": what, "flag": flag, "choices": choices, "range": rng}
+__all__ = ["FLOW", "LOOP_STAGES", "STAGE_ORDER", "K"]
 
 
 LOOP_STAGES: list[dict[str, Any]] = [
@@ -40,7 +31,9 @@ LOOP_STAGES: list[dict[str, Any]] = [
         "kind": "script",
         "optional": False,
         "backend": "loop_seq.py prep",
+        "script": "loop_seq",
         "terminal": "prep.json",
+        "identity": ["*.png", "*.npy"],
         "what": "Every still registered onto one still's background: SIFT + MAGSAC on a 1200 px proxy, then a chain through the previous still, then an ECC affine, else identity (said on the log); all stills cropped to the common valid rectangle. Writes in/<seq>/k<i>.png and prep.json.",
         "knobs": [
             K(
@@ -109,7 +102,9 @@ LOOP_STAGES: list[dict[str, Any]] = [
         "optional": True,
         "parent": "registration",
         "backend": "loop_seq.py readers",
+        "script": "loop_seq",
         "terminal": "readers.json",
+        "identity": ["readers.json"],
         "what": "Per registered still: the depth map (written beside the prep when missing), the face boxes (YuNet), the grey mean, the clipped pixels, the focus (the Laplacian's variance); per neighbouring pair: the share of pixels whose Lab distance is above 14 and above 30.",
         "knobs": [],
     },
@@ -122,7 +117,9 @@ LOOP_STAGES: list[dict[str, Any]] = [
         "branch": True,
         "stale_after": ["registration"],
         "backend": "loop_seq.py probe",
+        "script": "loop_seq",
         "terminal": "probe.json",
+        "identity": [],
         "what": "Compares three in-between methods before a plan is written. Per pair of registered stills (adjacent by index, or the listed pairs) it makes the in-betweens at t 0.25, 0.5 and 0.75 by RIFE over the whole frame (offline, behind its manifest; skipped with a log line when the manifest is missing), by the DIS morph and by the plain dissolve. It writes in/<seq>/probe/: the strips probe_<i>_<j>_<method>.jpg, 1:1 crops at the YuNet face boxes and probe.json (the double-exposure share per frame inside the change matte and over the whole frame, the step to each still). A rerun replaces the folder.",
         "knobs": [
             K(
@@ -156,7 +153,9 @@ LOOP_STAGES: list[dict[str, Any]] = [
         "kind": "script",
         "optional": False,
         "backend": "loop_seq.py render",
+        "script": "loop_seq",
         "terminal": "measure.json",
+        "identity": ["loop.mp4"],
         "what": "The loop the plan describes, at the prep canvas (full) or at a long edge (draft): loop.mp4, loop.gif, sheet.jpg, frames.json (what each frame is), measure.json (the step series on the decoded mp4, the seam, faces, the double-exposure share, the md5s). The plan's `in` is set to this job's prep on every render.",
         "knobs": [
             K(
@@ -196,7 +195,9 @@ LOOP_STAGES: list[dict[str, Any]] = [
         "branch": True,
         "stale_after": [],
         "backend": "loop_seq.py measure",
+        "script": "loop_seq",
         "terminal": "measure.json",
+        "identity": [],
         "what": "The measures of one render on its decoded mp4, without rendering: the step series, its mean, max and argmax, the seam step and faces per frame. With the render's frames.json it adds the face counts on the stills' frames, the generated share and the largest double-exposure share. With windows it adds each window's offset against frame ref in every frame (dx, dy px, sub-pixel, and the correlation): an object's stability. Each run writes a new folder <render>/measures/<stamp>/ with measure.json; the render's own files stay as they are.",
         "knobs": [
             K(
@@ -230,7 +231,9 @@ LOOP_STAGES: list[dict[str, Any]] = [
         "kind": "script",
         "optional": False,
         "backend": "loop_seq.py page",
+        "script": "loop_seq",
         "terminal": "index.html",
+        "identity": [],
         "what": "The review page over the full renders of the sequence, every one in name order or the listed ones in their order: the keyframes strip, the mp4 and the gif, the numbers, a note per candidate. Built behind the review gate, which checks the listed candidates only; its md5 opens a round.",
         "knobs": [
             K("title", "str", "", "the page's title", "--title"),
@@ -255,19 +258,10 @@ LOOP_STAGES: list[dict[str, Any]] = [
         "knobs": [],
     },
 ]
-FLOWS: dict[str, dict[str, Any]] = {
-    "loop": {
-        "title": "loop from a sequence",
-        "stages": LOOP_STAGES,
-        "what": "Two to ten stills of one scene, handheld, registered on an anchor and looped by a plan of holds and in-betweens; the pipeline of the playbook (.claude/skills/reveal/references/loops.md).",
-    }
+FLOW: dict[str, Any] = {
+    "title": "loop from a sequence",
+    "stages": LOOP_STAGES,
+    "what": "Two to ten stills of one scene, handheld, registered on an anchor and looped by a plan of holds and in-betweens; the pipeline of the playbook (.claude/skills/reveal/references/loops.md).",
+    "enabled": True,
 }
 STAGE_ORDER = [s["name"] for s in LOOP_STAGES]
-
-
-def stage_def(flow: str, name: str) -> dict[str, Any]:
-    stages: list[dict[str, Any]] = FLOWS[flow]["stages"]
-    for s in stages:
-        if s["name"] == name:
-            return s
-    raise StudioError(f"no stage {name!r} in the {flow} flow", 404)

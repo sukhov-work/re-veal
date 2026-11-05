@@ -67,8 +67,16 @@ Each setting comes from its flag, then its environment variable, then the defaul
 | port | `--port` | `REVEAL_STUDIO_PORT` | 8380 |
 | lock file | `--lock` | `REVEAL_STUDIO_LOCK` | `<root>/benchmarks/runs/studio.lock` |
 | folder date for new jobs | `--runs-date` | `REVEAL_STUDIO_RUNS_DATE` | today |
+| the layer tables' root (director flow) | `--layers-dir` | `REVEAL_STUDIO_LAYERS_DIR` | `<root>/benchmarks/runs/2026-09-28/layers_v3`, `director_render.py`'s own default |
+| the mattes' root (director flow) | `--mattes-dir` | `REVEAL_STUDIO_MATTES_DIR` | `<root>/benchmarks/runs/2026-10-17/mattes`, `director_render.py`'s own default |
 
-`uv run reveal-studio check` prints what was resolved, the md5 of `loop_seq.py` and the flags its `--help` lists.
+These paths come from the root alone: `transitions.py` and `reveal.py` at the root, `scripts/research/director_render.py`,
+`scripts/research/director_page.py`, the director plans in `scripts/research/plans/` (the loop's frozen plans stay in its
+`loops/` folder) and the fixture pairs in `fixtures/`.
+
+`uv run reveal-studio check` prints what was resolved, the md5 of `loop_seq.py` and the flags its `--help` lists. It
+also prints the md5 of each script above and a count for each folder. A missing one prints MISSING and leaves the exit
+code alone, because the loop flow runs without it.
 
 ## Gates
 

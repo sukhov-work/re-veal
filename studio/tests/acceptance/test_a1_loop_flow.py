@@ -35,7 +35,7 @@ from typing import IO, Any
 import pytest
 
 from reveal_studio.config import ConfigError, Settings, resolve_settings
-from reveal_studio.fs import Json, md5_file, read_json, sha256_file
+from reveal_studio.fs import Json, md5_file, now_iso, read_json, sha256_file, write_json
 
 from ..conftest import Client, free_port, wait_for
 
@@ -312,6 +312,11 @@ def test_the_a1_loop_flow_on_the_angel_stills(settings: Settings, tmp_path: Path
         line = next((ln for ln in cli.stdout.splitlines() if req["file"] in ln), "")
         assert re.match(r"^\s*\d+ (s|min)\s", line), cli.stdout
         assert any(r["file"] == req["file"] and r["age_s"] >= 0 for r in client.get("/api/requests")[1])
+        # the drive answers its own request, so no run leaves one open at the session's boot (b_pair_research.md,
+        # Part 3): an empty candidates map marks it answered and adds no verdict, and check 10's gate still refuses
+        # a2. Red if requests_of stops reading answers/ under the request's own name
+        write_json(d / "answers" / req["name"], {"at": now_iso(), "candidates": {}})
+        assert not any(r["file"] == req["file"] for r in client.get("/api/requests")[1])
 
         # check 10: the page gate; red if build_page stops refusing an unjudged candidate or drops the override
         code, body, _ = client.post(f"/api/jobs/{jid}/page", {})

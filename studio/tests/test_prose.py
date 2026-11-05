@@ -9,8 +9,9 @@ from pathlib import Path
 
 import pytest
 
+from reveal_studio.registry.common import COMMON_STAGES
+from reveal_studio.registry.flows import ALL_FLOWS
 from reveal_studio.registry.hints import HINTS
-from reveal_studio.registry.loop import FLOWS, LOOP_STAGES
 
 from .conftest import REPO
 
@@ -18,11 +19,13 @@ CHECKER = REPO / ".claude/skills/no-slop/scripts/slop-check.py"
 
 
 def sentences() -> list[str]:
-    """Every hint, every stage and flow sentence, and every knob sentence: one paragraph each."""
+    """Every hint, every stage and flow sentence of every flow (the disabled ones and the shared stages included),
+    and every knob sentence: one paragraph each."""
+    stages = [s for f in ALL_FLOWS.values() for s in f["stages"]] + list(COMMON_STAGES.values())
     out = [h["what"] for h in HINTS.values()]
-    out += [s["what"] for s in LOOP_STAGES]
-    out += [f["what"] for f in FLOWS.values()]
-    out += [k["what"] for s in LOOP_STAGES for k in s["knobs"]]
+    out += [s["what"] for s in stages]
+    out += [f["what"] for f in ALL_FLOWS.values()]
+    out += [k["what"] for s in stages for k in s["knobs"]]
     return out
 
 

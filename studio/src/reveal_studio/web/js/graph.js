@@ -8,13 +8,15 @@
 // hand-drawn lines.
 'use strict';
 S.graphAdded={};S.gConfirm=null;
-const G_MIN=176,G_MAX=240,G_COL=56,G_ROW=36,G_PAD=16,G_PORTS=6,G_HOSTS=['registration','readers','probe','render'];
-// what a rerun from the graph costs, in the confirmation's words
-const G_COST={registration:'The prep moves aside and the stages after it go stale',readers:'The readers folder is replaced',probe:'The probe folder is replaced',render:'A new render under the name the inspector holds',measure:'A new measure folder under the render'};
+const G_MIN=176,G_MAX=240,G_COL=56,G_ROW=36,G_PAD=16,G_PORTS=6;
+// the flow's graph data: the stages whose node can show its first picture, and what a rerun from the graph costs, in
+// the confirmation's words
+function gHosts(){return (flowUI().graph||{}).hosts||[];}
+function gCost(name){return ((flowUI().graph||{}).cost||{})[name];}
 // The node width that shows whole columns at rest: every column when they fit, else as many as fit, widened so the
 // next column starts past the scroller's edge and no node is cut there (the detector's edge-flush-cards at 1280).
 function graphWidth(avail,cols){if(!avail)return G_MIN;const fit=k=>(avail-2*G_PAD-(k-1)*G_COL)/k;let n=cols;while(n>1&&fit(n)<G_MIN)n--;return Math.floor(n<cols?fit(n):Math.min(G_MAX,fit(n)));}
-function gConfirmHTML(s){return '<div class="gconfirm"><span>Rerun '+esc(s.title)+' with the inspector\'s knobs? '+esc(G_COST[s.name]||'The stages after it go stale')+'.</span><span class="gyn"><button class="btn primary" data-act="yes" data-hint="control.rerun">yes, rerun</button><button class="btn ghost" data-act="no" data-hint="control.rerun">no</button></span></div>';}
+function gConfirmHTML(s){return '<div class="gconfirm"><span>Rerun '+esc(s.title)+' with the inspector\'s knobs? '+esc(gCost(s.name)||'The stages after it go stale')+'.</span><span class="gyn"><button class="btn primary" data-act="yes" data-hint="control.rerun">yes, rerun</button><button class="btn ghost" data-act="no" data-hint="control.rerun">no</button></span></div>';}
 function graphStages(){const v=S.view;const added=S.graphAdded[v.job.id]||[];return v.stages.filter(s=>!s.optional||s.latest||s.state!=='none'||added.includes(s.name));}
 // the layout rule: the required stages in one row in the flow's order; an optional stage in its parent's column, in the
 // first free row under it
@@ -35,7 +37,7 @@ function renderGraph(){const v=S.view;const host=$('#graph');if(!v||!host||S.vie
  let h='';stages.forEach(s=>{const p=pos[s.name];const ports=graphPorts(s.name);const ins=portList(ports.in,inL[s.name]||new Set()),outs=portList(ports.out,outL[s.name]||new Set());const st=s.stale?'stale':s.state;const added=s.optional&&!s.latest&&s.state==='none';
   const portRow=(q,side,linked)=>'<div class="gport '+side+(linked.has(q.name)?' linked':'')+'" data-port="'+esc(q.name)+'" title="'+esc(q.path)+'"><i></i>'+esc(q.name)+'</div>';
   const more=(m,side)=>m.length?'<div class="gport '+side+' more" data-port="+more" title="'+esc(m.map(q=>q.name).join(', '))+'"><i></i>+'+m.length+' more</div>':'';
-  const img=firstImage(s.name);const canRun=s.kind==='script'&&s.name!=='page';const canShow=!!img&&G_HOSTS.includes(s.name);
+  const img=firstImage(s.name);const canRun=s.kind==='script'&&s.name!=='page';const canShow=!!img&&gHosts().includes(s.name);
   h+='<div class="gnode'+((s.state==='failed'||s.state==='refused'||s.state==='lost')?' failed':'')+(s.state==='running'?' running':'')+(added?' added':'')+'" data-stage="'+esc(s.name)+'" data-row="'+p.row+'" data-col="'+p.col+'" data-hint="stage.'+esc(s.name)+'" tabindex="0" role="group" aria-label="'+esc(s.title+', '+st)+'" aria-current="'+(s.name===S.stage)+'" style="left:'+(G_PAD+p.col*(gw+G_COL))+'px;width:'+gw+'px">'
    +'<div class="ghead"><span class="label">'+esc(s.title)+'</span>'+hintBtn('stage.'+s.name)+(s.generated?'<span class="tick" title="generated content"></span>':'')+chip(added?'not run':st+(s.progress?' '+s.progress.i+'/'+s.progress.n:''),added?'':stateClass(st))+'</div>'
    +'<div class="gthumb'+(s.thumb?'':' empty')+'">'+(s.thumb?'<img src="'+esc(s.thumb)+'" alt="">':esc(s.title))+'</div>'
@@ -84,3 +86,4 @@ function wireGraph(){const nodes=[...document.querySelectorAll('#gcanvas .gnode'
 async function graphRerun(name){const v=S.view,s=stageOf(name);const K=knobState(v,s);const knobs={};s.knobs.forEach(k=>{knobs[k.key]=K[k.key]!==undefined?K[k.key]:knobBase(s,k);});
  selectStage(name);try{const r=await api('/api/jobs/'+encodeURIComponent(v.job.id)+'/stages/'+encodeURIComponent(name)+'/run',{knobs});setMsg('started '+r.record+' from the graph with the inspector\'s knobs','ok');await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}}
 window.addEventListener('resize',()=>{if(S.viewMode==='graph'&&$('#gcanvas'))renderGraph();});
+flowEntry('loop').graph={hosts:['registration','readers','probe','render'],cost:{registration:'The prep moves aside and the stages after it go stale',readers:'The readers folder is replaced',probe:'The probe folder is replaced',render:'A new render under the name the inspector holds',measure:'A new measure folder under the render'}};

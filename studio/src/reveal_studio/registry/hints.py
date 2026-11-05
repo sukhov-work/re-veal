@@ -2,34 +2,21 @@
 
 The page and the CLI's help say the same thing. The sentences for the scripts' flags and the plan keys are the
 scripts' own (loop_seq.py --help, plans/loops/SCHEMA.md); the bars are the playbook's (loops.md §6).
+
+This module holds the loop flow's rows (LOOP_HINTS: the 290 of 2026-11-05 and the two still-count chips of phase B's
+slice). HINTS, the one table the page and the tests read, merges them with the pair's (hints_pair.py) and the
+director's (hints_director.py); a key in two tables fails the import.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from reveal_studio.registry.entries import H, merge_hints
+from reveal_studio.registry.hints_director import HINTS as DIRECTOR_HINTS
+from reveal_studio.registry.hints_pair import HINTS as PAIR_HINTS
 
-def H(
-    what: str,
-    default: Any = None,
-    rng: list[float] | None = None,
-    stage: str | None = None,
-    source: str | None = None,
-) -> dict[str, Any]:
-    """A hint: the sentence, and the default, range, reading stage and source when they exist."""
-    d: dict[str, Any] = {"what": what}
-    if default is not None:
-        d["default"] = default
-    if rng is not None:
-        d["range"] = rng
-    if stage:
-        d["stage"] = stage
-    if source:
-        d["source"] = source
-    return d
-
-
-HINTS: dict[str, dict[str, Any]] = {
+LOOP_HINTS: dict[str, dict[str, Any]] = {
     # the plan's keys (SCHEMA.md)
     "plan.seq": H(
         "The sequence's name: the prep folder in/<seq>/ and the renders <seq>/<name>/ take it.",
@@ -307,6 +294,12 @@ HINTS: dict[str, dict[str, Any]] = {
     ),
     "chip.candidates": H(
         "The job's full renders, and how many of them lack a skeptic verdict on their current md5 (unjudged)."
+    ),
+    "chip.above_6": H(
+        "This sequence holds more stills than any loop_seq.py prep has registered so far: the largest was 6 (evgen-thug, 2026-10-30). No script states a limit, so the import goes ahead."
+    ),
+    "chip.above_10": H(
+        "This sequence holds more stills than the design's range of 2 to 10 per sequence (STUDIO.md §1). No script states a limit, so the import goes ahead."
     ),
     "chip.adopted": H(
         "A run folder made before the studio, opened in place: its prep, renders and page are read where they are, and the studio's records live in the job's own folder."
@@ -1168,3 +1161,5 @@ HINTS: dict[str, dict[str, Any]] = {
         stage="page",
     ),
 }
+
+HINTS: dict[str, dict[str, Any]] = merge_hints(LOOP_HINTS, PAIR_HINTS, DIRECTOR_HINTS)

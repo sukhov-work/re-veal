@@ -12,8 +12,37 @@ import pytest
 from reveal_studio.config import Settings
 from reveal_studio.errors import StudioError
 from reveal_studio.fs import Json, md5_file, read_json, sha256_file, write_json
+from reveal_studio.jobs import store
 from reveal_studio.jobs.candidates import candidates, rounds, verdicts
-from reveal_studio.jobs.store import create_job, find_job, job_dirs, job_root, list_stills, load_job, prep_dir
+from reveal_studio.jobs.grades import save_grade
+from reveal_studio.jobs.records import records
+from reveal_studio.jobs.rounds import open_round
+from reveal_studio.jobs.store import (
+    create_director_job,
+    create_job,
+    create_pair_job,
+    find_job,
+    job_dirs,
+    job_root,
+    list_stills,
+    load_job,
+    prep_dir,
+)
+from reveal_studio.registry import pair as pair_registry
+from reveal_studio.registry.flows import ALL_FLOWS
+
+from .conftest import HELPER, write_stills
+
+PAIR_SPEC: Json = {
+    "full": ["{root}/{seq}"],
+    "draft": ["{root}/drafts/{seq}"],
+    "terminal": "report.json",
+    "mp4": "transition.mp4",
+    "record_knobs": ["preset"],
+    "fields": ["class", "method", "median_disp_px"],
+}
+"""A candidate spec of the shape registry/pair.py holds, fixed here so the spec reader's test holds whatever spec the
+pair flow carries later."""
 
 
 def test_a_new_job_links_the_stills_in_order_and_hashes_them(settings: Settings, stills: Path) -> None:
@@ -46,7 +75,7 @@ def test_list_stills_reads_jpg_and_jpeg_only(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("kwargs", "code", "text"),
     [
-        ({"flow": "align"}, 400, "the flow is one of ['loop']"),
+        ({"flow": "align"}, 400, "the flow is one of ["),
         ({}, 400, "a new job needs a folder"),
         ({"folder": "/no/such/folder"}, 400, "is not a folder"),
         ({"seq": "bad name!"}, 400, "the sequence's name is letters"),
@@ -199,3 +228,314 @@ def test_prep_dir_is_in_seq_of_the_run_folder(settings: Settings, job: tuple[Pat
     d, j = job
     assert prep_dir(settings, j) == d / "in" / "tiny"
     assert json.loads((d / "job.json").read_text())["root"] == str(d.relative_to(settings.root))
+
+
+# ---------------------------------------------------------------- phase B's slice: the pair and director creators
+
+
+def test_every_flow_writes_seq_into_job_json(settings: Settings, stills: Path, fixture_pair: str) -> None:
+    """A job.json without `seq` makes GET /api/jobs answer 500 for every job (b_seams_research.md, key fact 1).
+    Mutation: a creator that leaves `seq` out turns this red."""
+    make_run_folder(settings)
+    made = [
+        create_job(settings, "loop", folder=str(stills), seq="tiny"),
+        create_job(settings, "loop", adopt="benchmarks/runs/2026-11-04/myrun", seq="angel"),
+        create_pair_job(settings, fixture=fixture_pair),
+        create_pair_job(settings, a=f"fixtures/{fixture_pair}_S.jpg", b=f"fixtures/{fixture_pair}_F.jpg"),
+        create_director_job(settings, fixture_pair),
+    ]
+    for j in made:
+        on_disk = read_json(find_job(settings, j["id"]) / "job.json")
+        assert on_disk == j and isinstance(j["seq"], str) and j["seq"], j["id"]
+    assert [j["seq"] for j in made] == ["tiny", "angel", "tiny_1", "tiny_1_s_tiny_1_f", "tiny_1"]
+
+
+def test_a_pair_job_links_the_two_photos_with_their_extensions(settings: Settings, fixture_pair: str) -> None:
+    """Mutation: a link without the original's extension (transitions.py then picks no reader), a copied photo, or a
+    missing sha256 turns this red."""
+    fx = settings.fixtures
+    before = {n: sha256_file(fx / n) for n in (f"{fixture_pair}_S.jpg", f"{fixture_pair}_F.jpg")}
+    j = create_pair_job(settings, fixture=fixture_pair)
+    d = find_job(settings, j["id"])
+    assert j["id"].startswith("pair_tiny_1_") and (j["flow"], j["fixture"], j["adopted"]) == ("pair", "tiny_1", False)
+    assert j["root"] == str(d.relative_to(settings.root))  # a pair's run folder is the job folder
+    links = sorted((d / "raw" / "tiny_1").iterdir())
+    assert [p.name for p in links] == ["A.jpg", "B.jpg"] and all(p.is_symlink() for p in links)
+    assert [i["role"] for i in j["inputs"]] == ["A", "B"]
+    assert [(i["name"], i["sha256"]) for i in j["inputs"]] == list(before.items())
+    assert [Path(os.readlink(p)) for p in links] == [(fx / n).resolve() for n in before]
+    assert {n: sha256_file(fx / n) for n in before} == before  # the originals untouched
+    other = settings.root / "photos"
+    other.mkdir()
+    (other / "Start Photo.PNG").write_bytes((fx / f"{fixture_pair}_S.jpg").read_bytes())
+    j2 = create_pair_job(settings, a=str(other / "Start Photo.PNG"), b=f"fixtures/{fixture_pair}_F.jpg")
+    assert (j2["seq"], j2["fixture"]) == ("start_photo_tiny_1_f", None)
+    assert [Path(i["link"]).name for i in j2["inputs"]] == ["A.PNG", "B.jpg"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "code", "text"),
+    [
+        ({}, 400, "a pair job needs a fixture pair's name, or two photos a and b"),
+        ({"a": "fixtures/tiny_1_S.jpg"}, 400, "a pair job needs"),
+        ({"fixture": "nope_9"}, 404, "no fixture pair nope_9"),
+        ({"fixture": "../x"}, 400, "a pair's name is letters"),
+        ({"a": "fixtures/none.jpg", "b": "fixtures/tiny_1_F.jpg"}, 400, "photo A:"),
+        ({"fixture": "tiny_1", "seq": "a b"}, 400, "the pair's name is letters"),
+    ],
+)
+def test_a_pair_job_refuses_before_it_makes_a_folder(
+    settings: Settings, fixture_pair: str, kwargs: Json, code: int, text: str
+) -> None:
+    with pytest.raises(StudioError) as e:
+        create_pair_job(settings, **kwargs)
+    assert (e.value.code, text in str(e.value)) == (code, True), str(e.value)
+    assert not (settings.runs / "2026-11-05" / "studio").exists()
+
+
+def test_a_director_job_counts_the_tables_and_mattes_and_hashes_the_helpers(
+    settings: Settings, fixture_pair: str
+) -> None:
+    """Mutation: the matte count taken from every file of the folder (mattes.json and sheet.jpg counted, the 53 of
+    mismatch_3_F), the missing ids not read from the layer table, or a helper left unhashed turns this red."""
+    mf = settings.mattes_dir / f"{fixture_pair}_S"
+    (mf / "mattes.json").write_text("{}")
+    (mf / "sheet.jpg").write_bytes(b"x")
+    j = create_director_job(settings, fixture_pair)
+    d = find_job(settings, j["id"])
+    assert j["id"].startswith("director_tiny_1_") and (j["flow"], j["seq"], j["pair"]) == (
+        "director",
+        "tiny_1",
+        "tiny_1",
+    )
+    assert j["root"] == str((d / "run").relative_to(settings.root)) and (d / "run").is_dir()
+    assert [(i["role"], Path(i["link"]).name) for i in j["inputs"]] == [("A", "A.jpg"), ("B", "B.jpg")]
+    assert (j["layers_dir"], j["mattes_dir"]) == (
+        "benchmarks/runs/2026-09-28/layers_v3",
+        "benchmarks/runs/2026-10-17/mattes",
+    )
+    table = settings.layers_dir / "tiny_1_S" / "layers.json"
+    assert j["tables"]["A"] == {
+        "path": str(table.relative_to(settings.root)),
+        "sha256": sha256_file(table),
+        "elements": 3,
+    }
+    assert j["tables"]["B"]["elements"] == 3
+    assert j["mattes"] == {"A": {"count": 2, "missing": [3]}, "B": {"count": 0, "missing": [1, 2, 3]}}
+    assert j["helpers"] == [{"path": HELPER, "sha256": sha256_file(settings.root / HELPER)}]
+
+
+def test_a_director_job_without_tables_or_mattes_still_opens(settings: Settings, fixture_pair: str) -> None:
+    """The refusal for a missing root belongs to the resolve stage. Mutation: the import raising on a missing layer
+    root turns this red."""
+    gone = Settings(
+        **{**settings.__dict__, "layers_dir": settings.root / "no-layers", "mattes_dir": settings.root / "x"}
+    )
+    j = create_director_job(gone, fixture_pair)
+    assert j["tables"] == {"A": None, "B": None}
+    assert j["mattes"] == {"A": {"count": 0, "missing": None}, "B": {"count": 0, "missing": None}}
+
+
+@pytest.mark.parametrize(
+    ("pair", "code", "text"),
+    [
+        ("mismatch_7", 400, "no plan under scripts/research/plans/ names the pair mismatch_7"),
+        ("", 400, "a director job names its pair"),
+        ("bad name", 400, "a director job names its pair"),
+    ],
+)
+def test_a_director_job_needs_a_plan_and_makes_no_folder_without_one(
+    settings: Settings, fixture_pair: str, pair: str, code: int, text: str
+) -> None:
+    with pytest.raises(StudioError) as e:
+        create_director_job(settings, pair)
+    assert (e.value.code, text in str(e.value)) == (code, True), str(e.value)
+    assert not (settings.runs / "2026-11-05" / "studio").exists()
+
+
+def test_create_job_refuses_a_flow_that_is_not_enabled(
+    settings: Settings, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST /api/jobs reaches create_job; the test disables the pair and director flows itself, so it holds once they
+    are built. Mutation: create_job dispatching on ALL_FLOWS (a disabled flow's job then made from the page) turns
+    this red."""
+    monkeypatch.setattr(store, "FLOWS", {"loop": ALL_FLOWS["loop"]})
+    for flow, kw in (("pair", {"fixture": fixture_pair}), ("director", {"pair": fixture_pair})):
+        with pytest.raises(StudioError) as e:
+            create_job(settings, flow, **kw)
+        assert e.value.code == 400
+        assert str(e.value) == "the flow is one of ['loop'] (pair and director are registered but not built yet)"
+    assert not (settings.runs / "2026-11-05" / "studio").exists()
+
+
+def pair_render(settings: Settings, d: Path, folder: Path, frames: int = 30) -> None:
+    """A finished pair render in the shape transitions.py writes: transition.mp4, strip.jpg, report.json last."""
+    folder.mkdir(parents=True)
+    (folder / "transition.mp4").write_bytes(b"an mp4 " + folder.name.encode())
+    (folder / "strip.jpg").write_bytes(b"jpg")
+    report = {
+        "class": "B",
+        "method": "saliency-panzoom",
+        "sparse_inliers": 0,
+        "median_disp_px": 24.71,
+        "mean_certainty": 0.5,
+        "canvas": [480, 360],
+        "n_frames": frames,
+        "spec": {"seconds": 1.0, "fps": 30.0},
+        "quality": {"flicker": {"edge_ratio": 0.132}},
+    }
+    write_json(folder / "report.json", report)
+
+
+def test_the_spec_reader_lists_a_flows_renders_with_their_md5_and_numbers(
+    settings: Settings, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A flow's candidates come from the spec in its registry entry (here a fixed one). Mutation: the md5 taken from
+    the folder instead of the record's outputs, the cache keyed without the mtime (a changed file keeps the old md5),
+    or the report's numbers not copied, turns this red."""
+    monkeypatch.setitem(pair_registry.FLOW, "candidates", PAIR_SPEC)
+    j = create_pair_job(settings, fixture=fixture_pair)
+    d = find_job(settings, j["id"])
+    pair_render(settings, d, d / "tiny_1" / "r1")
+    pair_render(settings, d, d / "drafts" / "tiny_1" / "d1", frames=12)
+    (d / "tiny_1" / "r2.part").mkdir()  # a render still running
+    rec = {
+        "id": "20261105-120000_render",
+        "stage": "render",
+        "state": "done",
+        "out_final": str((d / "tiny_1" / "r1").relative_to(settings.root)),
+        "knobs": {"preset": "morph", "draft": 0},
+        "outputs": [{"path": "x/transition.mp4", "md5": "the-records-md5"}],
+        "started": "2026-11-05T12:00:00",
+    }
+    write_json(d / "stages" / rec["id"] / "stage.json", rec)
+    assert [r["id"] for r in records(d)] == [rec["id"]]
+    full, draft = candidates(settings, d, j)
+    assert (full["kind"], full["name"], full["mp4"], full["md5_mp4"]) == (
+        "full",
+        "r1",
+        "transition.mp4",
+        "the-records-md5",
+    )
+    assert (full["frames"], full["seconds"], full["fps"], full["canvas"]) == (30, 1.0, 30.0, [480, 360])
+    assert (full["class"], full["method"], full["median_disp_px"], full["preset"]) == (
+        "B",
+        "saliency-panzoom",
+        24.71,
+        "morph",
+    )
+    assert (full["unjudged"], full["unjudged_reason"], full["record"]) == (
+        True,
+        "no skeptic verdict for this candidate",
+        rec["id"],
+    )
+    mp4 = d / "drafts" / "tiny_1" / "d1" / "transition.mp4"
+    assert (draft["kind"], draft["draft"], draft["md5_mp4"], draft["record"]) == ("draft", 480, md5_file(mp4), None)
+    (memo,) = (d / "cache" / "md5").iterdir()
+    assert memo.read_text() == md5_file(mp4)
+    mp4.write_bytes(b"changed")
+    os.utime(mp4, ns=(1, 2))
+    assert [c["md5_mp4"] for c in candidates(settings, d, j)][1] == md5_file(mp4)
+
+
+def test_every_loop_candidate_names_its_mp4(settings: Settings, registered: tuple[Path, Json]) -> None:
+    """Mutation: a loop candidate without `mp4` (frames_dir then opens nothing) turns this red."""
+    d, j = registered
+    write_json(job_root(settings, j) / "tiny" / "c1" / "measure.json", {"md5_mp4": "m1", "frames": 9})
+    (c1,) = candidates(settings, d, j)
+    assert c1["mp4"] == "loop.mp4"
+
+
+def test_open_round_opens_a_round_on_a_page_the_studio_wrote(settings: Settings, fixture_pair: str) -> None:
+    """The pair's page is written by the studio, not by a record. Mutation: page.md5 written into the job folder
+    instead of beside the page (a director's page lives in run/) turns this red."""
+    j = create_director_job(settings, fixture_pair)
+    d = find_job(settings, j["id"])
+    page = d / "run" / "index.html"
+    page.write_text("<html>a page</html>\n")
+    r = open_round(d, page, ["r1"])
+    assert (d / "run" / "page.md5").read_text() == md5_file(page) + "\n" and not (d / "page.md5").exists()
+    assert r == read_json(d / "rounds" / "1" / "round.json")
+    assert {k: r[k] for k in ("n", "candidates", "variants", "page", "record", "override", "grade")} == {
+        "n": 1,
+        "candidates": ["r1"],
+        "variants": [],
+        "page": "index.html",
+        "record": None,
+        "override": None,
+        "grade": None,
+    }
+    assert (d / "rounds" / "1" / "index.html").read_bytes() == page.read_bytes()
+    assert open_round(d, page, ["r1", "r2"], variants=["r2", "r1"], override="on his word")["n"] == 2
+
+
+PICKS: Json = {
+    "date": "2026-11-05",
+    "page": "director_tiny_1_r1",
+    "best": {"tiny_1_r1": "c1-a"},
+    "clips": {
+        "tiny_1_r1_c1-a": {
+            "acceptable": True,
+            "note": "the square brightens too soon",
+            "props": {"one_picture": True, "transforms": True, "not_invented": False},
+            "frames": [47],
+            "draft": True,
+        }
+    },
+}
+
+
+def test_the_picks_writer_saves_the_file_and_the_rounds_grade(settings: Settings, fixture_pair: str) -> None:
+    """POST /api/jobs/<id>/picks with {round, picks, text}. Mutation: the round's grade keeping the picks object
+    instead of the file's path, or a second save in the same second overwriting the first, turns this red."""
+    j = create_director_job(settings, fixture_pair)
+    d = find_job(settings, j["id"])
+    (d / "run" / "index.html").write_text("<html>p</html>\n")
+    r = open_round(d, d / "run" / "index.html", ["tiny_1_r1_c1-a"])
+    g = save_grade(d, {"round": 1, "picks": PICKS, "text": "  his words  "})["grade"]
+    assert list(g) == ["at", "page_md5", "picks", "text"]
+    assert (g["page_md5"], g["text"]) == (r["page_md5"], "his words")
+    assert g["picks"].startswith("picks/director_picks_") and read_json(d / g["picks"]) == PICKS
+    g2 = save_grade(d, {"round": 1, "picks": PICKS})["grade"]
+    assert g2["picks"] != g["picks"] and g2["text"] == "" and len(list((d / "picks").iterdir())) == 2
+    assert read_json(d / "rounds" / "1" / "round.json")["grade"] == g2
+
+
+@pytest.mark.parametrize(
+    ("picks", "text"),
+    [
+        ({**PICKS, "extra": 1}, "picks keys must be exactly ['best', 'clips', 'date', 'page']"),
+        ({k: v for k, v in PICKS.items() if k != "page"}, "picks keys must be exactly"),
+        ([PICKS], "picks keys must be exactly"),
+        ({**PICKS, "best": []}, "best and clips must be objects"),
+        ({**PICKS, "clips": {"x": {"acceptable": True, "note": ""}}}, "clip x: keys ['acceptable', 'note']"),
+        ({**PICKS, "clips": {"x": {"acceptable": True, "note": "", "props": {}, "colour": 1}}}, "clip x: keys"),
+        (
+            {**PICKS, "clips": {"x": {"acceptable": True, "note": "", "props": {"one_picture": 1, "transforms": 1}}}},
+            "clip x: props must be exactly ['not_invented', 'one_picture', 'transforms']",
+        ),
+    ],
+)
+def test_the_picks_writer_refuses_another_shape(
+    settings: Settings, fixture_pair: str, picks: object, text: str
+) -> None:
+    """The shape check of director_ui.py:688-707. Mutation: dropping the exact-keys check of the top or of props
+    turns the matching row red."""
+    j = create_director_job(settings, fixture_pair)
+    d = find_job(settings, j["id"])
+    (d / "run" / "index.html").write_text("<html>p</html>\n")
+    open_round(d, d / "run" / "index.html", [])
+    with pytest.raises(StudioError) as e:
+        save_grade(d, {"round": 1, "picks": picks})
+    assert (e.value.code, text in str(e.value)) == (400, True), str(e.value)
+    assert not (d / "picks").exists() and read_json(d / "rounds" / "1" / "round.json")["grade"] is None
+
+
+def test_the_loops_grade_text_keeps_its_shape(settings: Settings, tmp_path: Path) -> None:
+    """Mutation: the text branch writing the picks shape (or `picks: null`) for a loop grade turns this red."""
+    j = create_job(settings, "loop", folder=str(write_stills(tmp_path / "s")), seq="g")
+    d = find_job(settings, j["id"])
+    (d / "index.html").write_text("<html>p</html>\n")
+    open_round(d, d / "index.html", ["c1"])
+    g = save_grade(d, {"round": 1, "text": "c1 is fine"})["grade"]
+    assert list(g) == ["text", "at", "page_md5"] and g["text"] == "c1 is fine"

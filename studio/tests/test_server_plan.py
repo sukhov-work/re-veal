@@ -15,7 +15,7 @@ import pytest
 
 from reveal_studio.errors import StudioError
 from reveal_studio.fs import Json, md5_file, read_json, write_json
-from reveal_studio.registry.loop import stage_def
+from reveal_studio.registry.flows import stage_def
 from reveal_studio.registry.rulings import RULINGS
 from reveal_studio.registry.schema import PLAN_SCHEMA
 from reveal_studio.runner.process import Runner

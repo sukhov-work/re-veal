@@ -4,6 +4,15 @@
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const S={reg:null,jobs:[],jid:null,view:null,stage:null,cand:null,render:null,frame:0,playing:null,knobs:{},msg:null,mode:'fit',timer:null,planText:'',planFrom:'',editorDirty:false};
+// FLOW_UI: what the page draws per flow, registered by each flow's scripts at load (the loop's by rail.js, panels.js,
+// plan.js, viewer.js, inspector.js and graph.js; pair.js and director.js for theirs). An entry: {panels: {stage: fn
+// returning the panel's HTML}, wire: fn after a panel is drawn, sources: fn giving the viewer's pictures, candRow: fn
+// drawing a render's row, plots: fn drawing the axis plots, measures: fn giving the inspector's measures for a render,
+// newJob: fn opening the flow's new-job form, inputsWord: the inputs' word in the head, hosts: the stages whose panel
+// holds the viewer, graph: {hosts: the stages whose node can show a picture, cost: {stage: the rerun's cost}}}.
+const FLOW_UI={};
+function flowEntry(f){return FLOW_UI[f]||(FLOW_UI[f]={panels:{}});}
+function flowUI(){return (S.view&&FLOW_UI[S.view.job.flow])||{panels:{}};}
 function fmtS(s){return s==null?'—':(s<60?s.toFixed(1)+' s':Math.floor(s/60)+' min '+Math.round(s%60)+' s');}
 function fmtAge(s){return s>=3600?Math.floor(s/3600)+' h '+Math.floor(s%3600/60)+' min':s>=60?Math.floor(s/60)+' min':s+' s';}
 function stateClass(st){return ({done:'ok',saved:'ok',graded:'ok',answered:'ok',running:'run',cancelling:'run',waiting:'run',failed:'bad',refused:'bad',lost:'bad',cancelled:'bad',ungraded:'info','ungraded by his word':'info',stale:'info'})[st]||'';}

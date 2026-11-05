@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import fnmatch
 import os
 import shutil
 import signal
 import subprocess
 import threading
 import time
-from collections.abc import Callable
 from pathlib import Path
 
 from reveal_studio.config import Settings
@@ -28,23 +28,24 @@ from reveal_studio.fs import Json, inside, log, md5_file, now_iso, read_json, re
 from reveal_studio.jobs.candidates import candidates, rounds
 from reveal_studio.jobs.plans import run_warnings
 from reveal_studio.jobs.records import outputs_of, progress_of, record_dir, records
-from reveal_studio.jobs.store import job_dirs, job_root
-from reveal_studio.runner.argv import ScriptFlags, argv_for, coerce, script_arg
+from reveal_studio.jobs.rounds import open_round
+from reveal_studio.jobs.store import job_dirs
+from reveal_studio.registry.flows import identity_of
+from reveal_studio.runner.argv import ScriptFlags, argv_for, coerce
 
 __all__ = ["Runner", "progress_of"]
 
 
-def _never(name: str) -> bool:
-    return False
+def script_of(rec: Json) -> str | None:
+    """The script a record runs, as its own argv names it (argv[1], repo-relative): the pid check and cancel look for
+    it in the process's arguments, whatever flow's script it is."""
+    argv = rec.get("argv") or []
+    return str(argv[1]) if len(argv) > 1 else None
 
 
-# The files whose md5s name a run's result, per stage: equal to the previous run's means "unchanged" (STUDIO.md §4).
-IDENTITY: dict[str, Callable[[str], bool]] = {
-    "registration": lambda n: n.endswith(".png") or n.endswith(".npy"),
-    "render": lambda n: n == "loop.mp4",
-    "readers": lambda n: n == "readers.json",
-    "page": _never,
-}
+def _same(name: str, patterns: list[str]) -> bool:
+    """Whether an output's file name is one of the stage's identity files (STUDIO.md §4: equal md5s say "unchanged")."""
+    return any(fnmatch.fnmatchcase(name, p) for p in patterns)
 
 
 def _remove(p: Path) -> None:
@@ -98,7 +99,11 @@ class Runner:
         rec_dir.mkdir(parents=True)
         try:
             argv, out_final, out_part, inputs = argv_for(self.settings, self.flags, stage, d, job, knobs, rec_dir)
-            warnings = run_warnings(self.settings, d, stage["name"], knobs)  # rulings warn, never refuse
+            warnings = run_warnings(self.settings, d, stage["name"], knobs, job["flow"])  # rulings warn, never refuse
+            script = self.settings.root / argv[1]  # the record stamps the md5 of the script it runs
+            if not script.is_file():
+                raise StudioError(f"{argv[1]} is missing: the {stage['name']} stage cannot start", 409)
+            script_md5 = md5_file(script)
             if out_final.exists() and stage["name"] == "render":
                 raise StudioError(
                     f"{self._rel(out_final)} exists: choose another name (a finished render is never overwritten)", 409
@@ -133,7 +138,7 @@ class Runner:
             "knobs": knobs,
             "inputs": inputs,
             "outputs": [],
-            "script_md5": md5_file(self.settings.loop_seq),
+            "script_md5": script_md5,
             "out_part": self._rel(out_part),
             "out_final": self._rel(out_final),
             "terminal": stage["terminal"],
@@ -248,8 +253,8 @@ class Runner:
                     }
                     for q in sorted(out_final.parent.glob("depth_k*.npy"))
                 ]
-            ident = IDENTITY.get(rec["stage"], _never)
-            mine = sorted((Path(o["path"]).name, o["md5"]) for o in outputs if ident(Path(o["path"]).name))
+            patterns = identity_of((read_json(d / "job.json") or {}).get("flow"), rec["stage"])
+            mine = sorted((Path(o["path"]).name, o["md5"]) for o in outputs if _same(Path(o["path"]).name, patterns))
             prev_recs = [
                 r
                 for r in records(d)
@@ -258,7 +263,9 @@ class Runner:
             unchanged = None
             if mine and prev_recs:
                 theirs = sorted(
-                    (Path(o["path"]).name, o["md5"]) for o in prev_recs[-1]["outputs"] if ident(Path(o["path"]).name)
+                    (Path(o["path"]).name, o["md5"])
+                    for o in prev_recs[-1]["outputs"]
+                    if _same(Path(o["path"]).name, patterns)
                 )
                 if theirs == mine:
                     unchanged = prev_recs[-1]["id"]
@@ -277,38 +284,18 @@ class Runner:
         return rec
 
     def after_done(self, d: Path, rec: Json) -> None:
-        """What a finished stage adds to the job: a page opens a round and writes page.md5."""
+        """What a finished stage adds to the job: a page opens a round (jobs/rounds.py: page.md5 beside the page)."""
         if rec["stage"] != "page":
             return
         job: Json = read_json(d / "job.json")
-        root = job_root(self.settings, job)
         page = self.settings.root / rec["out_final"]
-        md5v = md5_file(page)
-        (root / "page.md5").write_text(md5v + "\n")
-        n = len(rounds(d)) + 1
         variants = list(rec["knobs"].get("variants") or [])  # [] = every full render in name order (backlog T76)
         names = variants or [c["name"] for c in candidates(self.settings, d, job) if c["kind"] == "full"]
-        (d / "rounds" / str(n)).mkdir(parents=True, exist_ok=True)
-        shutil.copy2(page, d / "rounds" / str(n) / "index.html")  # the round keeps its page; the root holds the latest
-        write_json(
-            d / "rounds" / str(n) / "round.json",
-            {
-                "n": n,
-                "at": now_iso(),
-                "candidates": names,
-                "variants": variants,
-                "page_md5": md5v,
-                "page": "index.html",
-                "record": rec["id"],
-                "override": rec["knobs"].get("override") or None,
-                "grade": None,
-                "ungraded_by_his_word": None,
-            },
-        )
-        log(f"{d.name}: round {n} opened on page md5 {md5v}")
+        open_round(d, page, names, variants=variants, record=rec["id"], override=rec["knobs"].get("override") or None)
 
     def pid_alive(self, pid: int, rec: Json | None = None) -> bool:
-        """Whether the pid runs; with a record, whether it runs that record's script into that record's .part path."""
+        """Whether the pid runs; with a record, whether it runs that record's own script (its argv[1]) into that
+        record's .part path, so a live child of any flow re-attaches and a stranger reusing the pid is never one."""
         try:
             os.kill(pid, 0)
         except OSError:
@@ -321,7 +308,8 @@ class Runner:
             return True
         if rec is None:
             return bool(args.strip())
-        return script_arg(self.settings) in args and (rec.get("out_part") or "\0") in args
+        script = script_of(rec)
+        return bool(script) and str(script) in args and (rec.get("out_part") or "\0") in args
 
     def _watch_pid(self, d: Path, rid: str, pid: int) -> None:
         while self.pid_alive(pid):

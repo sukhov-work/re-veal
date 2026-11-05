@@ -20,6 +20,28 @@ def test_explicit_root_derives_every_path(root: Path) -> None:
     assert s.lock_path == root.resolve() / "benchmarks/runs/studio.lock"
     assert (s.port, s.runs_date, s.body_cap) == (DEFAULT_PORT, "2026-11-05", BODY_CAP)
     assert s.ui_version == f"reveal-studio {__version__}" == "reveal-studio 0.2.0"
+    # the pair and director flows' paths (phase B, 2026-11-05). Mutation: a path read from the package's location,
+    # or the director plans pointed at the loop's loops/ folder, turns this red.
+    r = root.resolve()
+    assert (s.transitions, s.reveal) == (r / "transitions.py", r / "reveal.py")
+    assert (s.director_render, s.director_page) == (
+        r / "scripts/research/director_render.py",
+        r / "scripts/research/director_page.py",
+    )
+    assert (s.director_plans, s.fixtures) == (r / "scripts/research/plans", r / "fixtures")
+    assert s.layers_dir == r / "benchmarks/runs/2026-09-28/layers_v3"  # director_render.py's own default
+    assert s.mattes_dir == r / "benchmarks/runs/2026-10-17/mattes"
+
+
+def test_the_layers_and_mattes_roots_take_the_flag_then_the_environment(root: Path, tmp_path: Path) -> None:
+    """Mutation: the environment read before the flag, or a relative value read against the root instead of the
+    working folder (the lock's rule), turns this red."""
+    env = {"REVEAL_STUDIO_LAYERS_DIR": "env/layers", "REVEAL_STUDIO_MATTES_DIR": str(tmp_path / "env-mattes")}
+    s = resolve_settings(root=root, env=env, cwd=tmp_path)
+    assert (s.layers_dir, s.mattes_dir) == (tmp_path / "env/layers", tmp_path / "env-mattes")
+    s2 = resolve_settings(root=root, env=env, cwd=tmp_path, layers_dir="flag/layers", mattes_dir="/abs/mattes")
+    assert (s2.layers_dir, s2.mattes_dir) == (tmp_path / "flag/layers", Path("/abs/mattes"))
+    assert not s2.layers_dir.exists()  # a missing root raises nothing: the loop flow runs without it
 
 
 def test_env_beats_discovery_and_args_beat_env(root: Path, tmp_path: Path) -> None:

@@ -1,5 +1,6 @@
-"""Fixtures: a tmp repo root with the fake loop_seq.py and a fake main-venv python, Settings on it, the Runner, the App,
-and a live server on a free port with a small HTTP client."""
+"""Fixtures: a tmp repo root with the fake scripts and a fake main-venv python, Settings on it, the Runner, the App,
+a live server on a free port with a small HTTP client, and a fixture pair with a director plan, layer tables and
+mattes for the two-photo flows."""
 
 from __future__ import annotations
 
@@ -22,7 +23,17 @@ from reveal_studio.runner.argv import ScriptFlags
 from reveal_studio.runner.process import Runner
 from reveal_studio.server.app import App, StudioServer
 
-FAKE = Path(__file__).parent / "fakes" / "loop_seq.py"
+FAKES = Path(__file__).parent / "fakes"
+FAKE_TABLE = {
+    "loop_seq.py": "scripts/research/loop_seq.py",
+    "reveal.py": "reveal.py",
+    "transitions.py": "transitions.py",
+    "director_render.py": "scripts/research/director_render.py",
+    "director_page.py": "scripts/research/director_page.py",
+}
+"""Each fake under tests/fakes/ and where make_root copies it in a tmp root, when the fake's file exists (the flow
+builders add theirs). The fake reveal.py replaces the root's marker stub: it is still a file, so the root holds."""
+FAKE = FAKES / "loop_seq.py"
 REPO = Path(__file__).resolve().parents[2]
 """The real repo root (the integration tests read it; the unit tests never do)."""
 
@@ -76,7 +87,8 @@ def wait_record(d: Path, rid: str, timeout: float = 30.0) -> Json:
 
 
 def make_root(base: Path) -> Path:
-    """A repo root: reveal.py and AGENTS.md stubs, benchmarks/runs/, one frozen plan, the fake script and python."""
+    """A repo root: reveal.py and AGENTS.md stubs, benchmarks/runs/, one frozen plan, the fakes of FAKE_TABLE and the
+    python."""
     r = base / "repo"
     (r / "benchmarks/runs").mkdir(parents=True)
     (r / "reveal.py").write_text("# a stub: the marker of a Reveal repo root\n")
@@ -84,7 +96,10 @@ def make_root(base: Path) -> Path:
     plans = r / "scripts/research/plans/loops"
     plans.mkdir(parents=True)
     (plans / "tiny_a1.json").write_text(json.dumps(FROZEN_PLAN, indent=1))
-    (r / "scripts/research/loop_seq.py").write_text(FAKE.read_text())
+    for name, dest in FAKE_TABLE.items():
+        if (FAKES / name).is_file():
+            (r / dest).parent.mkdir(parents=True, exist_ok=True)
+            (r / dest).write_text((FAKES / name).read_text())
     py = r / ".venv/bin/python"
     py.parent.mkdir(parents=True)
     py.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')  # the main venv's python, played by this one
@@ -121,7 +136,7 @@ def write_stills(folder: Path, n: int = 2) -> Path:
 
     folder.mkdir(parents=True, exist_ok=True)
     for i in range(n):
-        cv2.imwrite(str(folder / f"IMG_{i + 1:04d}.jpg"), np.full((48, 64, 3), 60 + 40 * i, np.uint8))
+        cv2.imwrite(str(folder / f"IMG_{i + 1:04d}.jpg"), np.full((48, 64, 3), (60 + 40 * i) % 256, np.uint8))
     (folder / "IMG_0001.ARW").write_bytes(b"raw")
     (folder / "IMG_0001.xmp").write_text("<x/>")
     (folder / ".hidden.jpg").write_bytes(b"not a still")
@@ -133,6 +148,61 @@ def stills(tmp_path: Path) -> Path:
     return write_stills(tmp_path / "Tiny Stills")
 
 
+PAIR = "tiny_1"
+"""The fixture pair of the tmp root: fixtures/tiny_1_S.jpg and fixtures/tiny_1_F.jpg."""
+HELPER = "benchmarks/runs/2026-10-17/keyframes/out/k1.png"
+"""The one helper picture the pair's director plan names (a generated keyframe), under the tmp root."""
+DIRECTOR_PLAN: Json = {
+    "pair": PAIR,
+    "planner": "a test",
+    "relation": "unrelated",
+    "reading": "a grey square becomes a lighter one",
+    "concepts": [
+        {
+            "id": "c1",
+            "idea": "the square brightens",
+            "transforms": [
+                {"name": "lift", "by": "keyframe_chain", "window": [0.3, 0.9], "params": {"keyframes": [HELPER]}}
+            ],
+            "helper": {"keyframes": [HELPER]},
+        }
+    ],
+}
+
+
+def write_fixture_pair(root: Path) -> str:
+    """fixtures/tiny_1_S.jpg and _F.jpg (cv2 at test time, never committed), the pair's director plan under
+    scripts/research/plans/ naming one helper picture, a layer table per photo under the default layers root
+    (elements 1 to 3) and mattes for elements 1 and 2 of the first photo only."""
+    import cv2
+    import numpy as np
+
+    fx = root / "fixtures"
+    fx.mkdir(exist_ok=True)
+    cv2.imwrite(str(fx / f"{PAIR}_S.jpg"), np.full((48, 64, 3), 70, np.uint8))
+    cv2.imwrite(str(fx / f"{PAIR}_F.jpg"), np.full((48, 64, 3), 150, np.uint8))
+    (root / f"scripts/research/plans/{PAIR}_r1.json").write_text(json.dumps(DIRECTOR_PLAN, indent=1))
+    helper = root / HELPER
+    helper.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(helper), np.full((16, 16, 3), 200, np.uint8))
+    for side in ("S", "F"):
+        table = root / f"benchmarks/runs/2026-09-28/layers_v3/{PAIR}_{side}"
+        table.mkdir(parents=True)
+        elements = [{"id": i, "label": f"element {i}", "group": "object"} for i in (1, 2, 3)]
+        (table / "layers.json").write_text(json.dumps({"canvas": [64, 48], "elements": elements}))
+    mattes = root / f"benchmarks/runs/2026-10-17/mattes/{PAIR}_S"
+    mattes.mkdir(parents=True)
+    for i in (1, 2):
+        cv2.imwrite(str(mattes / f"el_{i}.png"), np.full((48, 64), 255, np.uint8))
+    return PAIR
+
+
+@pytest.fixture
+def fixture_pair(root: Path) -> str:
+    """The tmp root's fixture pair with its director plan, layer tables and mattes; returns the pair's name."""
+    return write_fixture_pair(root)
+
+
 @pytest.fixture
 def job(settings: Settings, stills: Path) -> tuple[Path, Json]:
     """A new loop job (not registered yet) and its folder."""
@@ -142,7 +212,7 @@ def job(settings: Settings, stills: Path) -> tuple[Path, Json]:
 
 def run(runner: Runner, d: Path, job: Json, stage: str, knobs: Json | None = None) -> Json:
     """Starts a stage and waits for its terminal record."""
-    from reveal_studio.registry.loop import stage_def
+    from reveal_studio.registry.flows import stage_def
 
     rec = runner.start_stage(d, job, stage_def("loop", stage), knobs or {})
     return wait_record(d, rec["id"])

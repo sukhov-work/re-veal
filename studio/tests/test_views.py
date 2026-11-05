@@ -11,11 +11,15 @@ import pytest
 
 from reveal_studio.config import Settings
 from reveal_studio.errors import StudioError
-from reveal_studio.fs import Json, md5_file, read_json, write_json
+from reveal_studio.fs import Json, md5_file, read_json, rel, write_json
 from reveal_studio.jobs.grades import mark_frame, save_grade, write_request
 from reveal_studio.jobs.records import records
+from reveal_studio.jobs.store import create_director_job, create_job, create_pair_job
+from reveal_studio.registry import pair as pair_registry
+from reveal_studio.registry.common import VERDICT_STAGE
+from reveal_studio.registry.flows import FLOWS, stage_def
 from reveal_studio.registry.hints import HINTS
-from reveal_studio.registry.loop import FLOWS, stage_def
+from reveal_studio.registry.loop import LOOP_STAGES
 from reveal_studio.runner.argv import ScriptFlags
 from reveal_studio.runner.process import Runner
 from reveal_studio.views.job import job_row, job_view, record_view, stage_views
@@ -23,7 +27,7 @@ from reveal_studio.views.models import models_view, open_requests, registry_view
 from reveal_studio.views.page import build_page
 from reveal_studio.views.render import frame_tag, render_view
 
-from .conftest import FLAGS, run, wait_for, wait_record
+from .conftest import FLAGS, run, wait_for, wait_record, write_stills
 
 RENDER = {"plan": "frozen:tiny_a1", "name": "c1", "draft": 0}
 
@@ -59,7 +63,7 @@ def test_job_view_has_every_key_the_page_reads(runner: Runner, rendered: tuple[P
         "script_flags",
     }
     assert v["job"] == j
-    assert [s["name"] for s in v["stages"]] == [s["name"] for s in FLOWS["loop"]["stages"]]
+    assert [s["name"] for s in v["stages"]] == [s["name"] for s in LOOP_STAGES]
     (c,) = v["candidates"]
     assert "dir" not in c and c["name"] == "c1" and c["kind"] == "full" and c["has_frames"] is True
     assert v["prep"]["canvas"] == [64, 48] and v["prep"]["n"] == 2
@@ -415,3 +419,156 @@ def test_the_page_needs_a_full_render(runner: Runner, registered: tuple[Path, Js
     with pytest.raises(StudioError, match="no full render to put on a page") as e:
         build_page(runner, d, j, {"override": True})
     assert e.value.code == 409
+
+
+# ---------------------------------------------------------------- phase B's slice: the views of every flow
+
+LOOP_VIEW_KEYS = {
+    "job",
+    "stages",
+    "candidates",
+    "plans",
+    "frozen_plans",
+    "requests",
+    "rounds",
+    "prep",
+    "readers",
+    "probe",
+    "graph",
+    "page",
+    "owner_frames",
+    "script_flags",
+}
+
+
+def test_a_pair_and_a_director_job_open_with_the_shared_keys(
+    settings: Settings, runner: Runner, fixture_pair: str
+) -> None:
+    """A job of a flow without stages yet opens: the shared keys, the loop's prep, readers and probe as None (the
+    page's shared scripts read them), no frozen loop plan. Mutation: the loop's frozen plans served to every flow,
+    or a key the loop's view lacks added to the base view, turns this red."""
+    for j in (create_pair_job(settings, fixture=fixture_pair), create_director_job(settings, fixture_pair)):
+        d = settings.runs / "2026-11-05" / "studio" / j["id"]
+        v = job_view(runner, d, j)
+        assert set(v) == LOOP_VIEW_KEYS, j["flow"]
+        assert (v["stages"], v["candidates"], v["frozen_plans"]) == ([], [], [])
+        assert (v["prep"], v["readers"], v["probe"]) == (None, None, None)
+        row = job_row(settings, d, runner)
+        assert row is not None and (row["flow"], row["seq"], row["stills"], row["last_render"]) == (
+            j["flow"],
+            "tiny_1",
+            2,
+            "none",
+        )
+
+
+def test_a_stage_without_a_tile_function_shows_its_base_tile(
+    settings: Settings, runner: Runner, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A flow builder's stage shows its latest record's state before its tile function exists, and a branch makes no
+    stage stale. Mutation: stage_views skipping a stage that has no tile function turns this red."""
+    monkeypatch.setitem(pair_registry.FLOW, "stages", [VERDICT_STAGE])
+    j = create_pair_job(settings, fixture=fixture_pair)
+    d = settings.runs / "2026-11-05" / "studio" / j["id"]
+    rec = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
+    (tile,) = stage_views(runner, d, j)
+    assert (tile["name"], tile["state"], tile["latest"], tile["branch"], tile["parent"]) == (
+        "verdict",
+        "done",
+        rec["id"],
+        True,
+        "import",
+    )
+    assert (tile["detail"], tile["thumb"], tile["stale"]) == ("", None, False)
+
+
+def mp4(path: Path, frames: int, w: int = 64, h: int = 48) -> None:
+    """A real mp4 cv2 decodes, as transitions.py and director_render.py write one (a flat grey ramp)."""
+    import cv2
+    import numpy as np
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 30, (w, h))
+    for i in range(frames):
+        vw.write(np.full((h, w, 3), 40 + 5 * i, np.uint8))
+    vw.release()
+
+
+def test_a_pair_render_opens_in_the_base_view_at_its_own_fps(
+    settings: Settings, runner: Runner, fixture_pair: str
+) -> None:
+    """The render view dispatches by flow and decodes the candidate's own mp4. Mutation: the decode opening loop.mp4
+    for every candidate (0 frames for a pair), or the viewer playing 25 fps for a 30 fps clip, turns this red."""
+    j = create_pair_job(settings, fixture=fixture_pair)
+    d = settings.runs / "2026-11-05" / "studio" / j["id"]
+    mp4(d / "tiny_1" / "r1" / "transition.mp4", 12)
+    write_json(d / "tiny_1" / "r1" / "report.json", {"n_frames": 12, "canvas": [64, 48], "spec": {"fps": 30.0}})
+    v = render_view(settings, d, j, "full", "r1")
+    assert (v["fps"], v["frames_available"], v["frames_tags"], v["mp4"]) == (30.0, 12, [], "transition.mp4")
+    assert v["mp4_url"] == f"/api/jobs/{j['id']}/file/tiny_1/r1/transition.mp4"
+    assert v["frame_url"] == f"/api/jobs/{j['id']}/render/full/r1/frame/" and "dir" not in v
+    (cache,) = (d / "cache" / "frames").iterdir()
+    assert (cache / "done").read_text() == "12"
+
+
+def test_a_director_draft_outside_run_gets_a_url_the_file_route_serves(
+    settings: Settings, runner: Runner, fixture_pair: str
+) -> None:
+    """A director's drafts sit in the job folder, outside run/ (the root). Mutation: the mp4 URL built from the
+    repo-relative path (the file route then answers 404) turns this red."""
+    j = create_director_job(settings, fixture_pair)
+    d = settings.runs / "2026-11-05" / "studio" / j["id"]
+    mp4(d / "drafts" / "tiny_1_r1_c1-a" / "transition.mp4", 6)
+    write_json(d / "drafts" / "tiny_1_r1_c1-a" / "info.json", {"frames": 6, "fps": 30, "canvas": [64, 48]})
+    v = render_view(settings, d, j, "draft", "tiny_1_r1_c1-a")
+    assert v["mp4_url"] == f"/api/jobs/{j['id']}/file/drafts/tiny_1_r1_c1-a/transition.mp4"
+    assert (v["fps"], v["frames_available"], v["draft"]) == (30, 6, 64)
+
+
+def test_the_loop_render_view_plays_at_the_render_records_fps(
+    settings: Settings, runner: Runner, registered: tuple[Path, Json]
+) -> None:
+    """The loop's fps is the render record's fps knob, 25 by default and for a render without a record. Mutation:
+    a fixed 25 (the viewer then plays a 30 fps loop 20 % slow) turns this red."""
+    d, j = registered
+    assert run(runner, d, j, "render", {**RENDER, "name": "f30", "fps": 30})["state"] == "done"
+    assert run(runner, d, j, "render", RENDER)["state"] == "done"
+    assert render_view(settings, d, j, "full", "f30")["fps"] == 30
+    assert render_view(settings, d, j, "full", "c1")["fps"] == 25
+    write_json(d / "tiny" / "shell" / "measure.json", {"md5_mp4": "x", "frames": 9})
+    assert render_view(settings, d, j, "full", "shell")["fps"] == 25
+
+
+@pytest.mark.parametrize(
+    ("n", "keys"),
+    [(6, None), (7, ["chip.above_6"]), (10, ["chip.above_6"]), (11, ["chip.above_6", "chip.above_10"])],
+)
+def test_a_long_sequence_gets_the_still_count_chips_and_no_refusal(
+    settings: Settings, runner: Runner, tmp_path: Path, n: int, keys: list[str] | None
+) -> None:
+    """Above 6 stills (the most one prep has registered) and above 10 (the design's range) the import tile carries a
+    chip each; the job is made either way. Mutation: refusing above 10, or the key added to every tile (the loop
+    snapshot's tiles then differ), turns this red."""
+    j = create_job(settings, "loop", folder=str(write_stills(tmp_path / f"s{n}", n)), seq=f"s{n}")
+    d = settings.root / j["root"]
+    tile = {v["name"]: v for v in stage_views(runner, d, j)}["import"]
+    assert tile["detail"] == f"{n} stills"
+    if keys is None:
+        assert "warnings" not in tile
+    else:
+        assert [w["key"] for w in tile["warnings"]] == keys
+        assert tile["warnings"][0]["text"] == "above every sequence registered so far (6)"
+        assert all(k in HINTS for k in keys)
+    if n == 11:
+        assert tile["warnings"][1]["text"] == "above the design's range of 2 to 10 stills"
+
+
+def test_the_page_knobs_come_from_the_flows_page_stage(runner: Runner, rendered: tuple[Path, Json]) -> None:
+    """Mutation: a fixed list of text knobs (a director page's key and head would never reach its record) turns the
+    loop's knobs red only if the list stops matching its stage: title, intro and footer, then notes and variants."""
+    d, j = rendered
+    rec = build_page(runner, d, j, {"override": True, "title": "t", "head": "not a loop knob"})
+    assert list(rec["knobs"])[:5] == ["title", "intro", "footer", "notes", "variants"]
+    assert "head" not in rec["knobs"] and rec["knobs"]["footer"] == rec["knobs"]["override"]
+    assert rel(d / "index.html", runner.settings.root) == rec["out_final"]
+    assert wait_record(d, rec["id"])["state"] == "done"

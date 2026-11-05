@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-from reveal_studio.registry.loop import STAGE_ORDER
+from reveal_studio.registry.flows import STAGE_NAMES
 from reveal_studio.registry.schema import resolve
 
 
@@ -100,8 +100,9 @@ RULINGS: list[Ruling] = [
 
 
 def is_stage_knob(knob: str) -> bool:
-    """A stage knob names a stage of the registry first (`registration.ecc_refine`); anything else is a plan path."""
-    return knob.split(".", 1)[0].split("[", 1)[0] in STAGE_ORDER
+    """A stage knob names a stage of the registry first (`registration.ecc_refine`): a stage of any flow, as the page's
+    isStageKnob reads the registry view's stage_order; anything else is a plan path."""
+    return knob.split(".", 1)[0].split("[", 1)[0] in STAGE_NAMES
 
 
 def _number(v: Any) -> bool:

@@ -6,14 +6,16 @@
 // frame, so the frame takes the height the window leaves between the strip and the axis (critique A2, P1).
 'use strict';
 Object.assign(S,{vw:{},shown:null,measureWin:'',measureRef:'0'});
-const VIEWER_HOSTS=['registration','readers','probe','render','measure'];
+// the stages whose panel holds the viewer: the flow's hosts
+function viewerHosts(){return flowUI().hosts||[];}
 const CMP_MODES=[['single','single','control.cmp_single'],['wipe','wipe','control.cmp_wipe'],['ab','A/B','control.cmp_ab'],['onion','onion','control.cmp_onion'],['diff','difference','control.cmp_diff']];
 const ZOOMS=[['fit','fit','control.zoom_fit'],['1:1','1:1','control.zoom_1to1'],['2x','2×','control.zoom_2x']];
 const DIFF_STRETCH=4;
 // the viewer's state per host: the compare mode, the sources, the split, the opacity, the side A/B shows
 function vhost(){return S.stage==='measure'?'render':S.stage;}
 function vstate(){const h=vhost();return S.vw[h]||(S.vw[h]=h==='render'?{cmp:'single',a:'frame',b:'k0',wipe:50,onion:50,ab:'A'}:{cmp:'single',a:'k0',b:'k1',wipe:50,onion:50,ab:'A'});}
-function sources(){const v=S.view,out=[];if(!v)return out;const base='/api/jobs/'+encodeURIComponent(v.job.id)+'/file/in/'+encodeURIComponent(v.job.seq)+'/';
+function sources(){const f=flowUI().sources;return f?f():[];}
+function loopSources(){const v=S.view,out=[];if(!v)return out;const base='/api/jobs/'+encodeURIComponent(v.job.id)+'/file/in/'+encodeURIComponent(v.job.seq)+'/';
  if(S.render&&vhost()==='render'){const t=S.render.frames_tags[S.frame]||{};out.push({id:'frame',label:'frame f '+S.frame+' of '+candLabel(S.render),url:S.render.frame_url+S.frame,gen:!!t.generated});}
  for(let i=0;i<(v.prep?v.prep.n:0);i++)out.push({id:'k'+i,label:'k'+i+'.png, the registered still '+i,url:base+'k'+i+'.png'});
  if(v.prep&&v.prep.windows_jpg)out.push({id:'windows',label:'windows.jpg',url:v.prep.windows_jpg});
@@ -32,7 +34,7 @@ function inspectorSig(){const r=S.render;return JSON.stringify([S.stage,r?[r.kin
 function syncInspector(){if((S.stage==='render'||S.stage==='measure')&&inspectorSig()!==S.insSig&&!typing($('#inspector')))renderInspector();}
 function seg(items,cur,attr,label){return '<div class="seg" role="group" aria-label="'+esc(label)+'">'+items.map(([k,t,hk])=>'<button '+attr+'="'+esc(k)+'" aria-pressed="'+(cur===k)+'" data-hint="'+esc(hk)+'">'+esc(t)+'</button>').join('')+'</div>';}
 function srcSelect(id,cur,hk,side){return '<label class="srcpick '+side+'"><span class="label">'+side.toUpperCase()+'</span><select id="'+id+'" data-hint="'+esc(hk)+'" aria-label="source '+side.toUpperCase()+'">'+sources().map(s=>'<option value="'+esc(s.id)+'"'+(s.id===cur?' selected':'')+'>'+esc(s.label)+'</option>').join('')+'</select></label>';}
-function renderViewer(){const w=$('#viewerWrap');if(!w||!S.view||!VIEWER_HOSTS.includes(S.stage))return;const host=vhost(),st=vstate(),r=S.render,v=S.view;
+function renderViewer(){const w=$('#viewerWrap');if(!w||!S.view||!viewerHosts().includes(S.stage))return;const host=vhost(),st=vstate(),r=S.render,v=S.view;
  if(host==='render'&&!r)return;
  if(!sources().length){w.innerHTML='';return;}
  const fk=focusKey(w);const axis=host==='render';const n=axis?(r.frames_available||r.frames||0):0;
@@ -48,10 +50,10 @@ function renderViewer(){const w=$('#viewerWrap');if(!w||!S.view||!VIEWER_HOSTS.i
  let h;
  if(axis){const last=Math.max(0,(v.prep?v.prep.n:1)-1);
   h='<div class="viewer">'+frame+'<div class="vside" id="vside"><div class="vtitle"><h3>'+esc(candLabel(r))+hintBtn('region.viewer')+'</h3>'+(r.kind==='draft'?chip('draft '+r.draft,'info'):(r.unjudged?chip('unjudged','info'):chip(r.verdict.verdict,r.verdict.verdict==='NOT READY'?'bad':'ok')))+'</div>'+(r.title?'<p class="muted vsub" title="'+esc(r.title)+'">'+esc(r.title)+'</p>':'')+modes+ctl+candList()
-   +'<div class="refs"><figure class="a"><img src="/api/jobs/'+esc(v.job.id)+'/thumb/still/0" alt="the first still"><figcaption>k0 · the first still</figcaption></figure><figure class="b"><img src="/api/jobs/'+esc(v.job.id)+'/thumb/still/'+last+'" alt="the last still"><figcaption>k'+last+' · the last still</figcaption></figure><div class="keys muted"><span class="kbd">space</span> play · <span class="kbd">←</span><span class="kbd">→</span> one frame · <span class="kbd">shift</span> ten · <span class="kbd">m</span> mark a fault</div></div></div></div>';
-  h+='<div class="axis"><div class="ctl"><button class="btn" id="play" data-hint="control.play">'+(S.playing?'pause':'play')+'</button><span class="data" id="frameNo"></span><span class="muted label">of '+n+' · 25 fps '+hintBtn('region.axis')+'</span><input id="markText" data-hint="control.mark_frame" placeholder="what you see at this frame" style="width:260px" aria-label="note for the marked frame"><button class="btn ghost" id="markBtn" data-hint="control.mark_frame">mark this frame as a fault</button>'+hintBtn('control.mark_frame')+'<span class="muted" id="markNote"></span></div><input type="range" id="scrub" data-hint="control.scrub" min="0" max="'+Math.max(0,n-1)+'" value="'+S.frame+'" step="1" aria-label="frame"><div id="plots"></div>'+measureCtl(r)+'</div>';}
+   +'<div class="refs">'+(v.prep?'<figure class="a"><img src="/api/jobs/'+esc(v.job.id)+'/thumb/still/0" alt="the first still"><figcaption>k0 · the first still</figcaption></figure><figure class="b"><img src="/api/jobs/'+esc(v.job.id)+'/thumb/still/'+last+'" alt="the last still"><figcaption>k'+last+' · the last still</figcaption></figure>':'')+'<div class="keys muted"><span class="kbd">space</span> play · <span class="kbd">←</span><span class="kbd">→</span> one frame · <span class="kbd">shift</span> ten · <span class="kbd">m</span> mark a fault</div></div></div></div>';
+  h+='<div class="axis"><div class="ctl"><button class="btn" id="play" data-hint="control.play">'+(S.playing?'pause':'play')+'</button><span class="data" id="frameNo"></span><span class="muted label">of '+n+' · '+esc(r.fps||25)+' fps '+hintBtn('region.axis')+'</span><input id="markText" data-hint="control.mark_frame" placeholder="what you see at this frame" style="width:260px" aria-label="note for the marked frame"><button class="btn ghost" id="markBtn" data-hint="control.mark_frame">mark this frame as a fault</button>'+hintBtn('control.mark_frame')+'<span class="muted" id="markNote"></span></div><input type="range" id="scrub" data-hint="control.scrub" min="0" max="'+Math.max(0,n-1)+'" value="'+S.frame+'" step="1" aria-label="frame"><div id="plots"></div>'+(stageOf('measure')?measureCtl(r):'')+'</div>';}
  else h='<div class="head vhead"><h3>Viewer'+hintBtn('region.viewer')+'</h3>'+modes+ctl+'</div><div class="viewer solo">'+frame+'</div>';
- w.innerHTML=h;if(axis)drawPlots();
+ w.innerHTML=h;if(axis)plots();
  sizeFrame();wireViewer();if(axis){$('#play').onclick=togglePlay;$('#scrub').oninput=e=>{S.frame=+e.target.value;showFrame();};$('#markBtn').onclick=markFrame;}
  showFrame();
  // the focus back on the same control (a zoom or compare button after Enter: critique A2, P2 2), or on the panel's
@@ -166,9 +168,14 @@ function stabilityPlots(r,W,n){const st=r.stability;if(!st||!st.series)return r.
   s+='<line x1="'+(x0+4)+'" y1="'+(H+10)+'" x2="'+(x0+28)+'" y2="'+(H+10)+'" stroke="'+TEXT+'" stroke-width="2"/>'+svgText(x0+32,H+14,'dx',{fill:TEXT})+'<line x1="'+(x0+60)+'" y1="'+(H+10)+'" x2="'+(x0+84)+'" y2="'+(H+10)+'" stroke="'+MUTED+'" stroke-width="2" stroke-dasharray="5 3"/>'+svgText(x0+88,H+14,'dy',{fill:MUTED})+svgText(x0+116,H+14,'px, positive right and down · corr min '+mx.corr_min+' · '+(st.record||st.folder.split('/').pop())+' · no bar is recorded');
   s+='<line class="cursor" x1="'+xOf(S.frame)+'" y1="'+y0+'" x2="'+xOf(S.frame)+'" y2="'+y1+'" stroke="'+AMBER+'" stroke-width="1.5"/></svg>';});
  return s;}
-function togglePlay(){if(!S.render||!$('#scrub'))return;if(S.playing)stopPlay();else{const n=S.render.frames_available||S.render.frames;S.playing=setInterval(()=>{S.frame=(S.frame+1)%n;showFrame();},40);const b=$('#play');if(b)b.textContent='pause';}}
+// the flow's axis plots under the scrubber (the loop's step series and stability)
+function plots(){const p=flowUI().plots;if(p)p();}
+// playback at the clip's own rate: 1000/fps ms a frame (40 ms at the loop's 25 fps, 33.3 ms at 30)
+function togglePlay(){if(!S.render||!$('#scrub'))return;if(S.playing)stopPlay();else{const n=S.render.frames_available||S.render.frames;S.playing=setInterval(()=>{S.frame=(S.frame+1)%n;showFrame();},1000/(S.render.fps||25));const b=$('#play');if(b)b.textContent='pause';}}
 function stopPlay(){if(S.playing){clearInterval(S.playing);S.playing=null;}const b=$('#play');if(b)b.textContent='play';}
 async function markFrame(){if(!S.render||!$('#markBtn'))return;const inp=$('#markText');const note=inp?inp.value:'';try{await api('/api/jobs/'+encodeURIComponent(S.view.job.id)+'/frames/mark',{kind:S.cand.kind,name:S.cand.name,frame:S.frame,note});if(inp)inp.value='';const f=S.frame;await loadRender();S.frame=f;showFrame();}catch(e){setMsg(e.message,'bad');}}
 // the a key flips A and B in the A/B mode (the frame keys stay boot.js's)
-document.addEventListener('keydown',e=>{if(e.key!=='a'||e.metaKey||e.ctrlKey||e.altKey||e.target.matches('input,textarea,select'))return;if(!$('#cmpStack')||!VIEWER_HOSTS.includes(S.stage))return;const st=vstate();if(st.cmp!=='ab')return;st.ab=st.ab==='A'?'B':'A';applyCompare();e.preventDefault();});
-window.addEventListener('resize',()=>{if($('#frameBox'))sizeFrame();if(S.render&&$('#plots'))drawPlots();});
+document.addEventListener('keydown',e=>{if(e.key!=='a'||e.metaKey||e.ctrlKey||e.altKey||e.target.matches('input,textarea,select'))return;if(!$('#cmpStack')||!viewerHosts().includes(S.stage))return;const st=vstate();if(st.cmp!=='ab')return;st.ab=st.ab==='A'?'B':'A';applyCompare();e.preventDefault();});
+window.addEventListener('resize',()=>{if($('#frameBox'))sizeFrame();if(S.render&&$('#plots'))plots();});
+flowEntry('loop').panels.measure=panelMeasure;
+Object.assign(flowEntry('loop'),{sources:loopSources,plots:drawPlots,hosts:['registration','readers','probe','render','measure']});

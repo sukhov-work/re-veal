@@ -75,9 +75,10 @@ def frozen_plans(settings: Settings) -> list[Json]:
     return out
 
 
-def run_warnings(settings: Settings, d: Path, stage: str, knobs: Json) -> list[Json]:
-    """The rulings a run warns about (STUDIO.md §4): the stage's own knobs, and for a render the plan it reads."""
-    plan = read_json(resolve_plan(settings, d, knobs.get("plan"))) if stage == "render" else None
+def run_warnings(settings: Settings, d: Path, stage: str, knobs: Json, flow: str = "loop") -> list[Json]:
+    """The rulings a run warns about (STUDIO.md §4): the stage's own knobs, and for a loop render the loop plan it
+    reads (another flow's render names its own kind of plan, which the loop's folder does not hold)."""
+    plan = read_json(resolve_plan(settings, d, knobs.get("plan"))) if flow == "loop" and stage == "render" else None
     return [dict(h) for h in stage_warnings(stage, knobs, plan)]
 
 

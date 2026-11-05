@@ -10,10 +10,16 @@ async function loadJobs(){S.jobs=await api('/api/jobs');const ul=$('#jobs');cons
  const reqs=await api('/api/requests');$('#reqs').innerHTML=reqs.length?reqs.map(r=>'<li class="kv"><span class="data" title="'+esc(r.file)+'">'+esc(r.name)+'</span>'+chip('waiting '+fmtAge(r.age_s),'run')+'</li>').join(''):'<li class="kv muted">none open</li>';}
 function fmtElapsed(s){return s<60?Math.round(s)+' s':fmtS(s);}
 async function loadModels(){const ms=await api('/api/models');$('#models').innerHTML=ms.map(m=>'<li class="kv"><span>'+esc(m.name)+'</span>'+chip(m.ready?'ready, offline':'missing',m.ready?'ok':'bad',m.ready?'chip.model_ready':'chip.model_missing')+'</li>').join('');}
-$('#btnNew').onclick=()=>{$('#newForm').style.display='';$('#adoptForm').style.display='none';$('#newFolder').focus();};
+// one "new <flow> job…" button per enabled flow that registers newJob, drawn once the registry is in (boot.js); the
+// loop's keeps its id, its text and its hint
+function drawNewJobs(){const box=$('#newJobs');if(!box||!S.reg)return;const flows=Object.keys(S.reg.flows||{}).filter(f=>FLOW_UI[f]&&FLOW_UI[f].newJob);
+ box.innerHTML=flows.map(f=>f==='loop'?'<button class="btn" id="btnNew" data-flow="loop" data-hint="control.new_job">new loop job…</button>':'<button class="btn" id="btnNew_'+esc(f)+'" data-flow="'+esc(f)+'" data-hint="'+esc('control.'+f+'_new_job')+'">new '+esc(f)+' job…</button>').join(' ');
+ box.querySelectorAll('button[data-flow]').forEach(b=>b.onclick=()=>FLOW_UI[b.dataset.flow].newJob());}
+function openLoopForm(){$('#newForm').style.display='';$('#adoptForm').style.display='none';$('#newFolder').focus();}
 $('#newCancel').onclick=()=>{$('#newForm').style.display='none';};
 $('#btnAdopt').onclick=()=>{$('#adoptForm').style.display='';$('#newForm').style.display='none';$('#adoptRoot').focus();};
 $('#adoptCancel').onclick=()=>{$('#adoptForm').style.display='none';};
 $('#newGo').onclick=async()=>{$('#newErr').textContent='';try{const r=await api('/api/jobs',{flow:'loop',folder:$('#newFolder').value,seq:$('#newSeq').value||undefined});$('#newForm').style.display='none';await loadJobs();openJob(r.id);}catch(e){$('#newErr').textContent=e.message;}};
 $('#adoptGo').onclick=async()=>{$('#adoptErr').textContent='';try{const r=await api('/api/jobs',{flow:'loop',adopt:$('#adoptRoot').value,seq:$('#adoptSeq').value});$('#adoptForm').style.display='none';await loadJobs();openJob(r.id);}catch(e){$('#adoptErr').textContent=e.message;}};
 function alertMsg(t){setMsg(t,'bad');if(!$('#msg')){$('#panel').insertAdjacentHTML('afterbegin','<div class="msg bad" id="msg">'+esc(t)+'</div>');}}
+Object.assign(flowEntry('loop'),{newJob:openLoopForm,inputsWord:'stills'});

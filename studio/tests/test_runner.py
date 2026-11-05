@@ -17,11 +17,13 @@ from reveal_studio.config import Settings
 from reveal_studio.errors import StudioError
 from reveal_studio.fs import Json, md5_file, now_iso, read_json, rel, sha256_file, write_json
 from reveal_studio.jobs.grades import save_grade
-from reveal_studio.jobs.plans import save_plan
+from reveal_studio.jobs.plans import run_warnings, save_plan
 from reveal_studio.jobs.records import progress_of, records
-from reveal_studio.jobs.store import create_job, job_root
-from reveal_studio.registry.loop import stage_def
-from reveal_studio.runner.argv import ScriptFlags, probe_script_flags
+from reveal_studio.jobs.store import create_director_job, create_job, create_pair_job, job_root
+from reveal_studio.registry.common import VERDICT_STAGE
+from reveal_studio.registry.entries import K
+from reveal_studio.registry.flows import stage_def
+from reveal_studio.runner.argv import ScriptFlags, argv_for, coerce, flags_of, probe_script_flags
 from reveal_studio.runner.lock import LockHeld, take_lock
 from reveal_studio.runner.process import Runner
 
@@ -520,3 +522,168 @@ def test_two_starts_in_one_second_get_distinct_record_ids(runner: Runner, regist
     assert a["id"] != b["id"]
     for r in (a, b):
         assert wait_record(d, r["id"])["state"] == "done"
+
+
+# ---------------------------------------------------------------- phase B's slice: any flow's script, the verdict
+
+SET = K("set", "object", {}, "knob=value (JSON value); 'name.param' targets a transform's params", "--set")
+OBJECT_STAGE: Json = {"name": "render", "knobs": [SET]}
+
+
+def test_an_object_knob_becomes_one_set_flag_per_key_in_sorted_order() -> None:
+    """The director's --set table rides one knob of type object. Mutation: the keys in the order the page sent them
+    (two equal dicts then give two argv), or a value written with str() instead of JSON ("True", "[0.35, 0.97]" as a
+    Python repr), turns this red."""
+    knobs = coerce(
+        OBJECT_STAGE, {"set": {"parallax_push": 2, "pane_becomes_view.window": [0.35, 0.97], "plate": False}}
+    )
+    assert flags_of(OBJECT_STAGE, knobs) == [
+        "--set",
+        "pane_becomes_view.window=[0.35, 0.97]",
+        "--set",
+        "parallax_push=2",
+        "--set",
+        "plate=false",
+    ]
+    assert coerce(OBJECT_STAGE, {"set": '{"sky.shape": "radial"}'})["set"] == {"sky.shape": "radial"}  # JSON text
+    assert flags_of(OBJECT_STAGE, coerce(OBJECT_STAGE, {})) == []  # the empty default passes no flag
+    a, b = coerce(OBJECT_STAGE, {}), coerce(OBJECT_STAGE, {})
+    a["set"]["x"] = 1
+    assert b["set"] == {} and SET["default"] == {}  # the default is copied, never shared between runs
+
+
+@pytest.mark.parametrize("bad", [{"a.b.c": 1}, {"has space": 1}, [1, 2], "not json", '"text"', {"": 1}])
+def test_an_object_knob_refuses_a_key_with_two_dots_or_a_non_object(bad: object) -> None:
+    """director_render.py routes a --set key on its first dot; a second dot lands on a key nothing reads. Mutation:
+    dropping the key check turns the first row red."""
+    with pytest.raises(StudioError, match="knob set takes a object") as e:
+        coerce(OBJECT_STAGE, {"set": bad})
+    assert e.value.code == 400
+
+
+def test_a_stage_of_a_flow_not_built_yet_answers_501_before_a_record_exists(
+    settings: Settings, runner: Runner, fixture_pair: str
+) -> None:
+    """argv_pair.py and argv_director.py are stubs in the slice. Mutation: the dispatcher sending a pair stage to the
+    loop's chain (a pair "render" then runs loop_seq.py) turns this red."""
+    for j in (create_pair_job(settings, fixture=fixture_pair), create_director_job(settings, fixture_pair)):
+        d = settings.root / "benchmarks/runs/2026-11-05/studio" / j["id"]
+        stage = {"name": "render", "kind": "script", "terminal": "report.json", "knobs": []}
+        with pytest.raises(StudioError, match=rf"the {j['flow']} flow's render stage is not built yet") as e:
+            runner.start_stage(d, j, stage, {})
+        assert e.value.code == 501
+        assert not (d / "stages").exists() or not list((d / "stages").iterdir())  # no record folder left
+
+
+def pair_job(settings: Settings, fixture_pair: str) -> tuple[Path, Json]:
+    j = create_pair_job(settings, fixture=fixture_pair)
+    return settings.root / j["root"], j
+
+
+def test_the_verdict_runs_reveal_align_on_a_pair_job(settings: Settings, runner: Runner, fixture_pair: str) -> None:
+    """The shared branch through the Runner on a pair job, its stage passed directly (the pair's stage list is empty
+    in the slice). Mutation: the argv naming the originals instead of the job's links, the record stamping
+    loop_seq.py's md5, or the verdict folder put under the run folder's renders, turns this red."""
+    d, j = pair_job(settings, fixture_pair)
+    rec = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
+    assert (rec["state"], rec["exit_code"], rec["stage"]) == ("done", 0, "verdict")
+    root = j["root"]
+    assert rec["argv"] == [
+        str(settings.python),
+        "reveal.py",
+        "align",
+        f"{root}/raw/tiny_1/A.jpg",
+        f"{root}/raw/tiny_1/B.jpg",
+        "--out",
+        f"{root}/verdict.part",
+    ]
+    assert rec["script_md5"] == md5_file(settings.reveal) != md5_file(settings.loop_seq)
+    assert rec["inputs"] == [{"path": i["path"], "sha256": i["sha256"]} for i in j["inputs"]]
+    assert (rec["out_final"], rec["terminal"]) == (f"{root}/verdict", "metrics.json")
+    names = sorted(Path(o["path"]).name for o in rec["outputs"])
+    assert names == ["after_aligned.jpg", "before.jpg", "metrics.json"]
+    assert read_json(d / "verdict" / "metrics.json")["metrics"]["inliers"] == 481
+    assert (d / "verdict" / "before.jpg").read_bytes() == (settings.fixtures / "tiny_1_S.jpg").read_bytes()
+    assert not (d / "verdict.part").exists() and (d / "stages" / rec["id"] / "done").exists()
+    again = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
+    # the identity pattern metrics.json comes from the shared stage: the rerun replaced the folder and says so
+    assert again["unchanged_from"] == rec["id"] and (d / "verdict" / "metrics.json").is_file()
+
+
+def test_a_verdict_refusal_is_refused_with_reveals_failed_line(
+    settings: Settings, runner: Runner, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exit 2 with a FAILED: line is a refusal: the photos share too little detail. Mutation: reading exit 2 as a
+    failure turns this red."""
+    d, j = pair_job(settings, fixture_pair)
+    monkeypatch.setenv("FAKE_REFUSE", "align")
+    rec = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
+    assert (rec["state"], rec["exit_code"], rec["reason"]) == (
+        "refused",
+        2,
+        "FAILED: the photos share too little detail",
+    )
+    assert not (d / "verdict").exists()
+    monkeypatch.setenv("FAKE_REFUSE", "")
+    monkeypatch.setenv("FAKE_FAIL", "align")
+    rec2 = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
+    assert (rec2["state"], rec2["reason"]) == ("failed", "RuntimeError: the fake align failed")
+
+
+def test_a_stage_whose_script_is_missing_is_refused_before_it_starts(
+    settings: Settings, runner: Runner, fixture_pair: str
+) -> None:
+    """Mutation: hashing the script after the child started (a 500 and an orphan record folder) turns this red."""
+    d, j = pair_job(settings, fixture_pair)
+    settings.reveal.unlink()
+    with pytest.raises(StudioError, match=r"^reveal.py is missing: the verdict stage cannot start$") as e:
+        runner.start_stage(d, j, VERDICT_STAGE, {})
+    assert e.value.code == 409 and list((d / "stages").glob("*")) == []
+
+
+def test_reconcile_reattaches_a_live_child_of_another_flows_script(
+    settings: Settings, runner: Runner, fixture_pair: str
+) -> None:
+    """After a restart a live verdict (reveal.py, not loop_seq.py) is watched, not marked lost with its .part removed
+    while it still writes (b_seams_research.md, key fact 2). Mutation: pid_alive looking for the loop script in the
+    process's arguments marks this record lost and turns this red."""
+    d, j = pair_job(settings, fixture_pair)
+    rid = "20261105-000006_verdict"
+    part = d / "verdict.part"
+    rec = hand_record(d, rid, "verdict", 0, part, d / "verdict", "metrics.json", settings)
+    rec["argv"] = [str(settings.python), "reveal.py", "align", "a", "b", "--out", rec["out_part"]]
+    a, b = (settings.root / i["link"] for i in j["inputs"])
+    with open(d / "stages" / rid / "log.txt", "ab") as logf:
+        child = subprocess.Popen(
+            [str(settings.python), "reveal.py", "align", str(a), str(b), "--out", rec["out_part"]],
+            cwd=str(settings.root),
+            stdout=logf,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            env={**os.environ, "FAKE_SLOW": "align=1.5"},
+        )
+    threading.Thread(target=child.wait, daemon=True).start()
+    rec["pid"] = child.pid
+    write_json(d / "stages" / rid / "stage.json", rec)
+    r = Runner(settings, FLAGS)
+    assert r.reconcile(d, rec)["state"] == "running" and rid in r.watching
+    out = wait_record(d, rid, timeout=20)
+    assert out["state"] == "done" and "finished after a restart" in out["note"]
+    assert (d / "verdict" / "metrics.json").is_file()
+
+
+def test_a_non_loop_flows_render_names_no_loop_plan_for_the_rulings(settings: Settings, fixture_pair: str) -> None:
+    """Mutation: run_warnings resolving every render's plan in the loop's folder (a director plan then 404s before
+    its script starts) turns this red."""
+    j = create_director_job(settings, fixture_pair)
+    d = settings.root / "benchmarks/runs/2026-11-05/studio" / j["id"]
+    assert run_warnings(settings, d, "render", {"plan": "frozen:tiny_1_r1"}, "director") == []
+    with pytest.raises(StudioError, match=r"no plan scripts/research/plans/loops/tiny_1_r1\.json"):
+        run_warnings(settings, d, "render", {"plan": "frozen:tiny_1_r1"}, "loop")
+
+
+def test_argv_for_routes_a_shared_stage_before_the_flow_module(settings: Settings, fixture_pair: str) -> None:
+    """Mutation: the dispatcher asking the flow module first (the pair stub's 501 then answers for the verdict)."""
+    d, j = pair_job(settings, fixture_pair)
+    argv, out_final, out_part, _inputs = argv_for(settings, FLAGS, VERDICT_STAGE, d, j, {}, d / "stages" / "x")
+    assert (argv[1:3], out_final, out_part) == (["reveal.py", "align"], d / "verdict", d / "verdict.part")

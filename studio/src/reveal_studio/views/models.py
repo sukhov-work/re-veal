@@ -9,8 +9,8 @@ from reveal_studio.fs import Json, read_json, rel
 from reveal_studio.jobs.candidates import requests_of
 from reveal_studio.jobs.plans import frozen_plans
 from reveal_studio.jobs.store import job_dirs
+from reveal_studio.registry.flows import STAGE_NAMES
 from reveal_studio.registry.hints import HINTS
-from reveal_studio.registry.loop import STAGE_ORDER
 from reveal_studio.registry.rulings import RULINGS
 from reveal_studio.registry.schema import EASES, EFFECTS, METHODS, PLAN_KEYS, VERDICTS, schema_view
 from reveal_studio.runner.argv import ScriptFlags
@@ -55,7 +55,7 @@ def registry_view(settings: Settings, flags: ScriptFlags, flows: dict[str, Any])
     """GET /api/registry: the flows and their stages, the hints, the schema's lists and the server's identity."""
     return {
         "flows": flows,
-        "stage_order": STAGE_ORDER,
+        "stage_order": STAGE_NAMES,
         "hints": HINTS,
         "methods": METHODS,
         "eases": EASES,

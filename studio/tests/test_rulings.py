@@ -21,7 +21,7 @@ import pytest
 from reveal_studio.config import Settings
 from reveal_studio.fs import Json
 from reveal_studio.jobs.plans import frozen_plans, plans_of, save_plan
-from reveal_studio.registry.loop import stage_def
+from reveal_studio.registry.flows import stage_def
 from reveal_studio.registry.rulings import RULINGS, knob_hits, plan_hits, ruled, stage_warnings
 from reveal_studio.runner.process import Runner
 

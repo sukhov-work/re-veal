@@ -11,8 +11,13 @@ from typing import Any
 import pytest
 
 from reveal_studio.errors import StudioError
-from reveal_studio.registry.hints import HINTS
-from reveal_studio.registry.loop import FLOWS, LOOP_STAGES, STAGE_ORDER, stage_def
+from reveal_studio.registry import loop
+from reveal_studio.registry.entries import merge_hints
+from reveal_studio.registry.flows import ALL_FLOWS, FLOWS, STAGE_NAMES, stage_def, stage_order
+from reveal_studio.registry.hints import HINTS, LOOP_HINTS
+from reveal_studio.registry.hints_director import HINTS as DIRECTOR_HINTS
+from reveal_studio.registry.hints_pair import HINTS as PAIR_HINTS
+from reveal_studio.registry.loop import LOOP_STAGES, STAGE_ORDER
 from reveal_studio.registry.rulings import RULINGS, Ruling, is_stage_knob
 from reveal_studio.registry.schema import (
     BY_PATH,
@@ -61,23 +66,48 @@ HINT_PREFIXES = ("plan.", "measure.", "prep.", "readers.", "chip.", "region.", "
 UNDOCUMENTED_2026_11_05 = {"teleport": {"rest", "flash", "flash_gain"}}
 
 
+LOOP_ORDER_2026_11_05 = [
+    "import",
+    "registration",
+    "readers",
+    "probe",
+    "plan",
+    "render",
+    "measure",
+    "skeptic",
+    "page",
+    "grades",
+]
+# 290 rows on 2026-11-05 (85 at the port, 145 for the plan keys and the editor, 37 for the views, 23 for the fix
+# round) and the two still-count chips of phase B's slice (chip.above_6, chip.above_10).
+LOOP_HINT_COUNT = 292
+
+
 def test_the_loop_flow_has_its_stages_in_order() -> None:
-    # A1's eight stages; agent E's A2 build added probe after readers and measure after render (2026-11-05).
-    assert list(FLOWS) == ["loop"]
-    assert STAGE_ORDER == [
-        "import",
-        "registration",
-        "readers",
-        "probe",
-        "plan",
-        "render",
-        "measure",
-        "skeptic",
-        "page",
-        "grades",
-    ]
-    assert FLOWS["loop"]["stages"] is LOOP_STAGES
-    assert FLOWS["loop"]["what"].strip()
+    # A1's eight stages; agent E's A2 build added probe after readers and measure after render (2026-11-05). The slice
+    # of phase B moved the flow table to registry/flows.py: the loop is the first flow and enabled. Mutation: a loop
+    # stage reordered, or the loop entry dropped from the enabled flows, turns this red.
+    assert STAGE_ORDER == stage_order("loop") == LOOP_ORDER_2026_11_05
+    assert ALL_FLOWS["loop"] is loop.FLOW and next(iter(ALL_FLOWS)) == "loop" and "loop" in FLOWS
+    assert loop.FLOW["stages"] is LOOP_STAGES and loop.FLOW["enabled"] is True
+    assert loop.FLOW["what"].strip()
+    assert STAGE_NAMES[: len(STAGE_ORDER)] == STAGE_ORDER  # the union the page reads starts with the loop's ten
+
+
+def test_every_loop_script_stage_names_its_script_and_identity() -> None:
+    """The Runner hashes the stage's own script and reads the "unchanged" files from the stage. Mutation: dropping
+    `identity` from the render stage (or naming loop.gif there) turns this red, and test_runner's unchanged test too."""
+    ident = {s["name"]: s["identity"] for s in LOOP_STAGES if s["kind"] == "script"}
+    assert ident == {
+        "registration": ["*.png", "*.npy"],
+        "readers": ["readers.json"],
+        "probe": [],
+        "render": ["loop.mp4"],
+        "measure": [],
+        "page": [],
+    }
+    assert {s["script"] for s in LOOP_STAGES if s["kind"] == "script"} == {"loop_seq"}
+    assert all("script" not in s and "identity" not in s for s in LOOP_STAGES if s["kind"] != "script")
 
 
 @pytest.mark.parametrize("stage", LOOP_STAGES, ids=lambda s: s["name"])
@@ -123,7 +153,18 @@ def test_the_hints_table_holds_the_a1_keys_each_with_a_sentence() -> None:
         assert isinstance(h["what"], str) and h["what"].strip(), key
         assert set(h) <= {"what", "default", "range", "stage", "source"}, key
         if "stage" in h:
-            assert h["stage"] in STAGE_ORDER, key
+            assert h["stage"] in STAGE_NAMES, key
+
+
+def test_the_hint_tables_are_disjoint_and_merged_into_one() -> None:
+    """HINTS is the loop's rows and each flow's, every key once. Mutation: a key added to hints_pair.py that the loop
+    already holds fails the import (merge_hints raises); a merge that dropped a table turns the count red."""
+    assert len(LOOP_HINTS) == LOOP_HINT_COUNT
+    assert len(HINTS) == len(LOOP_HINTS) + len(PAIR_HINTS) + len(DIRECTOR_HINTS)
+    assert set(HINTS) == set(LOOP_HINTS) | set(PAIR_HINTS) | set(DIRECTOR_HINTS)
+    assert all(HINTS[k] is LOOP_HINTS[k] for k in LOOP_HINTS)
+    with pytest.raises(ValueError, match=r"hint keys in two flows' tables: \['chip.done'\]"):
+        merge_hints({"chip.done": {"what": "a"}}, {"chip.done": {"what": "b"}})
 
 
 def _page_hint_keys() -> set[str]:
@@ -292,6 +333,9 @@ def test_stage_def_finds_a_stage_and_refuses_an_unknown_one() -> None:
     with pytest.raises(StudioError) as e:
         stage_def("loop", "warp")
     assert e.value.code == 404
+    with pytest.raises(StudioError, match="no flow 'align'") as e2:
+        stage_def("align", "render")
+    assert e2.value.code == 404
 
 
 @pytest.mark.integration
@@ -319,3 +363,21 @@ def test_the_schema_covers_every_key_of_the_frozen_plans() -> None:
             groups = element_groups("effects", e, ["plan"])
             gaps |= {f"{groups[0]}.{k}" for k in e if not any((g, k) in pairs for g in groups)}
     assert not gaps, f"keys of the frozen plans the schema lacks: {sorted(gaps)}"
+
+
+def test_the_loop_registers_a_panel_for_each_of_its_stages_in_flow_ui() -> None:
+    """The page picks a stage's panel from FLOW_UI[flow].panels (core.js); each loop script registers its own at
+    load. Mutation: a dropped registration (the stage then shows the plain panel: its sentence only) or a loop panel
+    registered under another flow turns this red."""
+    js = {p.stem: p.read_text() for p in (WEB / "js").glob("*.js")}
+    assert "const FLOW_UI={};" in js["core"]
+    names: list[str] = []
+    for text in js.values():
+        for block in re.findall(r"Object\.assign\(flowEntry\('loop'\)\.panels,\{([^}]*)\}\)", text):
+            names += re.findall(r"([a-z]+):panel[A-Z]", block)
+        names += re.findall(r"flowEntry\('loop'\)\.panels\.([a-z]+)=panel[A-Z]", text)
+    assert sorted(names) == sorted(STAGE_ORDER)
+    for key in ("wire:wireLoop", "candRow:candRow", "sources:loopSources", "plots:drawPlots", "newJob:openLoopForm"):
+        assert any(key in text for text in js.values()), key
+    assert "flowEntry('loop').measures=loopMeasures" in js["inspector"] and "flowEntry('loop').graph=" in js["graph"]
+    assert "flowEntry('pair');" in js["pair"] and "flowEntry('director');" in js["director"]

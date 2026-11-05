@@ -1,10 +1,13 @@
-"""Settings: the repo root, the main venv's python, the research script and the job folders, resolved once.
+"""Settings: the repo root, the main venv's python, the scripts each flow runs, their folders and the job folders,
+resolved once.
 
 Resolution order for every setting: an explicit argument (the CLI's flag) > the environment (REVEAL_STUDIO_ROOT,
-REVEAL_STUDIO_PY, REVEAL_STUDIO_PORT, REVEAL_STUDIO_LOCK, REVEAL_STUDIO_RUNS_DATE) > discovery > an error that
-names what is missing. Discovery of the root walks up from the working folder for a folder holding both
-`reveal.py` and `AGENTS.md`, then up from this package's own location (the last resort; nothing else in the
-package reads its own path to find the repo).
+REVEAL_STUDIO_PY, REVEAL_STUDIO_PORT, REVEAL_STUDIO_LOCK, REVEAL_STUDIO_RUNS_DATE, REVEAL_STUDIO_LAYERS_DIR,
+REVEAL_STUDIO_MATTES_DIR) > discovery > an error that names what is missing. Discovery of the root walks up from the
+working folder for a folder holding both `reveal.py` and `AGENTS.md`, then up from this package's own location (the
+last resort; nothing else in the package reads its own path to find the repo). The scripts and folders are derived
+from the root; a missing one raises nothing here, because the loop flow runs without the others (`reveal-studio
+check` names it MISSING).
 """
 
 from __future__ import annotations
@@ -25,7 +28,24 @@ ENV_PY = "REVEAL_STUDIO_PY"
 ENV_PORT = "REVEAL_STUDIO_PORT"
 ENV_LOCK = "REVEAL_STUDIO_LOCK"
 ENV_RUNS_DATE = "REVEAL_STUDIO_RUNS_DATE"
+ENV_LAYERS = "REVEAL_STUDIO_LAYERS_DIR"
+"""Mirrors --layers-dir, as REVEAL_STUDIO_RUNS_DATE mirrors --runs-date."""
+ENV_MATTES = "REVEAL_STUDIO_MATTES_DIR"
 LOOP_SEQ = Path("scripts/research/loop_seq.py")
+TRANSITIONS = Path("transitions.py")
+"""The pair flow's relation and render."""
+REVEAL = Path("reveal.py")
+"""Reveal's verdict, the optional branch the pair and director flows share."""
+DIRECTOR_RENDER = Path("scripts/research/director_render.py")
+DIRECTOR_PAGE = Path("scripts/research/director_page.py")
+DIRECTOR_PLANS = Path("scripts/research/plans")
+"""The frozen director plans (the loop's are FROZEN_PLANS, the loops/ folder inside it)."""
+FIXTURES = Path("fixtures")
+"""The fixture pairs <group>_<N>_S.<ext> and <group>_<N>_F.<ext>."""
+LAYERS_DIR = Path("benchmarks/runs/2026-09-28/layers_v3")
+"""director_render.py's default --layers-dir (its --help, 2026-11-05)."""
+MATTES_DIR = Path("benchmarks/runs/2026-10-17/mattes")
+"""director_render.py's default --mattes-dir (its --help, 2026-11-05)."""
 RUNS = Path("benchmarks/runs")
 FROZEN_PLANS = Path("scripts/research/plans/loops")
 LOCK_NAME = "studio.lock"
@@ -44,6 +64,14 @@ class Settings:
     loop_seq: Path
     runs: Path
     frozen_plans: Path
+    transitions: Path
+    reveal: Path
+    director_render: Path
+    director_page: Path
+    director_plans: Path
+    fixtures: Path
+    layers_dir: Path
+    mattes_dir: Path
     port: int
     lock_path: Path
     runs_date: str
@@ -85,6 +113,16 @@ def _absolute(p: str | Path, cwd: Path) -> Path:
     return q if q.is_absolute() else cwd / q
 
 
+def _folder(arg: str | Path | None, from_env: str | None, default: Path, cwd: Path) -> Path:
+    """The flag's folder, else the environment's, else the default under the root; a relative one is read against
+    the working folder, as the lock is."""
+    if arg is not None:
+        return _absolute(arg, cwd)
+    if from_env:
+        return _absolute(from_env, cwd)
+    return default
+
+
 def resolve_settings(
     *,
     root: str | Path | None = None,
@@ -92,6 +130,8 @@ def resolve_settings(
     port: int | None = None,
     lock: str | Path | None = None,
     runs_date: str | None = None,
+    layers_dir: str | Path | None = None,
+    mattes_dir: str | Path | None = None,
     open_browser: bool = True,
     env: Mapping[str, str] | None = None,
     cwd: Path | None = None,
@@ -149,6 +189,14 @@ def resolve_settings(
         loop_seq=found / LOOP_SEQ,
         runs=found / RUNS,
         frozen_plans=found / FROZEN_PLANS,
+        transitions=found / TRANSITIONS,
+        reveal=found / REVEAL,
+        director_render=found / DIRECTOR_RENDER,
+        director_page=found / DIRECTOR_PAGE,
+        director_plans=found / DIRECTOR_PLANS,
+        fixtures=found / FIXTURES,
+        layers_dir=_folder(layers_dir, env.get(ENV_LAYERS), found / LAYERS_DIR, cwd),
+        mattes_dir=_folder(mattes_dir, env.get(ENV_MATTES), found / MATTES_DIR, cwd),
         port=the_port,
         lock_path=lock_path,
         runs_date=date,

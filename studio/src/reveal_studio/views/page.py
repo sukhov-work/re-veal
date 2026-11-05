@@ -15,7 +15,7 @@ from typing import Any
 from reveal_studio.errors import StudioError
 from reveal_studio.fs import Json, now_iso
 from reveal_studio.jobs.candidates import candidates
-from reveal_studio.registry.loop import stage_def
+from reveal_studio.registry.flows import stage_def
 from reveal_studio.runner.argv import as_list
 from reveal_studio.runner.process import Runner
 
@@ -46,7 +46,10 @@ def page_variants(raw: Any, full: list[Json]) -> list[str]:
 
 
 def build_page(runner: Runner, d: Path, job: Json, body: Json) -> Json:
-    """POST /api/jobs/<id>/page: the variants check, the gate, then the page stage's record (`loop_seq.py page`)."""
+    """POST /api/jobs/<id>/page: the variants check, the gate, then the page stage's record (`loop_seq.py page` for
+    the loop). The text knobs are the flow's page stage's own (the loop's title, intro and footer); the override goes
+    into the footer when the stage has one, and into the record's knobs always."""
+    stage = stage_def(job["flow"], "page")
     full = [c for c in candidates(runner.settings, d, job) if c["kind"] == "full"]
     if not full:
         raise StudioError("no full render to put on a page", 409)
@@ -55,7 +58,7 @@ def build_page(runner: Runner, d: Path, job: Json, body: Json) -> Json:
     listed = [by_name[n] for n in variants] if variants else full
     bad = [c for c in listed if c["unjudged"] or (c["verdict"] and c["verdict"]["verdict"] == "NOT READY")]
     override = bool(body.get("override"))
-    knobs: Json = {k: str(body.get(k) or "") for k in ("title", "intro", "footer")}
+    knobs: Json = {k["key"]: str(body.get(k["key"]) or "") for k in stage["knobs"] if k["type"] == "str"}
     knobs["notes"] = body.get("notes") or {}
     knobs["variants"] = variants
     if bad and not override:
@@ -67,11 +70,13 @@ def build_page(runner: Runner, d: Path, job: Json, body: Json) -> Json:
             {"refused": [c["name"] for c in bad]},
         )
     if bad:
-        text = (
-            "Override: built on his word with "
-            + ", ".join(f"{c['name']} ({_why(c)})" for c in bad)
-            + f" ({now_iso()})."
-        )
+        _override(knobs, bad)
+    return runner.start_stage(d, job, stage, knobs)
+
+
+def _override(knobs: Json, bad: list[Json]) -> None:
+    """The override's text, printed in the footer when the page stage has one and kept in the record's knobs."""
+    text = "Override: built on his word with " + ", ".join(f"{c['name']} ({_why(c)})" for c in bad) + f" ({now_iso()})."
+    if "footer" in knobs:
         knobs["footer"] = (knobs["footer"] + " " + text).strip()
-        knobs["override"] = text
-    return runner.start_stage(d, job, stage_def(job["flow"], "page"), knobs)
+    knobs["override"] = text

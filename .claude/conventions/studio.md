@@ -35,6 +35,10 @@ studio/tests/  unit (a fake loop_seq script under a tmp root) · integration/ ·
   `transitions`, a research script, torch, transformers or kornia; cv2 only inside `media`;
   the layers are server > views > runner | media > jobs > registry > config | errors | fs. A
   contract change is a design decision recorded as a dated row here.
+  - 2026-11-05, phase B's slice: the forbidden names gain `director_render`, `director_page`,
+    `director_ui`, `chain_luma`, `layer_merge`, `matte_source`, `layered_probe` and `nest_probe`. The
+    cv2 rule and the layers are unchanged. An `import director_render` added to `views/director.py`
+    turned the first contract red; its removal turned it green.
 - Subprocesses: every heavy call runs the main venv's python with stdout and stderr in the
   record's `log.txt`; the argv is recorded in `stage.json` and reproduces the stage from the
   shell.

@@ -35,8 +35,9 @@ def jpeg_thumb(settings: Settings, src: Path, dest: Path, long: int = 160) -> Pa
 
 
 def frames_dir(d: Path, c: Json) -> Path:
-    """The render's JPEG frames: its own frames/ when the script wrote it, else a decode of loop.mp4 cached by the
-    mp4's md5 (one decode per render, under a lock per cache folder)."""
+    """The render's JPEG frames: its own frames/ when the script wrote it, else a decode of the candidate's own mp4
+    (`mp4`: loop.mp4 for the loop, transition.mp4 for a pair or a director render) cached by the mp4's md5 (one
+    decode per render, under a lock per cache folder)."""
     own: Path = c["dir"] / "frames"
     if (own / "f0000.jpg").exists():
         return own
@@ -50,7 +51,7 @@ def frames_dir(d: Path, c: Json) -> Path:
         import cv2
 
         cache.mkdir(parents=True, exist_ok=True)
-        cap = cv2.VideoCapture(str(c["dir"] / "loop.mp4"))
+        cap = cv2.VideoCapture(str(c["dir"] / c.get("mp4", "loop.mp4")))
         i = 0
         while True:
             ok, f = cap.read()

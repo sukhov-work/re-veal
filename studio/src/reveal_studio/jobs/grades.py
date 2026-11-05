@@ -1,4 +1,5 @@
-"""What the owner and the session write into a job: request files, his grade text per round, the frames he marks."""
+"""What the owner and the session write into a job: request files, his grade per round (his text, or the picks of a
+two-photo flow with his text), the frames he marks."""
 
 from __future__ import annotations
 
@@ -11,6 +12,12 @@ from reveal_studio.fs import Json, log, now_iso, read_json, rel, stamp, write_js
 from reveal_studio.jobs.candidates import candidate, candidates, rounds
 
 REQUEST_KINDS = ("skeptic", "plan", "reading", "director", "keyframe")
+# The picks shape of the director rounds (benchmarks/runs/2026-10-17/director_r11/director_picks_11.json), checked as
+# the workbench checked it (scripts/research/director_ui.py:688-707); the pair and director flows grade in it.
+PICK_TOP = frozenset({"date", "page", "best", "clips"})
+PICK_CLIP = frozenset({"acceptable", "note", "props"})
+PICK_CLIP_OPT = frozenset({"frames", "render", "draft"})
+PICK_PROPS = frozenset({"one_picture", "transforms", "not_invented"})
 
 
 def owner_frames(d: Path) -> list[Any]:
@@ -36,7 +43,7 @@ def write_request(settings: Settings, d: Path, job: Json, kind: str, body: Json)
                 "md5_mp4": c["md5_mp4"],
                 "frames": c["frames"],
                 "canvas": c["canvas"],
-                "plan_sha256": c["plan_sha256"],
+                "plan_sha256": c.get("plan_sha256"),
             }
         )
     (d / "requests").mkdir(exist_ok=True)
@@ -72,8 +79,37 @@ def write_request(settings: Settings, d: Path, job: Json, kind: str, body: Json)
     return {"file": rel(d / "requests" / fname, settings.root), "name": fname}
 
 
+def check_picks(obj: Any) -> None:
+    """The picks object as the workbench took it: exactly date, page, best and clips; best and clips objects; per clip
+    acceptable, note and props, with frames, render and draft allowed; props exactly the three boxes. 400 otherwise."""
+    if not isinstance(obj, dict) or set(obj) != PICK_TOP:
+        keys = sorted(obj) if isinstance(obj, dict) else type(obj).__name__
+        raise StudioError(f"picks keys must be exactly {sorted(PICK_TOP)}, not {keys}", 400)
+    if not isinstance(obj["best"], dict) or not isinstance(obj["clips"], dict):
+        raise StudioError("picks: best and clips must be objects", 400)
+    for tag, c in obj["clips"].items():
+        if not isinstance(c, dict) or not (PICK_CLIP <= set(c) <= PICK_CLIP | PICK_CLIP_OPT):
+            raise StudioError(f"picks: clip {tag}: keys {sorted(c) if isinstance(c, dict) else c!r}", 400)
+        if not isinstance(c["props"], dict) or set(c["props"]) != PICK_PROPS:
+            raise StudioError(f"picks: clip {tag}: props must be exactly {sorted(PICK_PROPS)}", 400)
+
+
+def save_picks(d: Path, picks: Any) -> Path:
+    """picks/director_picks_<stamp>.json after the shape check; a second save in the same second gets _2, _3."""
+    check_picks(picks)
+    base = d / "picks" / f"director_picks_{stamp()}"
+    p, k = base.with_suffix(".json"), 1
+    while p.exists():
+        k += 1
+        p = base.with_name(f"{base.name}_{k}.json")
+    write_json(p, picks)
+    return p
+
+
 def save_grade(d: Path, body: Json) -> Json:
-    """His words verbatim for a round (the latest by default) with the page md5, or 'ungraded by his word'."""
+    """His words verbatim for a round (the latest by default) with the page md5, or 'ungraded by his word'. With
+    `picks` (a two-photo flow's grade) the picks file is written first and the round's grade is {at, page_md5, picks,
+    text}: the file's path in the job folder and his words, which may be empty since the picks carry his notes."""
     rs = rounds(d)
     if not rs:
         raise StudioError("no round yet: build the page first", 409)
@@ -86,6 +122,10 @@ def save_grade(d: Path, body: Json) -> Json:
         raise StudioError(f"no round {n}", 404)
     if body.get("ungraded_by_his_word"):
         r["ungraded_by_his_word"] = {"at": now_iso(), "words": str(body.get("words", ""))}
+    elif "picks" in body:
+        p = save_picks(d, body["picks"])
+        text = str(body.get("text") or "").strip()
+        r["grade"] = {"at": now_iso(), "page_md5": r["page_md5"], "picks": str(p.relative_to(d)), "text": text}
     else:
         text = str(body.get("text", "")).strip()
         if not text:

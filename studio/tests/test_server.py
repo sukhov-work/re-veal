@@ -4,6 +4,7 @@ the file route's Range answer, the Host check, the body rules, the page gate, an
 from __future__ import annotations
 
 import http.client
+import json
 import re
 import time
 from pathlib import Path
@@ -11,12 +12,16 @@ from typing import Any
 
 import pytest
 
+from reveal_studio.config import Settings
 from reveal_studio.fs import Json
+from reveal_studio.jobs import store
+from reveal_studio.jobs.store import create_director_job, create_pair_job
+from reveal_studio.registry.flows import ALL_FLOWS, stage_order
 from reveal_studio.registry.hints import HINTS
-from reveal_studio.server import routes
+from reveal_studio.server import routes, routes_director, routes_pair
 from reveal_studio.server.app import App, StudioServer
 
-from .conftest import Client
+from .conftest import HELPER, Client
 
 HITS: set[str] = set()
 TERMINAL = ("done", "failed", "refused", "lost", "cancelled")
@@ -73,8 +78,28 @@ def test_the_page_and_its_assets(client: Client) -> None:
     assert code == 200 and h["content-type"] == "text/html; charset=utf-8" and h["cache-control"] == "no-store"
     page = html.decode()
     scripts = re.findall(r'<script src="/static/js/([a-z]+)\.js"></script>', page)
-    assert scripts == ["core", "rail", "strip", "panels", "plan", "viewer", "inspector", "graph", "boot"]
-    assert re.findall(r'href="/static/css/([a-z]+)\.css"', page) == ["studio", "plan", "viewer", "graph"]
+    # the flows' scripts after graph.js and before boot.js (phase B's slice): boot.js reads every entry they register
+    assert scripts == [
+        "core",
+        "rail",
+        "strip",
+        "panels",
+        "plan",
+        "viewer",
+        "inspector",
+        "graph",
+        "pair",
+        "director",
+        "boot",
+    ]
+    assert re.findall(r'href="/static/css/([a-z]+)\.css"', page) == [
+        "studio",
+        "plan",
+        "viewer",
+        "graph",
+        "pair",
+        "director",
+    ]
     for asset, ctype in (
         ("js/core.js", "text/javascript; charset=utf-8"),
         ("css/studio.css", "text/css; charset=utf-8"),
@@ -323,6 +348,93 @@ def test_every_route_in_the_table_is_hit(client: Client, stills: Path, monkeypat
     assert code == 202
     assert client.post(f"/api/jobs/{jid}/stages/{slow['record']}/cancel")[0] == 200
     assert client.post(f"/api/jobs/{jid}/nope")[0] == 404
-    missing = sorted(r.name for r in routes.ROUTES if r.name not in HITS)
+    missing = sorted(r.name for r in routes.CORE if r.name not in HITS)
     assert not missing, f"routes no test reaches: {missing}"
-    assert len(routes.ROUTES) == 26
+    # the 26 shared rows; each flow's list is walked and counted in its own test file (tests/test_pair_flow.py,
+    # tests/test_director_flow.py), with a spy of its own: this file's spy sees this file's requests only. Mutation:
+    # a flow's row spliced after the fallbacks (it then never answers), or a shared row dropped by the split, turns
+    # this red.
+    assert len(routes.CORE) == 26 and len(routes.FALLBACKS) == 2
+    spliced = [r for r in routes.CORE if r not in routes.FALLBACKS] + routes_pair.ROUTES + routes_director.ROUTES
+    assert spliced + routes.FALLBACKS == routes.ROUTES
+    assert routes.ROUTES[-2:] == routes.FALLBACKS and {r.method for r in routes.FALLBACKS} == {"GET", "POST"}
+
+
+# ---------------------------------------------------------------- phase B's slice: the jobs of the other flows
+
+
+def test_a_pair_jobs_folder_keeps_the_rail_and_its_view_answering(
+    client: Client, settings: Settings, stills: Path, fixture_pair: str
+) -> None:
+    """A job.json without `seq` made GET /api/jobs answer 500 for every job (b_seams_research.md, key fact 1); every
+    creator writes it. Mutation: job_row reading a loop-only key of every job, or a pair job's view raising, turns
+    this red."""
+    jid = new_job(client, stills)
+    pair = create_pair_job(settings, fixture=fixture_pair)
+    director = create_director_job(settings, fixture_pair)
+    code, rows, _ = client.get("/api/jobs")
+    assert code == 200 and [r["id"] for r in rows] == [jid, pair["id"], director["id"]]
+    assert [(r["flow"], r["seq"]) for r in rows] == [("loop", "tiny"), ("pair", "tiny_1"), ("director", "tiny_1")]
+    for j in (pair, director):
+        code, v, _ = client.get(f"/api/jobs/{j['id']}")
+        assert code == 200 and v["job"] == j, j["flow"]
+        assert [s["name"] for s in v["stages"]] == stage_order(j["flow"])  # empty in the slice; the flow's own later
+
+
+def test_post_jobs_refuses_a_flow_that_is_not_enabled_and_passes_its_fields(
+    client: Client, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The route passes fixture, a, b and pair to create_job. The test sets the enabled flows itself, so it holds
+    whichever flows the registry enables. Mutation: post_job dropping `fixture` (the enabled pair flow then answers
+    400 "needs a fixture pair's name") turns this red."""
+    monkeypatch.setattr(store, "FLOWS", {"loop": ALL_FLOWS["loop"]})
+    code, body, _ = client.post("/api/jobs", {"flow": "pair", "fixture": fixture_pair})
+    assert (code, body["error"]) == (
+        400,
+        "the flow is one of ['loop'] (pair and director are registered but not built yet)",
+    )
+    monkeypatch.setattr(store, "FLOWS", dict(ALL_FLOWS))
+    code, body, _ = client.post("/api/jobs", {"flow": "pair", "fixture": fixture_pair})
+    assert code == 201 and (body["job"]["flow"], body["job"]["fixture"]) == ("pair", fixture_pair)
+    a, b = f"fixtures/{fixture_pair}_S.jpg", f"fixtures/{fixture_pair}_F.jpg"
+    code, body, _ = client.post("/api/jobs", {"flow": "pair", "a": a, "b": b, "seq": "two"})
+    assert code == 201 and body["job"]["seq"] == "two"
+    code, body, _ = client.post("/api/jobs", {"flow": "director", "pair": fixture_pair})
+    assert code == 201 and body["job"]["pair"] == fixture_pair
+    code, body, _ = client.post("/api/jobs", {"flow": "director", "pair": "mismatch_7"})
+    assert code == 400 and "no plan under scripts/research/plans/" in body["error"]
+
+
+def test_the_file_route_serves_the_read_only_bases_of_a_director_job(
+    client: Client, settings: Settings, fixture_pair: str
+) -> None:
+    """fixtures/, layers/, mattes/ and the helpers a job names, one check per base, each with its refusals. Mutation:
+    serving any repo path (a helper the job does not name), or a base tried before the job's own folders (a loop
+    job's seq named "fixtures" then loses its renders), turns this red."""
+    j = create_director_job(settings, fixture_pair)
+    jid = j["id"]
+    base = f"/api/jobs/{jid}/file/"
+    cases = [
+        ("fixtures/tiny_1_S.jpg", settings.fixtures / "tiny_1_S.jpg"),
+        ("layers/tiny_1_S/layers.json", settings.layers_dir / "tiny_1_S" / "layers.json"),
+        ("mattes/tiny_1_S/el_1.png", settings.mattes_dir / "tiny_1_S" / "el_1.png"),
+        (HELPER, settings.root / HELPER),
+    ]
+    for path, f in cases:
+        code, data, _ = client.get(base + path)
+        assert code == 200, path
+        if path.endswith(".json"):  # a JSON file comes back parsed
+            assert data == json.loads(f.read_text()), path
+        else:
+            assert data == f.read_bytes(), path
+    (settings.root / "benchmarks/runs/2026-10-17/keyframes/out/k2.png").write_bytes(b"not named")
+    for path, code in (
+        ("benchmarks/runs/2026-10-17/keyframes/out/k2.png", 404),  # a helper the job's plans do not name
+        ("fixtures/../reveal.py", 403),
+        ("layers/../../AGENTS.md", 403),
+        ("mattes/tiny_1_F/el_1.png", 404),  # no such matte
+        ("fixtures/", 404),
+        ("job.json", 200),  # the job folder itself, as before
+        ("raw/tiny_1/A.jpg", 404),  # a link out of the job folder is never served through it (the loop's rule)
+    ):
+        assert client.get(base + path)[0] == code, path

@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="/static/css/plan.css">
 <link rel="stylesheet" href="/static/css/viewer.css">
 <link rel="stylesheet" href="/static/css/graph.css">
+<link rel="stylesheet" href="/static/css/pair.css">
+<link rel="stylesheet" href="/static/css/director.css">
 </head>
 <body>
 <div class="shell">
@@ -15,7 +17,7 @@
   <div class="wordmark"><b>Reveal studio</b><span class="muted label" id="ver"></span><button class="hint" data-hint="region.rail" tabindex="-1" aria-label="what the rail shows">?</button></div>
   <section><h2>Jobs <button class="hint" data-hint="control.new_job" tabindex="-1" aria-label="about new jobs">?</button></h2>
     <ul id="jobs"></ul>
-    <div class="new"><button class="btn" id="btnNew" data-hint="control.new_job">new loop job…</button> <button class="btn ghost" id="btnAdopt" data-hint="control.adopt">adopt a run folder…</button></div>
+    <div class="new"><span id="newJobs"></span> <button class="btn ghost" id="btnAdopt" data-hint="control.adopt">adopt a run folder…</button></div>
     <div id="newForm" style="display:none;padding:8px 16px 0">
       <div class="label muted"><label for="newFolder">folder of JPGs</label> <button class="hint" data-hint="control.new_job" tabindex="-1" aria-label="about new jobs">?</button></div><input id="newFolder" data-hint="control.new_job" style="width:100%" placeholder="/Users/…/angel-portrait">
       <label class="label muted" for="newSeq" style="display:block;margin-top:6px">sequence name</label><input id="newSeq" data-hint="control.new_job" style="width:100%" placeholder="angel">
@@ -28,6 +30,7 @@
       <div style="margin-top:6px"><button class="btn primary" id="adoptGo" data-hint="control.adopt">adopt</button> <button class="btn ghost" id="adoptCancel" data-hint="control.adopt">cancel</button></div>
       <div id="adoptErr" style="color:var(--failed);font-size:.75rem;margin-top:6px"></div>
     </div>
+    <div id="flowForms"></div>
   </section>
   <section><h2>Running <button class="hint" data-hint="chip.running" tabindex="-1" aria-label="about running tasks">?</button></h2><ul id="tasks"></ul></section>
   <section><h2>Requests <button class="hint" data-hint="chip.waiting" tabindex="-1" aria-label="about open requests">?</button></h2><ul id="reqs"></ul></section>
@@ -50,6 +53,8 @@
 <script src="/static/js/viewer.js"></script>
 <script src="/static/js/inspector.js"></script>
 <script src="/static/js/graph.js"></script>
+<script src="/static/js/pair.js"></script>
+<script src="/static/js/director.js"></script>
 <script src="/static/js/boot.js"></script>
 </body>
 </html>

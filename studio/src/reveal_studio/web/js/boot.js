@@ -10,4 +10,4 @@ document.addEventListener('keydown',e=>{if(!S.render||!$('#scrub')||e.metaKey||e
  else if(e.key===' '){if(t!==document.body&&t.id!=='scrub'&&!t.closest('#frameBox'))return;togglePlay();e.preventDefault();}
  else if(e.key==='m'){markFrame();}});
 // boot
-(async()=>{S.reg=await api('/api/registry');$('#ver').textContent=S.reg.ui_version+' · 127.0.0.1:'+S.reg.port;await loadJobs();await loadModels();let j=null;try{j=localStorage.getItem('studio_job')}catch(e){}if(j&&S.jobs.find(x=>x.id===j))openJob(j);else if(S.jobs.length)openJob(S.jobs[S.jobs.length-1].id);})();
+(async()=>{S.reg=await api('/api/registry');$('#ver').textContent=S.reg.ui_version+' · 127.0.0.1:'+S.reg.port;drawNewJobs();await loadJobs();await loadModels();let j=null;try{j=localStorage.getItem('studio_job')}catch(e){}if(j&&S.jobs.find(x=>x.id===j))openJob(j);else if(S.jobs.length)openJob(S.jobs[S.jobs.length-1].id);})();

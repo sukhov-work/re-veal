@@ -1,23 +1,30 @@
-"""From a stage and its knobs to the argv of `loop_seq.py`: knobs coerced, flags, the output and its .part twin."""
+"""From a stage and its knobs to the argv of its script: knobs coerced, flags, the output and its .part twin.
+
+argv_for dispatches: a shared stage (registry/common.py) to runner/argv_common.py, any other stage to its job's flow
+module (argv_loop.py, argv_pair.py, argv_director.py), each holding one function per script stage. The loop's script
+flags are probed from `loop_seq.py --help` at start (ScriptFlags).
+"""
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from reveal_studio.config import Settings
 from reveal_studio.errors import StudioError
-from reveal_studio.fs import Json, log, rel, sha256_file, write_json
-from reveal_studio.jobs.candidates import candidate, candidates, rounds
-from reveal_studio.jobs.plans import resolve_plan
-from reveal_studio.jobs.store import job_root, prep_dir
-from reveal_studio.registry.schema import NAME_RE
+from reveal_studio.fs import Json, log, rel
 
-STILL_RE = re.compile(r"^k\d+\.png$")
-"""A registered still of the prep folder: k<i>.png."""
+Argv = tuple[list[str], Path, Path, list[Json]]
+"""What a stage's argv builder returns: the argv, the final output path, its .part twin, the inputs."""
+SCRIPTS = ("loop_seq", "transitions", "reveal", "director_render", "director_page")
+"""The Settings keys a stage's `script` may name."""
+SET_KEY_RE = re.compile(r"^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)?$")
+"""A key of an object knob: one dotted segment at most (director_render.py routes `--set` on the first dot)."""
 
 
 @dataclass(frozen=True)
@@ -33,8 +40,16 @@ class ScriptFlags:
 
 
 def script_arg(settings: Settings) -> str:
-    """The script as the argv names it: repo-relative, run with the repo root as the working folder."""
+    """The loop script as the argv names it: repo-relative, run with the repo root as the working folder."""
     return rel(settings.loop_seq, settings.root)
+
+
+def script_rel(settings: Settings, key: str) -> str:
+    """The script a stage's `script` key names, as the argv names it (repo-relative)."""
+    if key not in SCRIPTS:
+        raise StudioError(f"a stage's script is one of {list(SCRIPTS)}, not {key!r}", 500)
+    path: Path = getattr(settings, key)
+    return rel(path, settings.root)
 
 
 def probe_script_flags(settings: Settings) -> ScriptFlags:
@@ -91,13 +106,24 @@ def coerce(stage: Json, knobs: Json | None) -> Json:
                 out[key] = bool(v) if not isinstance(v, str) else v.lower() in ("1", "true", "yes", "on")
             elif k["type"] == "list":
                 out[key] = as_list(v)
+            elif k["type"] == "object":
+                out[key] = as_object(v)
             else:
                 out[key] = str(v)
         except (TypeError, ValueError):
             raise StudioError(f"knob {key} takes a {k['type']}, not {v!r}", 400) from None
     for key, k in known.items():
-        out.setdefault(key, list(k["default"]) if isinstance(k["default"], list) else k["default"])
+        d = k["default"]
+        out.setdefault(key, list(d) if isinstance(d, list) else dict(d) if isinstance(d, dict) else d)
     return out
+
+
+def as_object(v: Any) -> Json:
+    """An object knob: a JSON object (or its text) whose keys have one dotted segment at most; the values any JSON."""
+    obj = json.loads(v) if isinstance(v, str) else v
+    if not isinstance(obj, dict) or not all(isinstance(k, str) and SET_KEY_RE.match(k) for k in obj):
+        raise TypeError("a JSON object whose keys are names with one dot at most")
+    return dict(obj)
 
 
 def as_list(v: Any) -> list[str]:
@@ -124,143 +150,38 @@ def flags_of(stage: Json, knobs: Json) -> list[str]:
         elif k["type"] == "list":
             if v:
                 out += [k["flag"], ",".join(v)]
+        elif k["type"] == "object":
+            # one flag per key, keys in sorted order: the argv is the same for one dict whatever order the page sent
+            # its keys in (the renderer keeps the last value of a repeated key, so the order cannot change a render)
+            for key in sorted(v):
+                out += [k["flag"], f"{key}={json.dumps(v[key])}"]
         else:
             out += [k["flag"], str(v)]
     return out
 
 
+ArgvFn = Callable[[Settings, ScriptFlags, Json, Path, Json, Json, Path], Argv]
+
+
+def builder_of(flow: str, name: str) -> ArgvFn:
+    """The argv function of a stage: the shared stage's of that name, else the job's flow module's."""
+    # imported here: each flow module imports ScriptFlags, flags_of and the script names from this module
+    from reveal_studio.runner import argv_common, argv_director, argv_loop, argv_pair
+
+    if name in argv_common.ARGV:
+        return argv_common.ARGV[name]
+    flows: dict[str, ArgvFn] = {
+        "loop": argv_loop.argv_for,
+        "pair": argv_pair.argv_for,
+        "director": argv_director.argv_for,
+    }
+    if flow not in flows:
+        raise StudioError(f"no argv for the {flow} flow", 501)
+    return flows[flow]
+
+
 def argv_for(
     settings: Settings, flags: ScriptFlags, stage: Json, d: Path, job: Json, knobs: Json, rec_dir: Path
-) -> tuple[list[str], Path, Path, list[Json]]:
+) -> Argv:
     """The argv, the final output path, its .part twin and the inputs of one run of a stage."""
-    root, seq, name = job_root(settings, job), job["seq"], stage["name"]
-    py, script = str(settings.python), script_arg(settings)
-    prep = prep_dir(settings, job)
-    argv: list[str]
-    inputs: list[Json]
-    if name == "registration":
-        src = d / "raw" / seq
-        if not src.is_dir():
-            raise StudioError("this job has no raw stills to register (an adopted job reads its prep in place)", 409)
-        out_final, out_part = prep, prep.with_name(seq + ".part")
-        argv = [
-            py,
-            script,
-            "prep",
-            rel(src, settings.root),
-            "--out",
-            rel(out_part, settings.root),
-            *flags_of(stage, knobs),
-        ]
-        inputs = [{"path": i["path"], "sha256": i["sha256"]} for i in job["inputs"]]
-    elif name == "readers":
-        if not flags.readers:
-            raise StudioError(f"{script} has no readers command yet (its --help does not list it)", 501)
-        if not (prep / "prep.json").exists():
-            raise StudioError("registration first: no prep.json", 409)
-        out_final, out_part = prep / "readers", prep / "readers.part"
-        argv = [py, script, "readers", rel(prep, settings.root), "--out", rel(out_part, settings.root)]
-        inputs = [{"path": rel(prep / "prep.json", settings.root), "sha256": sha256_file(prep / "prep.json")}]
-    elif name == "probe":
-        if not (prep / "prep.json").exists():
-            raise StudioError("registration first: no prep.json", 409)
-        stills = sorted((p for p in prep.glob("k*.png") if STILL_RE.match(p.name)), key=lambda p: int(p.stem[1:]))
-        if len(stills) < 2:
-            raise StudioError("the probe needs two registered stills or more", 409)
-        out_final, out_part = prep / "probe", prep / "probe.part"  # a rerun replaces the folder (the readers rule)
-        argv = [
-            py,
-            script,
-            "probe",
-            rel(prep, settings.root),
-            "--out",
-            rel(out_part, settings.root),
-            *flags_of(stage, knobs),
-        ]
-        inputs = [{"path": rel(prep / "prep.json", settings.root), "sha256": sha256_file(prep / "prep.json")}]
-        inputs += [{"path": rel(k, settings.root), "sha256": sha256_file(k)} for k in stills]
-    elif name == "measure":
-        kind, _, rname = str(knobs.get("render") or "").partition(":")
-        if not rname:
-            raise StudioError("choose the render to measure: full:<name> or draft:<name>", 400)
-        c = candidate(settings, d, job, kind, rname)
-        mp4 = c["dir"] / "loop.mp4"
-        if not mp4.is_file():
-            raise StudioError(f"{rel(mp4, settings.root)} is missing: nothing to measure", 409)
-        # a new folder under the render per run, named by the record's stamp; the render's own files are never written
-        tag = rec_dir.name.replace(f"_{name}", "", 1)
-        out_final, out_part = c["dir"] / "measures" / tag, c["dir"] / "measures" / (tag + ".part")
-        argv = [py, script, "measure", rel(mp4, settings.root), "--out", rel(out_part, settings.root)]
-        inputs = [{"path": rel(mp4, settings.root), "md5": c["md5_mp4"]}]
-        frames_json = c["dir"] / "frames.json"
-        if frames_json.is_file():
-            argv += ["--frames-json", rel(frames_json, settings.root)]
-            inputs.append({"path": rel(frames_json, settings.root), "sha256": sha256_file(frames_json)})
-        argv += flags_of(stage, knobs)
-    elif name == "render":
-        if not (prep / "prep.json").exists():
-            raise StudioError("registration first: no prep.json", 409)
-        plan_path = resolve_plan(settings, d, knobs.get("plan"))
-        rname = knobs.get("name") or plan_path.stem
-        if not NAME_RE.match(rname):
-            raise StudioError("a render name is letters, digits, dash and underscore", 400)
-        draft, fps = int(knobs.get("draft", 0)), int(knobs.get("fps", 25))
-        base = (root / "drafts" / seq) if draft else (root / seq)
-        out_final, out_part = base / rname, base / (rname + ".part")
-        argv = [
-            py,
-            script,
-            "render",
-            rel(plan_path, settings.root),
-            "--out",
-            rel(out_part, settings.root),
-            "--fps",
-            str(fps),
-            "--draft",
-            str(draft),
-            "--set",
-            f'in="{rel(prep, settings.root)}"',
-        ]
-        if flags.progress:
-            argv.append("--progress")
-        if flags.frames:
-            argv.append("--frames")
-        inputs = [
-            {"path": rel(plan_path, settings.root), "sha256": sha256_file(plan_path)},
-            {"path": rel(prep / "prep.json", settings.root), "sha256": sha256_file(prep / "prep.json")},
-        ]
-    elif name == "page":
-        out_final, out_part = root / "index.html", root / "index.part.html"
-        notes: Any = knobs.get("notes") or {}
-        if not isinstance(notes, dict):
-            raise StudioError("notes is {candidate: text}", 400)
-        write_json(rec_dir / "notes.json", {seq: notes})
-        n = len(rounds(d)) + 1
-        argv = [
-            py,
-            script,
-            "page",
-            "--root",
-            rel(root, settings.root),
-            "--out",
-            rel(out_part, settings.root),
-            "--order",
-            seq,
-            "--title",
-            knobs.get("title") or f"{seq}: round {n}",
-            "--intro",
-            knobs.get("intro") or "",
-            "--footer",
-            knobs.get("footer") or "",
-            "--notes",
-            rel(rec_dir / "notes.json", settings.root),
-        ]
-        variants = list(knobs.get("variants") or [])
-        if variants:  # backlog T76: only these full renders, in this order (views/page.py checked the names)
-            argv += ["--variants", ",".join(variants)]
-        full = {c["name"]: c for c in candidates(settings, d, job) if c["kind"] == "full"}
-        listed = [full[v] for v in variants if v in full] if variants else list(full.values())
-        inputs = [{"path": rel(c["dir"] / "loop.mp4", settings.root), "md5": c["md5_mp4"]} for c in listed]
-    else:
-        raise StudioError(f"the {name} stage is not a process", 400)
-    return argv, out_final, out_part, inputs
+    return builder_of(job["flow"], stage["name"])(settings, flags, stage, d, job, knobs, rec_dir)

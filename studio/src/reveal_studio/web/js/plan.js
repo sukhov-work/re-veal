@@ -283,3 +283,4 @@ function variantsControl(full){const st=variantsState(full);const by={};full.for
   document.addEventListener('keydown',e=>{if(S.stage!=='plan'||!PE.plan||!(e.metaKey||e.ctrlKey)||e.key.toLowerCase()!=='z')return;const t=e.target;
     if(t&&t.matches&&(t.matches('textarea')||(t.matches('input')&&t.value!==(t.dataset.v||''))))return;  // a text field undoes its own typing
     e.preventDefault();if(e.shiftKey)peRedo();else peUndo();});})();
+flowEntry('loop').panels.plan=panelPlan;

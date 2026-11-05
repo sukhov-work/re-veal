@@ -3,13 +3,15 @@
 The first row whose method and regex match the path answers. Every job route loads the job first, so a bad id is
 refused (400) or unknown (404) before the route's own checks; the two fallback rows load the job and then answer
 404 "no such route", as the research script did. `GET /static/<path>` serves the page's assets from `web/`.
+
+CORE holds the 26 rows every flow shares, the two fallbacks among them. ROUTES is what `match` walks: the shared rows,
+then each flow's list (server/routes_pair.py, server/routes_director.py), then the two fallbacks, so a flow's row
+answers before a fallback. `match` filters by method first, so the GET fallback's place among the POST rows is moot.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -21,7 +23,9 @@ from reveal_studio.jobs.plans import resolve_plan, save_plan
 from reveal_studio.jobs.records import record_dir
 from reveal_studio.jobs.store import create_job, job_dirs, load_job
 from reveal_studio.media.pictures import frames_dir, thumb_path
-from reveal_studio.registry.loop import stage_def
+from reveal_studio.registry.flows import stage_def
+from reveal_studio.server import routes_director, routes_pair
+from reveal_studio.server.route import JOB, Route, RouteFn, _r
 from reveal_studio.views.job import job_row, job_view, record_view
 from reveal_studio.views.models import models_view, open_requests, registry_view
 from reveal_studio.views.page import build_page
@@ -30,19 +34,11 @@ from reveal_studio.views.render import render_view
 if TYPE_CHECKING:
     from reveal_studio.server.handler import Handler
 
+__all__ = ["CORE", "FALLBACKS", "ROUTES", "WEB_DIR", "Route", "RouteFn", "dispatch", "match"]
+
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 """The page's assets: index.html, css/, js/ (package data, served under /static/)."""
 HTML = "text/html; charset=utf-8"
-
-RouteFn = Callable[["Handler", "re.Match[str]", Json], None]
-
-
-@dataclass(frozen=True)
-class Route:
-    method: str
-    pattern: re.Pattern[str]
-    fn: RouteFn
-    name: str
 
 
 # ------------------------------------------------------------------ GET
@@ -144,6 +140,10 @@ def post_job(h: Handler, m: re.Match[str], body: Json) -> None:
         folder=body.get("folder"),
         adopt=body.get("adopt"),
         seq=body.get("seq"),
+        fixture=body.get("fixture"),
+        a=body.get("a"),
+        b=body.get("b"),
+        pair=body.get("pair"),
     )
     h._send(201, {"id": job["id"], "job": job})
 
@@ -193,12 +193,7 @@ def post_mark(h: Handler, m: re.Match[str], body: Json) -> None:
     h._send(201, mark_frame(h.app.settings, d, job, body))
 
 
-def _r(method: str, pattern: str, fn: RouteFn) -> Route:
-    return Route(method, re.compile(pattern), fn, f"{method} {fn.__name__}")
-
-
-JOB = r"^/api/jobs/([^/]+)"
-ROUTES: list[Route] = [
+CORE: list[Route] = [
     _r("GET", r"^/$", get_page),
     _r("GET", r"^/favicon\.ico$", get_favicon),
     _r("GET", r"^/static/(.+)$", get_static),
@@ -226,6 +221,9 @@ ROUTES: list[Route] = [
     _r("POST", JOB + r"/frames/mark$", post_mark),
     _r("POST", JOB + r"(/.*)$", job_route_unknown),
 ]
+FALLBACKS: list[Route] = [r for r in CORE if r.fn is job_route_unknown]
+"""The GET and the POST fallback of a job's routes: a 404 after the job is loaded."""
+ROUTES: list[Route] = [r for r in CORE if r not in FALLBACKS] + routes_pair.ROUTES + routes_director.ROUTES + FALLBACKS
 
 
 def match(method: str, path: str) -> tuple[Route, re.Match[str]] | None:

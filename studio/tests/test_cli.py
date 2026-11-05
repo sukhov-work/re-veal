@@ -15,7 +15,15 @@ from reveal_studio.fs import Json, md5_file
 from reveal_studio.jobs.grades import write_request
 from reveal_studio.runner.lock import take_lock
 
-ENV = ("REVEAL_STUDIO_ROOT", "REVEAL_STUDIO_PY", "REVEAL_STUDIO_PORT", "REVEAL_STUDIO_LOCK", "REVEAL_STUDIO_RUNS_DATE")
+ENV = (
+    "REVEAL_STUDIO_ROOT",
+    "REVEAL_STUDIO_PY",
+    "REVEAL_STUDIO_PORT",
+    "REVEAL_STUDIO_LOCK",
+    "REVEAL_STUDIO_RUNS_DATE",
+    "REVEAL_STUDIO_LAYERS_DIR",
+    "REVEAL_STUDIO_MATTES_DIR",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +40,31 @@ def test_check_prints_the_resolved_settings(root: Path, capsys: pytest.CaptureFi
     assert "serves        http://127.0.0.1:8391/" in out
     assert "script flags  progress yes, frames yes, readers yes" in out
     assert "frozen plans  scripts/research/plans/loops (1 plans)" in out
+
+
+def test_check_prints_the_flow_paths_and_a_missing_one_leaves_the_exit_code(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every path of the pair and director flows gets a row with its md5 or count. Mutation: a missing transitions.py
+    or layer root counted into the exit code (check then answers 1 on a tree that runs the loop) turns this red."""
+    (root / "transitions.py").unlink(missing_ok=True)
+    (root / "scripts/research/director_page.py").unlink(missing_ok=True)
+    fx = root / "fixtures"
+    fx.mkdir(exist_ok=True)
+    for name in ("pa_1_S.jpg", "pa_1_F.png", "pb_2_S.jpg", "MANIFEST.md"):  # pb_2 lacks its _F: not a pair
+        (fx / name).write_bytes(b"x")
+    layers = root / "benchmarks/runs/2026-09-28/layers_v3"
+    for photo in ("pa_1_S", "pa_1_F", "_candidates"):  # a folder starting with _ is no photo
+        (layers / photo).mkdir(parents=True)
+        (layers / photo / "layers.json").write_text("{}")
+    assert main(["check", "--root", str(root), "--mattes-dir", str(root / "nowhere")]) == 0
+    out = capsys.readouterr().out
+    assert f"transitions   {root.resolve()}/transitions.py (MISSING)" in out
+    assert f"reveal        reveal.py md5 {md5_file(root / 'reveal.py')}" in out
+    assert f"director page {root.resolve()}/scripts/research/director_page.py (MISSING)" in out
+    assert "fixtures      fixtures (1 pairs)" in out
+    assert "layers        benchmarks/runs/2026-09-28/layers_v3 (2 photo folders with layers.json)" in out
+    assert f"mattes        {root.resolve()}/nowhere (MISSING)" in out
 
 
 def test_check_exits_1_when_the_main_venv_is_missing(

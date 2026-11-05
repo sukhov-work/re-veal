@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from reveal_studio import __version__
+from reveal_studio.config import Settings
 from reveal_studio.errors import StudioError
 from reveal_studio.fs import Json, inside, log
 from reveal_studio.jobs.store import job_root
@@ -35,6 +36,35 @@ MIME = {
     ".svg": "image/svg+xml",
 }
 STATIC_MIME = {**MIME, ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8"}
+
+
+def _root_of(settings: Settings, given: Any, default: Path) -> Path:
+    """A root a job records (repo-relative or absolute) over the settings' default."""
+    if not isinstance(given, str) or not given:
+        return default
+    p = Path(given)
+    return p if p.is_absolute() else settings.root / p
+
+
+def read_only_file(settings: Settings, job: Json, relpath: str) -> Path | None:
+    """The file a two-photo flow's page and overlays read from outside the job (STUDIO.md §5): fixtures/<name>,
+    layers/<photo>/<file> and mattes/<photo>/<file> under the job's recorded roots (else the settings'), and the
+    helper files of the job's `helpers` list, each by its repo path. None for anything else."""
+    bases = {
+        "fixtures/": settings.fixtures,
+        "layers/": _root_of(settings, job.get("layers_dir"), settings.layers_dir),
+        "mattes/": _root_of(settings, job.get("mattes_dir"), settings.mattes_dir),
+    }
+    for prefix, base in bases.items():
+        if relpath.startswith(prefix):
+            p = base / relpath[len(prefix) :]
+            if p.is_file() and inside(p, base):
+                return p
+    named = {h.get("path") for h in job.get("helpers") or [] if isinstance(h, dict)}
+    p = settings.root / relpath
+    if relpath in named and p.is_file() and inside(p, settings.root):
+        return p
+    return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -138,14 +168,19 @@ class Handler(BaseHTTPRequestHandler):
         return None
 
     def _safe_file(self, d: Path, job: Json, relpath: str) -> Path:
-        """A path inside the job's run folder or the job folder; `..` and absolute paths are refused (403)."""
+        """A path inside the job's run folder or the job folder, tried first; else, read-only, a file under fixtures/,
+        layers/ (the job's layer root) or mattes/ (its matte root), or a helper file the job's `helpers` list names by
+        its repo path. `..` and absolute paths are refused (403)."""
         if ".." in relpath.split("/") or relpath.startswith("/"):
             raise StudioError("forbidden", 403)
         for base in (job_root(self.app.settings, job), d):
             p = base / relpath
             if p.exists() and inside(p, base):
                 return p
-        raise StudioError("no such file", 404)
+        found = read_only_file(self.app.settings, job, relpath)
+        if found is None:
+            raise StudioError("no such file", 404)
+        return found
 
     def _handle(self, method: str) -> None:
         try:

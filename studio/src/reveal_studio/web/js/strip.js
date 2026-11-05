@@ -5,9 +5,9 @@ S.viewMode=(()=>{try{return localStorage.getItem('studio_view')==='graph'?'graph
 // the job
 async function openJob(id,keep){if(!keep){S.jid=id;S.stage='render';S.cand=null;S.render=null;S.frame=0;S.msg=null;S.sig=null;S.vw={};S.shown=null;stopPlay();}
  try{localStorage.setItem('studio_job',id)}catch(e){}
- S.view=await api('/api/jobs/'+encodeURIComponent(id));const v=S.view;$('#title').textContent=v.job.seq+' · '+v.job.flow;$('#subtitle').textContent=v.job.id+(v.job.adopted?' · adopted from '+v.job.root:'')+' · '+v.job.inputs.length+' stills';
+ S.view=await api('/api/jobs/'+encodeURIComponent(id));const v=S.view;$('#title').textContent=v.job.seq+' · '+v.job.flow;$('#subtitle').textContent=v.job.id+(v.job.adopted?' · adopted from '+v.job.root:'')+' · '+v.job.inputs.length+' '+(flowUI().inputsWord||'inputs');
  document.querySelectorAll('#jobs .job').forEach(li=>li.setAttribute('aria-current',li.dataset.id===id));
- if(!v.stages.find(s=>s.name===S.stage))S.stage='render';renderStrip();renderGraph();
+ if(!v.stages.find(s=>s.name===S.stage))S.stage=v.stages.find(s=>s.name==='render')?'render':(v.stages[0]||{}).name;renderStrip();renderGraph();
  // a poll re-renders the panel and the inspector only when their data changed and nothing in them has the focus (typed text is never wiped);
  // the render's viewer also follows the measure stage, whose runs it plots
  // (the render's measures reach the inspector through loadRender's syncInspector, after the render is fetched: T97)

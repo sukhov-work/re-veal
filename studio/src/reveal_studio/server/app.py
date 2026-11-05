@@ -11,7 +11,7 @@ from typing import Any
 from reveal_studio.config import Settings
 from reveal_studio.fs import log, rel
 from reveal_studio.jobs.store import job_dirs, studio_dir
-from reveal_studio.registry.loop import FLOWS
+from reveal_studio.registry.flows import FLOWS
 from reveal_studio.runner.argv import ScriptFlags, probe_script_flags
 from reveal_studio.runner.lock import take_lock
 from reveal_studio.runner.process import Runner
