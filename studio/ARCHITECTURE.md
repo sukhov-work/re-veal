@@ -98,7 +98,7 @@ the package's `web/` folder.
 
 | Layer | Marker | Files | Needs | Tests (2026-11-05) |
 |---|---|---|---|---|
-| unit | none | `tests/test_*.py` except `test_compat.py` | a temporary repo root with `tests/fakes/loop_seq.py` and a shell wrapper as its `.venv/bin/python` | 379 |
+| unit | none | `tests/test_*.py` except `test_compat.py` | a temporary repo root with `tests/fakes/loop_seq.py` and a shell wrapper as its `.venv/bin/python` | 381 |
 | integration | `integration` | `tests/test_compat.py`, `tests/integration/test_loopseq_help.py`, the frozen-plan coverage test of `test_registry.py` | the real repo root and `../.venv`; each module skips when they are absent | 14 |
 | acceptance | `acceptance` | `tests/acceptance/test_a1_loop_flow.py` (a new job from the owner's stills, the registration against the recorded prep, the full a2 render at its md5, the gates, a restart, a cancel; about 100 s) and `tests/acceptance/test_a2_loop_flow.py` (the fits table, the probe, a ruled knob's warning, the a2 md5 from a saved unchanged copy, the measure's stability with the render's files unchanged, the page's variants; about 85 s), both by `make acceptance`; `tests/integration/test_draft_render.py` (`make draft-check`: a 480 draft into the job `loop_angel_20261104-220719`) | the owner's stills, RIFE, the real tree | 3 |
 
@@ -121,6 +121,7 @@ and `FAKE_NO_FLAGS=1` plays a script without `--progress`, `--frames` and `reade
 | an output that exists is one that finished | the `.part` path renamed in `Runner.finalize` | `test_runner.py`: the cancel and reconcile tests |
 | a finished render is never overwritten | `Runner.start_stage` | `test_runner.py::test_a_finished_render_is_never_overwritten` |
 | the page refuses unjudged or NOT READY candidates unless overridden, and prints the override | `views.page.build_page` | `test_views.py` (the page gate tests), `test_server.py::test_the_page_gate_over_http` |
+| PyPI is the only index: the lock names `pypi.org` and `files.pythonhosted.org`, never a machine's mirror | `pyproject.toml` `[[tool.uv.index]]`, the Makefile's `UV_DEFAULT_INDEX` export | `test_lock.py` (both tests; the GitHub workflow's `uv sync --frozen` is the live check) |
 
 ## Changed from the research script
 

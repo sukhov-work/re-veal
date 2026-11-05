@@ -56,6 +56,9 @@ studio/tests/  unit (a fake loop_seq script under a tmp root) · integration/ ·
   the no-slop checker: `tests/test_prose.py` runs `slop-check.py` over them.
 - Names: modules and functions `snake_case`; stage, knob and hint keys as the page shows them;
   record ids `<stamp>_<stage>`; `ui_version` is `reveal-studio <version>`.
+- Dependencies: PyPI is the only index (`[[tool.uv.index]]` with `default = true`; the Makefile exports
+  `UV_DEFAULT_INDEX`). `uv.lock` is tracked and names `pypi.org` and `files.pythonhosted.org` only;
+  `tests/test_lock.py` fails on any other host, because the GitHub runner reaches no private mirror.
 - Types: mypy strict. A `# type: ignore[code]` carries a dated reason on the same line.
 - Style: ruff with the rule set in `pyproject.toml` (line length 120). A per-file ignore carries
   a dated reason.

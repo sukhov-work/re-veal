@@ -3,7 +3,9 @@
 # acceptance layers run on the laptop by `make -C studio test` and `make -C studio acceptance`).
 # This workflow is an addition beyond the epistemic-filter project's practice (its gates run
 # locally through `make qa`). Its first run (2026-11-05, run 42003096693) failed in setup on the
-# missing major tag `astral-sh/setup-uv@v10`; the release tag is pinned since.
+# missing major tag `astral-sh/setup-uv@v10`; the release tag is pinned since. The second run
+# (42003291126) failed in `uv sync`: the lock named a work mirror this laptop's shell exports as
+# `UV_DEFAULT_INDEX`; the project pins PyPI since (`pyproject.toml`, the Makefile, `tests/test_lock.py`).
 name: studio
 
 on:

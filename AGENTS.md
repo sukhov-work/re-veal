@@ -70,7 +70,7 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
   · Gate 0 `.venv/bin/python -m py_compile reveal.py harness.py transitions.py transitions_harness.py`
   (seconds; run before Gate 1)
   · Gate 3 `make -C studio qa` (the studio package: ruff, mypy strict, the unit tests, import-linter,
-  deptry, vulture, pip-audit, radon, the prose check; `cd studio && uv sync` once; counts and wall
+  deptry, vulture, pip-audit, radon, the prose check; `make -C studio install` once (PyPI is the package's only index; a bare `uv sync` in this laptop's shell rewrites the lock to a work mirror); counts and wall
   time in `studio/ARCHITECTURE.md`) · `make -C studio test` adds the integration layer (needs the main venv)
   · `make -C studio acceptance` drives the owner's stills through the served page (about 5 min)
   · Run the studio `make -C studio run` (127.0.0.1:8380; `reveal-studio serve --no-browser` for a drive)

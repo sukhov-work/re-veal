@@ -1,6 +1,10 @@
 # reveal-studio: every target runs from studio/ with uv's venv (studio/.venv); the main venv (../.venv) is only ever
 # the python the runner starts for loop_seq.py, never this Makefile's interpreter.
 UV ?= uv
+# PyPI for every uv call, whatever the shell exports (this laptop's shell names a work mirror;
+# the lock of 2026-11-05 carried its URLs once and the GitHub runner could not reach it).
+export UV_DEFAULT_INDEX := https://pypi.org/simple
+unexport UV_INDEX_URL PIP_INDEX_URL
 RUN := $(UV) run
 PORT ?= 8390
 

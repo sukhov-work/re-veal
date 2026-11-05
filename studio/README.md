@@ -14,20 +14,27 @@ resized the viewer and took the "?" buttons and the chips out of the Tab order. 
 
 ```
 cd studio
-uv sync
+make install     # uv sync against PyPI, the project's only index (the note below)
 ```
 
-`uv sync` builds `studio/.venv` with Python 3.13 and the pins of `../requirements.txt` (numpy 2.2.6 and
+`make install` builds `studio/.venv` with Python 3.13 and the pins of `../requirements.txt` (numpy 2.2.6 and
 opencv-python-headless 5.0.0.93), plus the dev tools. The studio starts every heavy step as a subprocess of the
 main venv's python. `./setup.sh` at the repo root builds that venv; the studio itself holds no model and no torch.
+
+PyPI is the project's only index: `pyproject.toml` names it under `[[tool.uv.index]]` with `default = true`, and the
+Makefile exports `UV_DEFAULT_INDEX` for every target. A bare `uv sync` or `uv run` in a shell that exports another
+default index re-resolves against that index and rewrites `uv.lock` with its URLs (uv treats a lock whose registry
+is not among the configured indexes as stale). That happened on 2026-11-05 with a work mirror, and the GitHub runner
+could not reach it. Use the make targets, or add `--frozen` to a direct `uv run`; `tests/test_lock.py` fails on any
+other host in the lock.
 
 ## Run
 
 ```
 make run                                   # uv run reveal-studio serve: 127.0.0.1:8380, opens the browser
-uv run reveal-studio serve --port 8390 --no-browser --lock /tmp/review.lock
-uv run reveal-studio requests              # the open requests across every job, with their age
-uv run reveal-studio check                 # the resolved settings and the script's flags
+uv run --frozen reveal-studio serve --port 8390 --no-browser --lock /tmp/review.lock
+uv run --frozen reveal-studio requests     # the open requests across every job, with their age
+uv run --frozen reveal-studio check        # the resolved settings and the script's flags
 ```
 
 `serve` takes the tree's lock file, `benchmarks/runs/studio.lock`, which names the port and pid of the server

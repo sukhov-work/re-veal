@@ -82,3 +82,11 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+
+# The package resolves against PyPI and nothing else (2026-11-05). This laptop's shell exports a
+# work mirror as the default index; the first lock carried its URLs, and the GitHub runner could
+# not resolve that host. The Makefile exports the same index for every target.
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
