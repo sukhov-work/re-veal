@@ -3,8 +3,8 @@
 The page and the CLI's help say the same thing. The sentences for the scripts' flags and the plan keys are the
 scripts' own (loop_seq.py --help, plans/loops/SCHEMA.md); the bars are the playbook's (loops.md §6).
 
-This module holds the loop flow's rows (LOOP_HINTS: the 290 of 2026-11-05 and the two still-count chips of phase B's
-slice). HINTS, the one table the page and the tests read, merges them with the pair's (hints_pair.py) and the
+This module holds the loop flow's rows (LOOP_HINTS: the 290 of 2026-11-05, the two still-count chips of phase B's
+slice and the four rows of the repaint leg). HINTS, the one table the page and the tests read, merges them with the pair's (hints_pair.py) and the
 director's (hints_director.py); a key in two tables fails the import.
 """
 
@@ -58,7 +58,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         source="SCHEMA.md",
     ),
     "plan.timeline.method": H(
-        "rife: RIFE v4.26 in-betweens inside the change matte (generated content, the page says so). dissolve: the plain blend. morph: transitions.py's DIS morph. teleport: a region squeezed out and in. cut: no frames. rewind: earlier frames played backward. slices: diagonal cards. sheets: whole pictures sliding across the base. snap: a short blurred jump. slide and rise: one person moved in a matte.",
+        "rife: RIFE v4.26 in-betweens inside the change matte (generated content, the page says so). dissolve: the plain blend. morph: transitions.py's DIS morph. teleport: a region squeezed out and in. cut: no frames. rewind: earlier frames played backward. slices: diagonal cards. sheets: whole pictures sliding across the base. snap: a short blurred jump. slide and rise: one person moved in a matte. repaint: a chain of stills repainted in a per-pixel order, nothing generated.",
         default="rife",
         stage="render",
         source="SCHEMA.md",
@@ -296,7 +296,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         "The job's full renders, and how many of them lack a skeptic verdict on their current md5 (unjudged)."
     ),
     "chip.above_6": H(
-        "This sequence holds more stills than any loop_seq.py prep has registered so far: the largest was 6 (evgen-thug, 2026-10-30). No script states a limit, so the import goes ahead."
+        "This sequence holds more stills than the longest sequence of the loops work before the studio: 6 (evgen-thug, 2026-10-30). The boxes' seven stills of 2026-11-05 were the first above it, through the studio. No script states a limit, so the import goes ahead."
     ),
     "chip.above_10": H(
         "This sequence holds more stills than the design's range of 2 to 10 per sequence (STUDIO.md §1). No script states a limit, so the import goes ahead."
@@ -312,7 +312,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         "The model's manifest is absent or does not read: a stage that needs the model skips it or refuses. Only the tool's warmup, run from the shell, fetches a model."
     ),
     "chip.tag": H(
-        "The frame's kind from frames.json: photo is a still held byte-exact, blend a mix of two stills, snap a blend with motion blur, rewind a stretch of an earlier step played backwards. k is the still's index, t the place between two stills (0 to 1)."
+        "The frame's kind: the loop reads it from frames.json, a pair or a director render tags its frames from its own record. Photo is a still held byte-exact, blend a mix of two stills, snap a blend with motion blur, rewind a stretch of an earlier step played backwards. k is the still's index, t the place between two stills (0 to 1)."
     ),
     "chip.method": H(
         "The method of the transition this frame belongs to (frames.json), for a frame no model drew: dissolve, morph and the other methods mix or move the two stills."
@@ -334,7 +334,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         "One row per knob of the selected stage: the literal key, the value, the range, the default, the sentence; the provenance (the plan's sha256, the script's md5, the outputs' md5s); the command line that reproduces the stage from the shell; cancel for a running stage."
     ),
     "region.viewer": H(
-        "One large picture under judgement: source A (the render's current frame by default), with B beside it as a wipe, a flicker, an onion skin or a difference; the first and the last still sit small beside it. Space plays at 25 fps while the focus is on the picture, the scrubber or no control; left and right step one frame, shift by ten; `,` and `.` likewise; m marks the frame as a fault (saved under owner_frames/)."
+        "One large picture under judgement: source A (the render's current frame by default), with B beside it as a wipe, a flicker, an onion skin or a difference; the first and the last still sit small beside it. Space plays at the clip's own rate (the loop 25 fps, a director clip 30, a pair its spec's) while the focus is on the picture, the scrubber or no control; left and right step one frame, shift by ten; `,` and `.` likewise; m marks the frame as a fault (saved under owner_frames/)."
     ),
     "region.axis": H(
         "The shared frame axis: the scrubber, the step series with its stalls (bands) and jumps (ticks), the generated bands, the skeptic's markers and one stability plot per measured window, all at the same x; a click moves the scrubber; the dashed line is the 0.3 stall bar."
@@ -352,7 +352,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         "Saves the editor's JSON as a new plan of this job with a provenance block (from which plan, which keys changed, your words); a plan saved from the page is recorded as the owner's. Unknown top-level keys, methods, eases and effect kinds are refused with the known list."
     ),
     "control.render": H(
-        "Renders the chosen plan into <seq>/<name>/ (full) or drafts/<seq>/<name>/ (a draft) with the job's prep as `in`; the record shows the progress number and the log."
+        "Renders into <seq>/<name>/ (full) or drafts/<seq>/<name>/ (a draft): the loop renders the chosen plan with the job's prep as `in`, a pair its knobs, a director concept its plan under run/. The record shows the progress number and the log."
     ),
     "control.request_skeptic": H(
         "Writes requests/skeptic_<stamp>.json with the candidates' md5s and your brief; the session answers with answers/skeptic_<stamp>.json (a verdict per candidate on the md5 judged) and a report with crops."
@@ -373,7 +373,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
     # ---- the controls that carried no key of their own (critique A2, P2 11: the "?" leaves the Tab order, so each
     # control names its hint and its focus opens it)
     "control.candidate": H(
-        "Opens this render in the viewer: its frames on the scrubber, its measures and plan in the inspector."
+        "Opens this render in the viewer: its frames on the scrubber, its measures in the inspector, and the loop's plan as rendered."
     ),
     "control.knob_reset": H("Returns the knob to the last run's value, or to its default when the stage has not run."),
     "control.play": H(
@@ -1017,6 +1017,30 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
     ),
     "plan.timeline.sheets.object.seasons": H(
         "The stills whose plate of this object is blended in; absent, every still but the base.",
+        stage="render",
+        source="SCHEMA.md",
+    ),
+    # ---- the repaint leg (SCHEMA.md 2026-11-05: chain_luma.py's draw on registered stills; builder L of phase B)
+    "plan.timeline.repaint.through": H(
+        "The inner stills of the repaint's chain, in order; without it the leg repaints one pair. The inner stills are passed, never held.",
+        stage="render",
+        source="SCHEMA.md",
+    ),
+    "plan.timeline.repaint.front": H(
+        "The width of a repaint's front in order units (TR14's luma uses 0.15). It must be above 0.",
+        default=0.35,
+        stage="render",
+        source="SCHEMA.md",
+    ),
+    "plan.timeline.repaint.overlap": H(
+        "A repaint starts this fraction of a step before its turn and ends as late. The first repaint starts on time and the last ends on time, so a single pair ignores it. With 0 the repaint stops at each still.",
+        default=0.35,
+        stage="render",
+        source="SCHEMA.md",
+    ),
+    "plan.timeline.repaint.zone_erode": H(
+        "The union changed region eroded this many px is the drawing zone: the change matte of every consecutive pair (the plan's matte keys), eroded, then blurred at sigma 8 px. Outside the zone one dissolve runs from the first still to the last. Prep-canvas px; a draft scales them.",
+        default=15,
         stage="render",
         source="SCHEMA.md",
     ),

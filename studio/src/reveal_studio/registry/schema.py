@@ -31,7 +31,20 @@ ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$")
 """A render, plan or sequence name: 60 characters since phase B, so a director folder <stem>_<concept>-<tag> fits."""
 SCHEMA_DATE = "2026-11-05"
-METHODS = ("rife", "dissolve", "morph", "teleport", "cut", "rewind", "slices", "sheets", "snap", "slide", "rise")
+METHODS = (
+    "rife",
+    "dissolve",
+    "morph",
+    "teleport",
+    "cut",
+    "rewind",
+    "slices",
+    "sheets",
+    "snap",
+    "slide",
+    "rise",
+    "repaint",
+)
 EASES = ("linear", "smooth", "snap", "accel", "accel3", "decel", "sine")
 EFFECTS = ("breath", "parallax", "glow")
 PLAN_KEYS = ("seq", "in", "title", "gag", "timeline", "effects", "matte", "crf", "gif_long", "crop", "provenance")
@@ -81,6 +94,7 @@ GROUPS: dict[str, tuple[str, str, str]] = {
     "sheets": ("timeline[method=sheets].", "plan.timeline.sheets.", "sheets"),
     "sheets.sheet": ("timeline[method=sheets].sheets[*].", "plan.timeline.sheets.sheet.", "a sheet"),
     "sheets.object": ("timeline[method=sheets].objects[*].", "plan.timeline.sheets.object.", "an object plate"),
+    "repaint": ("timeline[method=repaint].", "plan.timeline.repaint.", "repaint"),
     "effect": ("effects[*].", "plan.effects.", "an effect"),
     "effect.breath": ("effects[kind=breath].", "plan.effects.breath.", "breath"),
     "effect.parallax": ("effects[kind=parallax].", "plan.effects.parallax.", "parallax"),
@@ -267,6 +281,11 @@ PLAN_SCHEMA: list[Entry] = [
     _e("sheets.object", "lead", "int", 6, S, units="frames"),
     _e("sheets.object", "linger", "int", 10, S, units="frames"),
     _e("sheets.object", "seasons", "list", item="int", units="stills"),
+    # repaint (SCHEMA.md, 2026-11-05): `through` as the slices group has its own, since the leg reads no chain key
+    _e("repaint", "through", "list", item="int", units="stills"),
+    _e("repaint", "front", "float", 0.35, S, units="order units"),
+    _e("repaint", "overlap", "float", 0.35, S, units="share of a step"),
+    _e("repaint", "zone_erode", "int", 15, S, units=PX),
     # effects
     _e("effect", "kind", "str", req=True, choices=EFFECTS),
     _e("effect.breath", "z", "float", req=True, units="share of the frame"),

@@ -19,7 +19,9 @@ from reveal_studio.views.fits import fits_summary
 from reveal_studio.views.measures import measure_runs, probe_view
 
 SO_FAR = 6
-"""The most stills one `loop_seq.py prep` has registered so far (evgen-thug, 2026-10-30; b_pair_research.md Part 4)."""
+"""The longest sequence of the loops work before the studio (evgen-thug, 6 stills, 2026-10-30; b_pair_research.md
+Part 4). The chip's threshold stays 6: the boxes' seven stills of 2026-11-05 were the first above it, through the
+studio (b_loop_build.md)."""
 DESIGN_RANGE = (2, 10)
 """Stills per sequence in the design of record (STUDIO.md §1); no script states a limit, so neither refuses."""
 
@@ -105,7 +107,12 @@ def still_count_warnings(n: int) -> list[Json]:
     """The import's chips for a long sequence: a hint, never a refusal (no script states a limit)."""
     out: list[Json] = []
     if n > SO_FAR:
-        out.append({"key": "chip.above_6", "text": f"above every sequence registered so far ({SO_FAR})"})
+        out.append(
+            {
+                "key": "chip.above_6",
+                "text": f"above the longest sequence of the loops work before the studio ({SO_FAR})",
+            }
+        )
     if n > DESIGN_RANGE[1]:
         out.append(
             {

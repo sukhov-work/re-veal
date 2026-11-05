@@ -41,7 +41,8 @@ WEB = Path(__file__).resolve().parents[1] / "src" / "reveal_studio" / "web"
 
 # The lists as scripts/research/plans/loops/SCHEMA.md and loop_seq.py's EASES and method branches name them on
 # 2026-11-05 (SCHEMA.md lists rife..rewind, slices, sheets; loop_seq.py's render also dispatches snap, slide, rise;
-# its EASES dict holds accel3 and sine beside the five SCHEMA.md names).
+# its EASES dict holds accel3 and sine beside the five SCHEMA.md names). Phase B added repaint, a leg with its own
+# SCHEMA.md section. Mutation: repaint dropped from METHODS turns this red, and validate_plan refuses a repaint step.
 SCHEMA_METHODS_2026_11_05 = [
     "rife",
     "dissolve",
@@ -54,6 +55,7 @@ SCHEMA_METHODS_2026_11_05 = [
     "snap",
     "slide",
     "rise",
+    "repaint",
 ]
 SCHEMA_EASES_2026_11_05 = ["linear", "smooth", "snap", "accel", "accel3", "decel", "sine"]
 SCHEMA_EFFECTS_2026_11_05 = ["breath", "parallax", "glow"]
@@ -80,8 +82,9 @@ LOOP_ORDER_2026_11_05 = [
     "grades",
 ]
 # 290 rows on 2026-11-05 (85 at the port, 145 for the plan keys and the editor, 37 for the views, 23 for the fix
-# round) and the two still-count chips of phase B's slice (chip.above_6, chip.above_10).
-LOOP_HINT_COUNT = 292
+# round), the two still-count chips of phase B's slice (chip.above_6, chip.above_10) and the four keys of its repaint
+# leg (plan.timeline.repaint.through, front, overlap, zone_erode).
+LOOP_HINT_COUNT = 296
 
 
 def test_the_loop_flow_has_its_stages_in_order() -> None:
@@ -273,7 +276,7 @@ def test_every_schema_entry_is_complete(entry: dict[str, Any]) -> None:
 
 
 def test_the_schema_paths_are_unique_and_the_view_serves_them() -> None:
-    assert len(BY_PATH) == len(PLAN_SCHEMA) == 151
+    assert len(BY_PATH) == len(PLAN_SCHEMA) == 155  # 151 on 2026-11-05 and the repaint leg's 4 of phase B
     v = schema_view()
     assert (v["date"], v["source"]) == ("2026-11-05", "scripts/research/plans/loops/SCHEMA.md")
     assert v["entries"] is PLAN_SCHEMA and [g["group"] for g in v["groups"]] == list(GROUPS)
@@ -393,13 +396,17 @@ def _digest(obj: Any) -> str:
 
 # The loop's registry rows on 2026-11-05, pinned by the slice of phase B before its first edit (in
 # tests/test_loop_snapshot.py then, moved here so a loop builder updates them with the loop counts): the stages without
-# the two keys the slice added, the 290 hints without its two chips, the plan schema and the rulings.
+# the two keys the slice added, the hints without its two chips, the plan schema and the rulings. Phase B's repaint leg
+# moved two digests on purpose: the hints (290 to 294: its four keys, and repaint named in plan.timeline.method's
+# sentence; then the main thread's five flow-neutral rewordings of 2026-11-05: region.viewer, chip.tag, control.render,
+# control.candidate, chip.above_6, digest 164bc46d1a2b4bb2)
+# sentence) and the schema (151 to 155 entries, digest d9bdc86dd439f099 before); the stages and the rulings held.
 LOOP_REGISTRY_2026_11_05 = {
     "stages": "83b7f497d40f9380",
-    "hints": "ceca97b5111fc312",
-    "hint_count": 290,
-    "schema": "d9bdc86dd439f099",
-    "schema_rows": 151,
+    "hints": "164bc46d1a2b4bb2",
+    "hint_count": 294,
+    "schema": "28130182bcbb2232",
+    "schema_rows": 155,
     "rulings": "b533b58ecedcb25e",
     "rulings_rows": 7,
 }

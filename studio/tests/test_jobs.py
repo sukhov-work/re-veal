@@ -495,7 +495,8 @@ def test_the_picks_writer_saves_the_file_and_the_rounds_grade(settings: Settings
     g = save_grade(d, {"round": 1, "picks": PICKS, "text": "  his words  "})["grade"]
     assert list(g) == ["at", "page_md5", "picks", "text"]
     assert (g["page_md5"], g["text"]) == (r["page_md5"], "his words")
-    assert g["picks"].startswith("picks/director_picks_") and read_json(d / g["picks"]) == PICKS
+    assert g["picks"].startswith(("picks/loop_picks_", "picks/pair_picks_", "picks/director_picks_"))  # <flow>_picks_
+    assert read_json(d / g["picks"]) == PICKS
     g2 = save_grade(d, {"round": 1, "picks": PICKS})["grade"]
     assert g2["picks"] != g["picks"] and g2["text"] == "" and len(list((d / "picks").iterdir())) == 2
     assert read_json(d / "rounds" / "1" / "round.json")["grade"] == g2

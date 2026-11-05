@@ -31,6 +31,7 @@ from reveal_studio.config import Settings
 from reveal_studio.errors import StudioError
 from reveal_studio.fs import Json, inside, log, md5_file, now_iso, read_json, rel, sha256_file, stamp, write_json
 from reveal_studio.registry.flows import ALL_FLOWS, FLOWS
+from reveal_studio.registry.pair import RESERVED_NAMES
 from reveal_studio.registry.schema import ID_RE, NAME_RE
 
 
@@ -297,6 +298,12 @@ def create_pair_job(
         raise StudioError("a pair job needs a fixture pair's name, or two photos a and b", 400)
     if not NAME_RE.match(seq):
         raise StudioError("the pair's name is letters, digits, dash and underscore", 400)
+    if seq in RESERVED_NAMES:
+        raise StudioError(
+            f"the pair's name {seq!r} is a folder of the job itself (its full renders would sit inside another stage's "
+            "folder): choose another name",
+            400,
+        )
     jid, d, raw = _new_dir(settings, "pair", seq)
     inputs = [_link(settings, raw, "A", photos[0]), _link(settings, raw, "B", photos[1])]
     job: Json = {

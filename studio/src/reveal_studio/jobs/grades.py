@@ -68,6 +68,11 @@ def write_request(settings: Settings, d: Path, job: Json, kind: str, body: Json)
                         "verdict": "READY | READY WITH A NOTE | NOT READY",
                         "judged_md5": "<the md5_mp4 judged>",
                         "note": "<one line>",
+                        **(
+                            {"look": "<what to look at, one line>", "faults": "<the faults to expect, one line>"}
+                            if job.get("flow") == "director"
+                            else {}
+                        ),
                     }
                 },
                 "report": f"answers/{fname[:-5]}.md (the crops beside it)",
@@ -95,9 +100,11 @@ def check_picks(obj: Any) -> None:
 
 
 def save_picks(d: Path, picks: Any) -> Path:
-    """picks/director_picks_<stamp>.json after the shape check; a second save in the same second gets _2, _3."""
+    """picks/<flow>_picks_<stamp>.json after the shape check (director_picks_ for a director job, as the rounds of
+    2026-10 named them); a second save in the same second gets _2, _3."""
     check_picks(picks)
-    base = d / "picks" / f"director_picks_{stamp()}"
+    flow = str((read_json(d / "job.json") or {}).get("flow") or "director")
+    base = d / "picks" / f"{flow}_picks_{stamp()}"  # director_picks_<stamp>.json for a director job
     p, k = base.with_suffix(".json"), 1
     while p.exists():
         k += 1

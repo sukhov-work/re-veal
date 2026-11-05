@@ -1,1 +1,33 @@
-/* pair.css: the pair flow's styles (builder P's from wave 2 on); empty in the slice of 2026-11-05. */
+/* pair.css: the pair flow's panels and its new-job form (builder P, phase B), on the shell's tokens (studio.css). */
+.pair-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0 12px}
+.pair-facts{margin:0 0 8px;display:flex;gap:6px;flex-wrap:wrap}
+.pair-table td{padding:2px 16px 2px 0;vertical-align:baseline}
+.pair-table td.num{text-align:right}
+.pair-basket{margin:4px 0 12px}
+.pair-basket td,.pair-basket th{padding:2px 12px 2px 0;vertical-align:baseline}
+.pair-ab{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.pair-ab figure,.pair-strip figure{margin:0;background:var(--panel);border:1px solid var(--line);padding:4px;max-width:100%}
+.pair-ab img{height:200px;max-width:100%;display:block;object-fit:contain}
+.pair-strip{margin:12px 0}
+.pair-strip img{display:block;max-width:100%;height:auto}
+.pair-ab figcaption,.pair-strip figcaption{font:500 0.75rem/1.3 var(--sans);color:var(--muted);padding:4px 2px 0}
+.pair-check{display:block;margin:4px 0}
+.pair-note{display:flex;gap:8px;align-items:center;margin-top:4px}
+.pair-note .data{min-width:72px}
+.pair-note input{flex:1}
+.pair-cols label.label{display:block;margin-top:8px}
+.pair-cols input:not([type]),.pair-cols textarea{width:100%}
+.pair-frame{width:100%;height:600px;border:1px solid var(--line);background:var(--ground)}
+.pair-best{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 8px}
+.pair-clip{border:1px solid var(--line);border-radius:3px;margin:8px 0;padding:6px 10px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.pair-clip legend{padding:0 4px}
+.pair-clip input.pairClipNote{flex:1 1 220px}
+.pair-words{margin:8px 0;border-left:2px solid var(--line-strong);padding-left:12px;white-space:pre-wrap}
+.pair-prov{font-size:.75rem;word-break:break-all}
+.pair-plotnote{margin:2px 0 0 40px}
+.pair-form{padding:8px 16px 0}
+.pair-form label{display:block;margin-top:6px}
+.pair-form .label label{display:inline}
+.pair-form input,.pair-form select{width:100%}
+.pair-form .pair-acts{margin:8px 0 0}
+.pair-err{color:var(--failed);font-size:.75rem;margin-top:6px}

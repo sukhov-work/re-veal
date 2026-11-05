@@ -89,8 +89,18 @@ def thumb_path(settings: Settings, d: Path, job: Json, what: str, a: str, b: str
         if not src.exists():
             raise StudioError("no frame 0", 404)
         dest = cache / f"render_{c['kind']}_{c['name']}_{(c['md5_mp4'] or 'x')[:8]}.jpg"
+    elif what == "canvas":
+        # a director job's photo as the latest resolve cropped it (canvas_A.png or canvas_B.png): the import tile's
+        # picture whatever the photo's format, since cv2 reads no HEIC (phase B, builder D, 2026-11-05)
+        if a not in ("A", "B"):
+            raise StudioError("a canvas is A or B", 404)
+        done = sorted(p for p in (d / "resolve").glob(f"*/canvas_{a}.png") if not p.parent.name.endswith(".part"))
+        if not done:
+            raise StudioError("no resolve yet: run the resolve stage", 404)
+        src = done[-1]
+        dest = cache / f"canvas_{a}_{src.parent.name}_{src.stat().st_mtime_ns}.jpg"
     else:
-        raise StudioError("a thumb is still/<i>, raw/<i> or render/<kind>/<name>", 404)
+        raise StudioError("a thumb is still/<i>, raw/<i>, render/<kind>/<name> or canvas/<A|B>", 404)
     if not dest.exists():
         jpeg_thumb(settings, src, dest, 192)
     return dest

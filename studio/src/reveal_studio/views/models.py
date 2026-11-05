@@ -37,7 +37,34 @@ def models_view(settings: Settings) -> list[Json]:
                 "verified": (m or {}).get("verified") or (m or {}).get("date"),
             }
         )
-    return out
+    return out + director_inputs(settings)
+
+
+def director_inputs(settings: Settings) -> list[Json]:
+    """The director flow's two derived inputs beside the models (phase B, builder D): the layer tables under the
+    layers root (<photo>/layers.json) and the mattes under the mattes root (<photo>/el_<id>.png), with their counts in
+    the row's name, since the rail prints the name and the readiness."""
+    tables = sorted(p.parent.name for p in settings.layers_dir.glob("*/layers.json"))
+    mattes = {p.parent.name for p in settings.mattes_dir.glob("*/el_*.png")}
+    files = sum(1 for _ in settings.mattes_dir.glob("*/el_*.png"))
+    return [
+        {
+            "name": f"layer tables ({len(tables)} photos)" if tables else "layer tables",
+            "manifest": rel(settings.layers_dir, settings.root),
+            "ready": bool(tables),
+            "version": None,
+            "verified": None,
+            "count": len(tables),
+        },
+        {
+            "name": f"mattes ({len(mattes)} photos, {files} files)" if mattes else "mattes",
+            "manifest": rel(settings.mattes_dir, settings.root),
+            "ready": bool(mattes),
+            "version": None,
+            "verified": None,
+            "count": files,
+        },
+    ]
 
 
 def open_requests(settings: Settings) -> list[Json]:

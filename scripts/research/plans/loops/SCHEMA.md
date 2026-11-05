@@ -273,3 +273,43 @@ sequence when the names belong to one. A name that is not a full render of a seq
 as before.
 On a copy of the angel run the page with the recorded title, intro, footer and notes gives md5
 72dadc4f5ea4db16152fe0c7062a3f94, the recorded page's, with and without `--variants a1,a2,a3,a4,a5`.
+
+## `repaint` (2026-11-05, phase B of the studio): a chain of stills repainted in a per-pixel order
+
+`{"to": 6, "method": "repaint", "through": [1, 2, 3, 4, 5], "n": 75, "ease": "smooth", "front": 0.35, "overlap": 0.35,
+"zone_erode": 15}` renders `chain_luma.py --variant draw` (the boxes, 2026-10-09) on registered stills: `n` frames
+along the chain from the current still through the `through` stills to `to`, under one `ease` over the whole chain. The
+inner stills are passed, never held, and nothing is generated. A plan without a `repaint` step renders as before: a2
+gave `c302623f293eacd069218fd7518e0967` and s6 `5908af3d5300046579548848679b0cbb` before and after the leg went in.
+- Outside the zone, one dissolve runs from the first still of the chain to the last.
+- Inside the zone, each consecutive pair's repaint spreads as a soft front in a per-pixel order: the sum of three
+  ranks, ranked again.
+  - The distance to the new still's Canny edges, weight 0.5: its lines come first.
+  - The old still's negated brightness, weight 0.3: its bright parts come early.
+  - Noise at two scales, weight 0.2: Gaussian sigma 6 and 24 px, seeded by the segment's index + 1.
+- `through`: the inner stills in order; without it the leg repaints one pair.
+- `front` (default 0.35): the width of a repaint's front in order units (TR14's luma uses 0.15). It must be above 0.
+- `overlap` (default 0.35): a repaint starts this fraction of a step before its turn and ends as late. The first
+  repaint starts on time and the last ends on time, so a single pair ignores it.
+- `zone_erode` (default 15): the union changed region eroded this many px is the drawing zone. The changed region is
+  the change matte of every consecutive pair (the plan's `matte` keys), each binarized at 0.5; the eroded union is
+  blurred at sigma 8 px. These px are prep-canvas px: a draft scales them, and the noise's two sigmas too.
+- The three sentences and defaults are `chain_luma.py`'s `--front`, `--overlap` and `--zone-erode` help
+  (`chain_luma.py:283–285`). `rank_order` and `reveal_mix` are copied from `tr14_variants.py:111–135`, so `loop_seq.py`
+  imports no further research script.
+- `frames.json` rows: `{"generated": "none (repaint)", "u", "segment": [a, b], "t"}`: `u` is the profile's value,
+  `segment` the pair the frame's position lies in and `t` the position inside that pair. `--progress` prints one line
+  per frame.
+- A `front` at or below 0, a negative `overlap` or `zone_erode`, or a still the prep folder lacks prints a `FAILED:`
+  line and exits 2.
+
+Measured on 2026-11-05 on the seven photos of the boxes (`benchmarks/runs/2026-10-09/fabra/draw7_3s/aligned/`, which
+chain_luma.py wrote after its light match), registered by `prep` at its defaults (740 to 1047 inliers per still; canvas
+1492×1882), with `n` 75 and the defaults:
+- The zone covers 0.911 of the canvas, 0.587 with `matte.thr` 30. chain_luma's draw of the same photos had 0.346, from
+  Reveal's changed-region masks (0.06 to 0.25 of the frame per pair) rather than a Lab threshold. Two neighbouring
+  pairs still differ by a median of 23 and 28 Lab levels, above the matte's 14, so their light change is drawn as well.
+- Two renders give one mp4 md5. The holds beside the leg reach the encoder byte-equal to `k<i>.png`. A repaint between
+  two identical stills leaves every in-between equal to the still.
+- The step into a pair's first frame is 1.00 to 1.07 times its neighbours' mean, no jump. With `overlap` 0 every such
+  frame dips to 0.19 to 0.49 times (the repaint stops at each still); with 0.175, half the front, 0.91 to 0.98 times.

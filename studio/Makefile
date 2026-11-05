@@ -28,7 +28,7 @@ test-fast:  ## unit tests only (the fake loop_seq.py, no main venv)
 test-cov:  ## unit and integration tests with line and branch coverage
 	$(RUN) pytest tests -m "not acceptance" --cov --cov-report=term-missing
 
-acceptance:  ## the A1 and A2 loop-flow drives on the owner's stills (tests/acceptance; two new jobs under benchmarks/runs/<date>/studio/; about 3 min)
+acceptance:  ## the loop (A1, A2), pair and director drives (tests/acceptance; new jobs under benchmarks/runs/<date>/studio/; about 8 min, one at a time)
 	$(RUN) pytest tests/acceptance -m acceptance -s
 
 draft-check:  ## the 480 px draft of angel_a2 through the package into the job loop_angel_20261104-220719 (an 8 MB draft per run)

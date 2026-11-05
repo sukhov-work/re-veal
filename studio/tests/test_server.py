@@ -157,9 +157,12 @@ def test_a_job_made_and_run_through_the_api(client: Client, stills: Path) -> Non
     assert client.get(f"/api/jobs/{jid}/render/full/zz")[0] == 404
 
 
-def test_post_jobs_refuses_a_bad_folder(client: Client, tmp_path: Path) -> None:
+def test_post_jobs_refuses_a_bad_folder(client: Client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     code, body, _ = client.post("/api/jobs", {"flow": "loop", "folder": str(tmp_path / "none")})
     assert code == 400 and "is not a folder" in body["error"]
+    # the enabled flows set by the test itself, so the refusal holds whichever flows the registry enables (builder
+    # D enabled the director flow on 2026-11-05)
+    monkeypatch.setattr(store, "FLOWS", {"loop": ALL_FLOWS["loop"]})
     code, body, _ = client.post("/api/jobs", {"flow": "pair", "folder": str(tmp_path)})
     assert code == 400 and body["error"].startswith("the flow is one of ['loop']")
 
@@ -301,7 +304,9 @@ def test_the_server_binds_127_0_0_1_only(app: App) -> None:
 
 def test_models_route(client: Client) -> None:
     code, ms, _ = client.get("/api/models")
-    assert code == 200 and [m["name"] for m in ms] == ["reveal matcher", "depth model", "RIFE", "faces (YuNet)"]
+    # the four models, then the director flow's layer tables and mattes (none in the tmp root; builder D, 2026-11-05)
+    names = ["reveal matcher", "depth model", "RIFE", "faces (YuNet)", "layer tables", "mattes"]
+    assert code == 200 and [m["name"] for m in ms] == names
 
 
 def test_every_route_in_the_table_is_hit(client: Client, stills: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Looped short clips from a photo sequence (2–6 developed stills of the same scene, handheld).
+"""Looped short clips from a photo sequence (two or more developed stills of the same scene, handheld).
 
 Research script (2026-10-30; the Halloween sequences). Neither tool changes: transitions.py is imported for
 its decode, its canvas cover, its morph (prepare + iter_frames) and nothing else; rife_probe.py is imported for
@@ -32,7 +32,9 @@ Subcommands
       region's content in place instead, for a ghost that materializes while the rest moves by RIFE), or `rewind` (the
       frames of an earlier segment played backward, every k-th), or `slices` (2026-11-01: diagonal cells that slide
       the next still into place as cards, a lattice or chevrons, a wave through several stills, temporal motion blur;
-      nothing generated). Post effects: `breath` (a push-in about a
+      nothing generated), or `repaint` (2026-11-05: chain_luma.py's draw over a chain of stills: outside the change
+      zone one dissolve from the first still to the last, inside it each still's repaint spreading in a per-pixel
+      order, the fronts of consecutive repaints overlapping; nothing generated). Post effects: `breath` (a push-in about a
       point, sin² over the loop, the endpoints untouched). Writes OUT/loop.mp4, OUT/loop.gif (two-pass
       palette, 40 ms per frame at 25 fps), OUT/sheet.jpg, OUT/frames.json (what each frame is) and
       OUT/measure.json (the step series, the seam step, faces per frame, the double-exposure share per
@@ -734,6 +736,93 @@ def frames_chain(keys, knots, n, weights, ease, soft, method, matte_cfg, out_row
         out_rows.append(row)
         tick(j)
     return out
+
+
+# The repaint leg (2026-11-05, phase B of the studio): chain_luma.py's `draw` variant (2026-10-09, the boxes) on
+# registered stills. rank_order and reveal_mix are copied from tr14_variants.py:111-135 (numpy only), so this script
+# imports no research module beyond transitions and rife_probe; the copy of reveal_mix drops its REVEAL_SOFT default,
+# because the leg always passes its `front`.
+
+def rank_order(values, mask):
+    """values inside the mask -> uniform order in [0, 1] (small value = appears first)."""
+    o = np.zeros(values.shape, np.float32)
+    idx = np.flatnonzero(mask.ravel() > 0)
+    v = values.ravel()[idx]
+    ranks = np.empty(len(idx), np.float64)
+    ranks[np.argsort(v, kind="stable")] = np.arange(len(idx))
+    o.ravel()[idx] = ranks / max(1, len(idx) - 1)
+    return o
+
+
+def reveal_mix(order, tm, soft):
+    """0 = A, 1 = B; every pixel is 0 at tm = 0 and 1 at tm = 1 (the luma_mask formula)."""
+    p = tm * (1.0 + soft) - soft / 2.0
+    return np.clip((p - order) / soft + 0.5, 0.0, 1.0).astype(np.float32)
+
+
+def frames_repaint(keys, knots, n, ease, step, matte_kw, out_rows, src):
+    """n frames of a repaint along the chain of stills `knots` (the current still first), as chain_luma.py's `draw`
+    renders the boxes, under ONE profile u = ease(j / (n + 1)) over the whole chain. Outside the zone one dissolve runs
+    from the first still to the last. Inside it each consecutive pair's repaint spreads as a soft front `front` wide
+    (order units) in a per-pixel order: the distance to the new still's Canny edges weighs 0.5 (its lines first), the
+    old still's negated brightness 0.3 (its bright parts early) and noise at two scales 0.2 (Gaussian sigma 6 and 24 px,
+    seeded by the segment's index + 1), the sum ranked again. Repaint k starts `overlap` of a step before its turn and
+    ends as late (chain_luma.py:629-641), so no segment boundary is synchronized. The zone is the union of the change
+    matte (the plan's `matte` keys) over the consecutive pairs, each binarized at 0.5, eroded `zone_erode` px and
+    blurred at sigma 8 px. The px values are prep-canvas px: a draft scales them. Nothing is generated."""
+    front, overlap, erode = step.get("front", 0.35), step.get("overlap", 0.35), step.get("zone_erode", 15)
+    for name, v, ok in (("front", front, lambda x: x > 0), ("overlap", overlap, lambda x: x >= 0),
+                        ("zone_erode", erode, lambda x: x >= 0)):
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not ok(v):
+            fail(f"repaint: {name} must be a number {'above' if name == 'front' else 'at or above'} 0, not {v!r}")
+    missing = [k for k in knots if k not in keys]
+    if missing:
+        fail(f"repaint: stills {missing} are not in the prep folder (k<i>.png)")
+    front, overlap = float(front), float(overlap)
+    H, W = keys[knots[0]].shape[:2]
+    pj = Path(src) / "prep.json"
+    sc = W / float(json.loads(pj.read_text())["canvas"][0]) if pj.exists() else 1.0    # a draft scales the px values
+    nseg = len(knots) - 1
+    full = np.full((H, W), 255, np.uint8)
+    orders, union = [], np.zeros((H, W), np.uint8)
+    for k in range(nseg):
+        A, B = keys[knots[k]], keys[knots[k + 1]]
+        edges = cv2.Canny(cv2.cvtColor(B, cv2.COLOR_BGR2GRAY), 60, 160)
+        dist = cv2.distanceTransform(255 - edges, cv2.DIST_L2, 5).astype(np.float32)
+        rng = np.random.default_rng(k + 1)
+        noise = (cv2.GaussianBlur(rng.standard_normal((H, W)).astype(np.float32), (0, 0), 6 * sc)
+                 + 0.5 * cv2.GaussianBlur(rng.standard_normal((H, W)).astype(np.float32), (0, 0), 24 * sc))
+        order = (0.5 * rank_order(dist, full) + 0.3 * rank_order(-cv2.cvtColor(A, cv2.COLOR_BGR2GRAY).astype(np.float32), full)
+                 + 0.2 * rank_order(noise, full))
+        orders.append(rank_order(order, full))
+        union = np.maximum(union, (change_matte(A, B, **matte_kw) > 0.5).astype(np.uint8))
+    e = int(round(float(erode) * sc))
+    ke = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * e + 1, 2 * e + 1))
+    zone = cv2.GaussianBlur(cv2.erode(union, ke).astype(np.float32), (0, 0), 8 * sc)[..., None]
+    first, last = keys[knots[0]].astype(np.float32), keys[knots[-1]].astype(np.float32)
+    news = [keys[knots[k + 1]].astype(np.float32) for k in range(nseg)]
+    out = []
+    for j in range(1, n + 1):
+        u = EASES[ease](j / (n + 1))
+        pos = u * nseg
+        bg = first * (1 - u) + last * u
+        fin = first
+        for k in range(nseg):
+            lead = 0.0 if k == 0 else overlap
+            tail = 0.0 if k == nseg - 1 else overlap
+            t_k = float(np.clip((pos - k + lead) / (1.0 + lead + tail), 0.0, 1.0))
+            if t_k <= 0.0:
+                break
+            m = reveal_mix(orders[k], t_k, front)[..., None]
+            fin = fin * (1 - m) + news[k] * m
+        out.append((bg * (1 - zone) + fin * zone).round().astype(np.uint8))
+        seg = min(int(math.floor(pos)), nseg - 1)
+        out_rows.append({"generated": "none (repaint)", "u": round(float(u), 4),
+                         "segment": [int(knots[seg]), int(knots[seg + 1])], "t": round(float(pos - seg), 4)})
+        tick(j)
+    info = {"stills": [int(k) for k in knots], "zone_share": round(float((zone > 0.5).mean()), 4), "front": front,
+            "overlap": overlap, "zone_erode_px": e, "draft_scale": round(sc, 4)}
+    return out, info
 
 
 def frames_dissolve(A, B, n, ease, out_rows):
@@ -1658,6 +1747,9 @@ def render_plan(plan, out, fps, draft=0, frames_jpg=False):
         elif method == "slices":
             knots = [cur] + [int(k) for k in step.get("through", [])] + [j]
             fr, info = frames_slices(keys, knots, step, seg_rows); step["n"] = len(fr); log(f"render: slices {info}")
+        elif method == "repaint":                    # before `through`: frames_chain renders rife and dissolve only
+            knots = [cur] + [int(k) for k in step.get("through", [])] + [j]
+            fr, info = frames_repaint(keys, knots, n, ease, step, matte_kw, seg_rows, src); log(f"render: repaint {info}")
         elif "through" in step:
             knots = [cur] + [int(k) for k in step["through"]] + [j]
             fr = frames_chain(keys, knots, n, step.get("weights"), ease, float(step.get("soft", 0.0)), method, matte_kw, seg_rows, margin=float(step.get("knot_margin", 0.0)))

@@ -29,6 +29,8 @@ def _kind(generated: Any) -> str:
         return "hold"
     if g.startswith("none (blend + motion blur)"):
         return "snap"
+    if g == "none (repaint)":  # the repaint leg (2026-11-05): a per-pixel blend of the stills, nothing generated
+        return "blend"
     if g.startswith("none ("):
         return g[6:].split(")")[0].split()[0] if g[6:].strip(" )") else "none"
     if g.startswith("none"):
@@ -47,10 +49,10 @@ def frame_kinds(rows: list[Json]) -> list[str]:
     """Per row of frames.json, the kind the step rules read.
 
     hold: a still (`none (photo)`); snap: a short blurred jump (`none (blend + motion blur)`); generated: a model
-    drew the frame (`rife`, `rife (the base)`, ...); otherwise the word frames.json gives (blend, morph, rewind,
-    slices, sheets). cut: the first frame after a declared cut, found where two neighbouring frames belong to
-    different plan steps and the still the first step ends on differs from the one the next step starts from (a cut
-    writes no frames, so it shows only at that boundary).
+    drew the frame (`rife`, `rife (the base)`, ...); blend for a repaint leg's frame (`none (repaint)`); otherwise the
+    word frames.json gives (blend, morph, rewind, slices, sheets). cut: the first frame after a declared cut, found
+    where two neighbouring frames belong to different plan steps and the still the first step ends on differs from the
+    one the next step starts from (a cut writes no frames, so it shows only at that boundary).
     """
     kinds = [_kind(r.get("generated")) for r in rows]
     for i in range(1, len(rows)):

@@ -350,7 +350,8 @@ def cmd_measure(a: argparse.Namespace) -> None:
 
 
 def expand(plan: dict[str, object]) -> list[dict[str, object]]:
-    """frames.json's rows for the plan's timeline: holds are photos, rife legs generated, others blends."""
+    """frames.json's rows for the plan's timeline: holds are photos, rife legs generated, a repaint leg in the real
+    script's row shape (`none (repaint)` with u, segment and t; frames_repaint, 2026-11-05), others blends."""
     rows: list[dict[str, object]] = []
     cur = 0
     for si, st in enumerate(plan["timeline"]):
@@ -375,6 +376,22 @@ def expand(plan: dict[str, object]) -> list[dict[str, object]]:
                         "method": "rife",
                     }
                 )
+            elif m == "repaint":
+                knots = [cur, *[int(k) for k in st.get("through", [])], st["to"]]
+                pos = t * (len(knots) - 1)
+                seg = min(int(pos), len(knots) - 2)
+                rows.append(
+                    {
+                        "generated": "none (repaint)",
+                        "u": t,
+                        "segment": [knots[seg], knots[seg + 1]],
+                        "t": round(pos - seg, 4),
+                        "step": si,
+                        "from": cur,
+                        "to": st["to"],
+                        "method": m,
+                    }
+                )
             else:
                 rows.append({"t": t, "generated": "none (blend)", "step": si, "from": cur, "to": st["to"], "method": m})
         cur = st["to"]
@@ -397,7 +414,8 @@ def cmd_render(a: argparse.Namespace) -> None:
     for i in range(n):
         if getattr(a, "progress", False):
             print(f"PROGRESS {i + 1} {n} frames", file=sys.stderr, flush=True)
-    levels = [40 + 10 * int(r.get("key", 0) or 0) + int(100 * float(r.get("t", 0) or 0)) for r in rows]
+    # a repaint row's t restarts in each pair, so its level follows u, the leg's own profile
+    levels = [40 + 10 * int(r.get("key", 0) or 0) + int(100 * float(r.get("u", r.get("t", 0)) or 0)) for r in rows]
     mp4 = out / "loop.mp4"
     vw = cv2.VideoWriter(str(mp4), cv2.VideoWriter_fourcc(*"mp4v"), a.fps, (W, H))
     for lv in levels:

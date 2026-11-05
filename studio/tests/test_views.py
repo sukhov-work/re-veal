@@ -331,7 +331,7 @@ def test_models_view_reads_the_manifests(settings: Settings) -> None:
         "verified": "2026-09-13",
     }
     assert rows["RIFE"]["ready"] is False and rows["RIFE"]["version"] is None
-    assert len(rows) == 4
+    assert len(rows) == 6  # the four models and the director flow's layer tables and mattes (builder D, 2026-11-05)
 
 
 def test_open_requests_lists_the_unanswered_ones_across_jobs(settings: Settings, rendered: tuple[Path, Json]) -> None:
@@ -591,7 +591,7 @@ def test_a_long_sequence_gets_the_still_count_chips_and_no_refusal(
         assert "warnings" not in tile
     else:
         assert [w["key"] for w in tile["warnings"]] == keys
-        assert tile["warnings"][0]["text"] == "above every sequence registered so far (6)"
+        assert tile["warnings"][0]["text"] == "above the longest sequence of the loops work before the studio (6)"
         assert all(k in HINTS for k in keys)
     if n == 11:
         assert tile["warnings"][1]["text"] == "above the design's range of 2 to 10 stills"

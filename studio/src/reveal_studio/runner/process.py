@@ -324,7 +324,10 @@ class Runner:
         if rec is None:
             return bool(args.strip())
         script = script_of(rec)
-        return bool(script) and str(script) in args and (rec.get("out_part") or "\0") in args
+        needle = rec.get("out_part") or "\0"
+        if rec.get("in_place"):  # the page script names the folder it writes into, never the file
+            needle = str(Path(needle).parent)
+        return bool(script) and str(script) in args and needle in args
 
     def _watch_pid(self, d: Path, rid: str, pid: int) -> None:
         while self.pid_alive(pid):
