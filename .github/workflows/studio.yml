@@ -2,7 +2,8 @@
 # fixtures, the weights and the main venv are not on the runner, so the integration and
 # acceptance layers run on the laptop by `make -C studio test` and `make -C studio acceptance`).
 # This workflow is an addition beyond the epistemic-filter project's practice (its gates run
-# locally through `make qa`); its first run is UNVERIFIED until the push after 2026-11-05.
+# locally through `make qa`). Its first run (2026-11-05, run 42003096693) failed in setup on the
+# missing major tag `astral-sh/setup-uv@v10`; the release tag is pinned since.
 name: studio
 
 on:
@@ -25,7 +26,7 @@ jobs:
         working-directory: studio
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3  # the release tag: the major tag v10 did not exist on 2026-11-05 (the first run failed on it)
         with:
           enable-cache: true
           cache-dependency-glob: "studio/uv.lock"
