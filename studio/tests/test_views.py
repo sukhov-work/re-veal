@@ -11,7 +11,7 @@ import pytest
 
 from reveal_studio.config import Settings
 from reveal_studio.errors import StudioError
-from reveal_studio.fs import Json, md5_file, read_json, rel, write_json
+from reveal_studio.fs import Json, md5_file, now_iso, read_json, rel, write_json
 from reveal_studio.jobs.grades import mark_frame, save_grade, write_request
 from reveal_studio.jobs.records import records
 from reveal_studio.jobs.store import create_director_job, create_job, create_pair_job
@@ -189,7 +189,12 @@ def test_the_rail_row_reconciles_a_record_whose_process_is_gone(
     gone.wait()  # a pid that no longer runs: the record's wait thread died before it wrote the terminal state
     rid = "29991231-235959_render"
     (d / "stages" / rid).mkdir()
-    write_json(d / "stages" / rid / "stage.json", {**done, "id": rid, "state": "running", "pid": gone.pid})
+    # started now: the finished render's terminal file is older, so no other server is finishing this record (the
+    # phase B fix round's rule in Runner.finalize reads that file's mtime against the record's start)
+    write_json(
+        d / "stages" / rid / "stage.json",
+        {**done, "id": rid, "state": "running", "pid": gone.pid, "started": now_iso()},
+    )
     before = job_row(settings, d)
     assert before is not None and [r["id"] for r in before["running"]] == [rid]  # the read without the Runner
     row = job_row(settings, d, runner)

@@ -1,7 +1,7 @@
 [project]
 name = "reveal-studio"
 version = "0.2.0"
-description = "The studio: one local page over the loop flow of Reveal's research scripts, served on 127.0.0.1."
+description = "The studio: one local page over Reveal's flows (the loop, the pair transition, the director plan), served on 127.0.0.1."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 # The same pins as ../requirements.txt, so a thumbnail decodes as the main venv decodes it.
@@ -72,7 +72,8 @@ markers = [
 known_first_party = ["reveal_studio"]
 
 [tool.deptry.per_rule_ignores]
-# 2026-11-05: numpy is pinned to the main venv's version for cv2's sake; the package never imports it.
+# 2026-11-05: numpy is pinned to the main venv's version for cv2's sake. Since phase B media/pair.py and media/overlays.py
+# import it inside their functions; the ignore stays for a deptry that misses a function-level import.
 DEP002 = ["numpy"]
 
 [tool.coverage.run]

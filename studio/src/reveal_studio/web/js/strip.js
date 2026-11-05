@@ -4,8 +4,12 @@
 S.viewMode=(()=>{try{return localStorage.getItem('studio_view')==='graph'?'graph':'strip';}catch(e){return 'strip';}})();
 // the job
 async function openJob(id,keep){if(!keep){S.jid=id;S.stage='render';S.cand=null;S.render=null;S.frame=0;S.msg=null;S.sig=null;S.vw={};S.shown=null;stopPlay();}
+ const got=await api('/api/jobs/'+encodeURIComponent(id));
+ // the answer for a job the page has left since (a poll's, or a click's overtaken by another click) is dropped: it would
+ // draw that job under the open one's id and re-arm the poll for it, stopping the open job's (the phase B drive's defect 1)
+ if(S.jid!==id)return;
  try{localStorage.setItem('studio_job',id)}catch(e){}
- S.view=await api('/api/jobs/'+encodeURIComponent(id));const v=S.view;$('#title').textContent=v.job.seq+' · '+v.job.flow;$('#subtitle').textContent=v.job.id+(v.job.adopted?' · adopted from '+v.job.root:'')+' · '+v.job.inputs.length+' '+(flowUI().inputsWord||'inputs');
+ S.view=got;const v=S.view;$('#title').textContent=v.job.seq+' · '+v.job.flow;$('#subtitle').textContent=v.job.id+(v.job.adopted?' · adopted from '+v.job.root:'')+' · '+v.job.inputs.length+' '+(flowUI().inputsWord||'inputs');
  document.querySelectorAll('#jobs .job').forEach(li=>li.setAttribute('aria-current',li.dataset.id===id));
  if(!v.stages.find(s=>s.name===S.stage))S.stage=v.stages.find(s=>s.name==='render')?'render':(v.stages[0]||{}).name;renderStrip();renderGraph();
  // a poll re-renders the panel and the inspector only when their data changed and nothing in them has the focus (typed text is never wiped);
@@ -19,7 +23,7 @@ async function openJob(id,keep){if(!keep){S.jid=id;S.stage='render';S.cand=null;
 function selectStage(name){S.stage=name;S.msg=null;S.focusLater=null;S.gConfirm=null;renderStrip();renderGraph();renderPanel();renderInspector();}
 function stripTile(s,row,col){const st=s.stale?'stale':s.state;const cls=['stage',s.branch?'branch':'',(s.state==='failed'||s.state==='refused'||s.state==='lost')?'failed':'',s.state==='running'?'running':''].join(' ');
  const prog=s.progress?' '+s.progress.i+'/'+s.progress.n+' '+esc(s.progress.phase||''):(s.unchanged_from?' (unchanged)':'');
- return '<div class="'+cls+'" role="tab" tabindex="0" style="grid-row:'+row+';grid-column:'+col+'" data-row="'+row+'" data-col="'+col+'" data-stage="'+esc(s.name)+'" data-hint="stage.'+esc(s.name)+'" aria-selected="'+(s.name===S.stage)+'">'+(s.generated?'<span class="tick" title="generated content"></span>':'')+(s.branch?'':'<div class="thumb'+(s.thumb?'':' empty')+'">'+(s.thumb?'<img src="'+esc(s.thumb)+'" alt="">':esc(s.title))+'</div>')+'<div class="nm"><span class="label">'+esc(s.title)+(s.optional?' <span class="muted">(optional)</span>':'')+'</span>'+hintBtn('stage.'+s.name)+'</div><div class="dt" title="'+esc(s.detail)+'">'+esc(s.detail||'')+'</div><div class="ft"><span class="data muted">'+(s.wall_s!=null?esc(fmtS(s.wall_s)):(s.state==='running'&&s.progress?'':'—'))+'</span>'+chip(st+prog,stateClass(st))+'</div></div>';}
+ return '<div class="'+cls+'" role="tab" tabindex="0" style="grid-row:'+row+';grid-column:'+col+'" data-row="'+row+'" data-col="'+col+'" data-stage="'+esc(s.name)+'" data-hint="stage.'+esc(s.name)+'" aria-selected="'+(s.name===S.stage)+'">'+(s.generated?'<span class="tick" title="generated content"></span>':'')+(s.branch?'':'<div class="thumb'+(s.thumb?'':' empty')+'">'+(s.thumb?'<img src="'+esc(s.thumb)+'" alt="">':esc(s.title))+'</div>')+'<div class="nm"><span class="label">'+esc(s.title)+(s.optional?' <span class="muted">(optional)</span>':'')+'</span>'+hintBtn('stage.'+s.name)+'</div><div class="dt" title="'+esc(s.detail)+'">'+esc(s.detail||'')+'</div><div class="ft"><span class="data muted">'+(s.wall_s!=null?esc(fmtS(s.wall_s)):(s.state==='running'&&s.progress?'':'—'))+'</span>'+chip(st+prog,stateClass(st),s.stale?null:s.chip_key)+'</div></div>';}
 function renderStrip(){const v=S.view;const ssig=JSON.stringify(v.stages.map(s=>[s.name,s.state,s.stale,s.detail,s.wall_s,s.progress,s.thumb,s.generated,s.unchanged_from,s.branch,s.parent]))+'|'+S.stage;if(ssig===S.stripSig)return;S.stripSig=ssig;const focusedTile=document.activeElement&&document.activeElement.closest('.stage')?document.activeElement.dataset.stage:null;
  const main=v.stages.filter(s=>!s.branch),col={},rows={};main.forEach((s,i)=>{col[s.name]=i+1;});
  const strip=$('#strip');strip.style.gridTemplateColumns='repeat('+main.length+',minmax(0,1fr))';

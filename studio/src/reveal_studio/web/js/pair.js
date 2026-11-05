@@ -36,16 +36,16 @@ function pairRelation(){const r=pairRel(),s=stageOf('relation');let h='<p class=
  if(s.last_attempt)m+='<p class="muted">'+esc(s.reason||'')+'</p>';
  return h+hostGrid(m);}
 function pairVerdict(){const x=pairVer(),s=stageOf('verdict');let h='<p class="muted">'+esc(s.what)+'</p>';
- h+='<div class="pair-acts"><button class="btn" id="pairVerdictRun" data-hint="control.pair_verdict_run">'+(x.record?'run the verdict again':'run Reveal\'s verdict')+'</button><span class="muted label">reveal.py align, the strict profile · 2 to 16 s</span></div>';
+ h+='<div class="pair-acts"><button class="btn" id="pairVerdictRun" data-hint="control.pair_verdict_run">'+(x.record?'run the verdict again':'run Reveal\'s verdict')+'</button><span class="muted label">reveal.py align, the strict profile · 2 to 18 s</span></div>';
  if(x.state==='none')return h+'<div class="empty">Optional and not run: it tells whether Reveal can align the two photos.</div>';
  if(x.state==='running')h+='<div class="empty">Reveal aligns B onto A.</div>';
- else if(x.state==='refused')h+='<div class="msg bad">'+chip('refused','bad')+' '+esc(x.reason||'')+'</div><p class="muted">Reveal refused this pair '+hintBtn('verdict.refused')+'</p>';
+ else if(x.state==='refused')h+='<div class="msg bad">'+chip('refused','bad')+' '+esc(x.reason||'')+hintBtn('verdict.refused')+'</div>';  // once, in its box (critique B, minor 5)
  else if(x.state!=='done')h+='<div class="msg bad">'+chip(x.state,stateClass(x.state))+' '+esc(x.reason||'')+'</div>';
  if(x.metrics){const mm=x.metrics;h+=(x.done_record!==x.record?'<p class="muted">From the earlier record '+esc(x.done_record)+'.</p>':'')+'<table class="pair-table">'+pairRow('method',esc(mm.method),'','verdict.method')+pairRow('inliers',pairNum(mm.inliers),'','verdict.inliers')+pairRow('rmse',pairNum(mm.rmse_px,2),'px','verdict.rmse_px')+pairRow('confidence',pairNum(mm.confidence),'of 100','verdict.confidence')+'<tr><td>passed'+hintBtn('verdict.passed')+'</td><td>'+chip(mm.passed?'passed':'below the strict bars',mm.passed?'ok':'bad','verdict.passed')+'</td></tr></table>';
   const st=x.stills||{};if(st.before||st.after_aligned)h+='<div class="pair-ab">'+(st.before?pairFigure(st.before,'before.jpg, A'):'')+(st.after_aligned?pairFigure(st.after_aligned,'after_aligned.jpg, B warped onto A'):'')+'</div><p class="muted">Full resolution '+hintBtn('verdict.stills')+'</p>';}
  return h;}
 function pairRender(){const v=S.view,s=stageOf('render');const warn=(s.warnings||[]).map(w=>'<p>'+chip(w.text,'bad',w.key)+'</p>').join('');
- if(!v.candidates.length)return '<p class="muted">'+esc(s.what)+'</p><div class="empty">No render yet. Set the knobs in the inspector, then render a draft (draft 480) or the full size (draft 0 at max_long 1920).</div>';
+ if(!v.candidates.length)return '<p class="muted">'+esc(s.what)+'</p><div class="empty">No render yet. Set the knobs in the inspector, then render a 480 px draft, or the full size at 1920 px.</div>';
  return warn+'<div id="viewerWrap"><div class="viewer"><div class="framewrap"><div class="frame" id="frameBox"></div></div><div class="vside" id="vside">'+candList()+'</div></div></div>';}
 // the crops a pair's skeptic takes (TRANSITIONS.md §12.13): the frames beside the endpoints, the mid frame, and the two
 // endpoint steps behind the edge ratio
@@ -88,7 +88,7 @@ function pairPlots(){const r=S.render;const steps=r.steps||[];const fl=r.flicker
  let s='<svg viewBox="0 0 '+W+' '+(H+48)+'" width="'+W+'" height="'+(H+48)+'" style="width:100%;height:auto" aria-label="the decoded step series with the report\'s flicker numbers">';
  s+='<line x1="'+x0+'" y1="'+y1+'" x2="'+x1+'" y2="'+y1+'" stroke="'+LINE+'"/><line x1="'+x0+'" y1="'+y0+'" x2="'+x0+'" y2="'+y1+'" stroke="'+LINE+'"/>';
  [0,maxv/2,maxv].forEach(x=>{s+=svgText(x0-4,yOf(x)+4,x.toFixed(3),{anchor:'end',mono:true});});
- s+=svgText(x0,12,'decoded step, 0..1 grey, after the encode');
+ s+=svgText(x0,12,'decoded step, in grey from 0 to 1, after the encode');
  s+='<line x1="'+x0+'" y1="'+yOf(0.12)+'" x2="'+x1+'" y2="'+yOf(0.12)+'" stroke="'+FAILED+'" stroke-dasharray="4 4" opacity=".8"/>'+svgText(x1,yOf(0.12)-3,'0.12 flicker max bar',{anchor:'end',fill:FAILED});
  if(fl.mean!=null)s+='<line x1="'+x0+'" y1="'+yOf(fl.mean)+'" x2="'+x1+'" y2="'+yOf(fl.mean)+'" stroke="'+MUTED+'" stroke-dasharray="1 3"><title>the report\'s flicker mean '+fl.mean+'</title></line>';
  if(fl.max!=null)s+='<line x1="'+x0+'" y1="'+yOf(fl.max)+'" x2="'+x1+'" y2="'+yOf(fl.max)+'" stroke="'+MUTED+'" stroke-dasharray="6 3"><title>the report\'s flicker max '+fl.max+'</title></line>';
@@ -108,7 +108,7 @@ function pairMeasures(r){const p=r.report||{},sp=p.spec||{};let h='<section><h3>
  return h;}
 
 // ------------------------------------------------------------------ the new-job form in the rail
-function pairFormHTML(){return '<div id="pairForm" class="pair-form" hidden><div class="label muted"><label for="pairFixture">fixture pair</label> '+hintBtn('control.pair_fixture')+'</div><select id="pairFixture" data-hint="control.pair_fixture"><option value="">two photos by path</option></select>'
+function pairFormHTML(){return '<div id="pairForm" class="pair-form" hidden><h3 class="formhead">new pair job</h3><div class="label muted"><label for="pairFixture">fixture pair</label> '+hintBtn('control.pair_fixture')+'</div><select id="pairFixture" data-hint="control.pair_fixture"><option value="">two photos by path</option></select>'
  +'<label class="label muted" for="pairA">photo A, the start</label><input id="pairA" data-hint="control.pair_photo_a" placeholder="fixtures/mismatch_3_S.jpg">'
  +'<label class="label muted" for="pairB">photo B, the finish</label><input id="pairB" data-hint="control.pair_photo_b" placeholder="fixtures/mismatch_3_F.jpg">'
  +'<label class="label muted" for="pairName">pair name</label><input id="pairName" data-hint="control.pair_name" placeholder="the fixture\'s or the two files\' names">'
@@ -117,14 +117,12 @@ async function pairFixtures(){const sel=$('#pairFixture');if(!sel||sel.dataset.l
 function pairFormSync(){const fx=$('#pairFixture').value;['#pairA','#pairB'].forEach(q=>{$(q).disabled=!!fx;});}
 function openPairForm(){let f=$('#pairForm');if(!f){$('#flowForms').insertAdjacentHTML('beforeend',pairFormHTML());f=$('#pairForm');
   $('#pairFixture').onchange=pairFormSync;$('#pairCancel').onclick=()=>{f.hidden=true;};
-  $('#pairGo').onclick=async()=>{const err=$('#pairErr');err.textContent='';const fx=$('#pairFixture').value,name=$('#pairName').value.trim();const body=fx?{flow:'pair',fixture:fx}:{flow:'pair',a:$('#pairA').value.trim(),b:$('#pairB').value.trim()};if(name)body.seq=name;
-   try{const r=await api('/api/jobs',body);f.hidden=true;await loadJobs();openJob(r.id);}catch(e){err.textContent=e.message;}};}
- $('#newForm').style.display='none';$('#adoptForm').style.display='none';f.hidden=false;pairFixtures();$('#pairFixture').focus();}
-// the loop's own forms hide this one, so one form shows at a time
-document.addEventListener('click',e=>{if(e.target.closest('#btnNew,#btnAdopt')){const f=$('#pairForm');if(f)f.hidden=true;}});
+  $('#pairGo').onclick=()=>busy($('#pairGo'),async()=>{const err=$('#pairErr');err.textContent='';const fx=$('#pairFixture').value,name=$('#pairName').value.trim();const body=fx?{flow:'pair',fixture:fx}:{flow:'pair',a:$('#pairA').value.trim(),b:$('#pairB').value.trim()};if(name)body.seq=name;
+   try{const r=await api('/api/jobs',body);f.hidden=true;await loadJobs();openJob(r.id);}catch(e){err.textContent=e.message;}});}
+ closeForms();f.hidden=false;pairFixtures();$('#pairFixture').focus();}
 
 // ------------------------------------------------------------------ the wiring after a panel is drawn
-function pairRun(sel,stage){const b=$(sel);if(!b)return;b.onclick=async()=>{b.disabled=true;try{const r=await api(pairBase()+'/stages/'+stage+'/run',{knobs:{}});setMsg('started '+r.record,'ok');await openJob(S.view.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');b.disabled=false;}};}
+function pairRun(sel,stage){const b=$(sel);if(!b)return;b.onclick=()=>busy(b,async()=>{try{const r=await api(pairBase()+'/stages/'+stage+'/run',{knobs:{}});setMsg('started '+r.record,'ok');await openJob(S.view.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}});}
 // the picks file of each graded round, fetched once per job and file (S.pairPicks keys them by job id and path)
 function pairPickKey(r){return S.view.job.id+'/'+r.grade.picks;}
 async function pairLoadPicks(){const rs=(S.view.rounds||[]).filter(r=>r.grade&&r.grade.picks);S.pairPicks=S.pairPicks||{};let fresh=false;for(const r of rs){const k=pairPickKey(r);if(k in S.pairPicks)continue;try{S.pairPicks[k]=await api(pairBase()+'/file/'+r.grade.picks);fresh=true;}catch(e){S.pairPicks[k]=null;}}if(fresh&&S.stage==='grades')renderPanel();}
@@ -133,13 +131,15 @@ function pairPicksOf(n){const v=S.view;const r=v.rounds.find(x=>x.n===n);const q
  const best_={};best_[v.job.seq]=best;return {date:new Date().toISOString(),page:v.job.id+' round '+n,best:best_,clips};}
 function wirePair(){const v=S.view,p=$('#panel');wireCands(p);p.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>showInViewer(b.dataset.show,b.dataset.label));
  if(S.stage==='relation')renderViewer();
+ // source B starts at the render's last frame, photo B, so a wipe at f 0 compares A with B (critique B, minor 7)
+ if(S.stage==='render'&&!S.vw.render)S.vw.render={cmp:'single',a:'frame',b:'k1',wipe:50,onion:50,ab:'A'};
  if(S.stage==='render'){if(!S.cand&&v.candidates.length){const full=v.candidates.filter(c=>c.kind==='full');const c=(full.length?full:v.candidates).slice().sort((a,b)=>a.mtime<b.mtime?1:-1)[0];selectCand(c.kind,c.name);}else if(S.cand)loadRender();}
  if(S.stage==='grades')pairLoadPicks();
  pairRun('#pairRelRun','relation');pairRun('#pairVerdictRun','verdict');
- const sk=$('#pairSkGo');if(sk)sk.onclick=async()=>{const names=[...document.querySelectorAll('.pairSkc:checked')].map(c=>c.value);const crops=v.candidates.filter(c=>c.kind==='full'&&names.includes(c.name)).map(pairCrops);try{const r=await api(pairBase()+'/requests/skeptic',{brief:$('#pairSkBrief').value,candidates:names,crops});setMsg('written '+r.file+'; the session lists it with reveal-studio requests','ok');await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}};
- const pg=$('#pairPgGo');if(pg)pg.onclick=async()=>{const notes={};document.querySelectorAll('.pairPgNote').forEach(i=>{if(i.value.trim())notes[i.dataset.name]=i.value.trim();});try{const r=await api(pairBase()+'/page',{title:$('#pairPgTitle').value,intro:$('#pairPgIntro').value,footer:$('#pairPgFooter').value,notes,override:$('#pairPgOverride').checked,variants:pageVariants()});setMsg('the page is written: record '+r.record+(r.override?' · '+r.override:''),'ok');await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}};
- p.querySelectorAll('.pairGrSave').forEach(b=>b.onclick=async()=>{const n=+b.dataset.round;const text=(document.querySelector('.pairWords[data-round="'+n+'"]')||{}).value||'';try{await api(pairBase()+'/picks',{round:n,picks:pairPicksOf(n),text});setMsg('round '+n+' graded: the picks file and his words are saved','ok');await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}});
- p.querySelectorAll('.pairGrSkip').forEach(b=>b.onclick=async()=>{const n=+b.dataset.round;try{await api(pairBase()+'/picks',{round:n,ungraded_by_his_word:true});await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}});}
+ const sk=$('#pairSkGo');if(sk)sk.onclick=()=>busy(sk,async()=>{const names=[...document.querySelectorAll('.pairSkc:checked')].map(c=>c.value);const crops=v.candidates.filter(c=>c.kind==='full'&&names.includes(c.name)).map(pairCrops);try{const r=await api(pairBase()+'/requests/skeptic',{brief:$('#pairSkBrief').value,candidates:names,crops});setMsg('written '+r.file+'; the session lists it with reveal-studio requests','ok');await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}});
+ const pg=$('#pairPgGo');if(pg)pg.onclick=()=>busy(pg,async()=>{const notes={};document.querySelectorAll('.pairPgNote').forEach(i=>{if(i.value.trim())notes[i.dataset.name]=i.value.trim();});try{const r=await api(pairBase()+'/page',{title:$('#pairPgTitle').value,intro:$('#pairPgIntro').value,footer:$('#pairPgFooter').value,notes,override:$('#pairPgOverride').checked,variants:pageVariants()});setMsg('the page is written: record '+r.record+(r.override?' · '+r.override:''),'ok');await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}});
+ p.querySelectorAll('.pairGrSave').forEach(b=>b.onclick=()=>busy(b,async()=>{const n=+b.dataset.round;const text=(document.querySelector('.pairWords[data-round="'+n+'"]')||{}).value||'';try{await api(pairBase()+'/picks',{round:n,picks:pairPicksOf(n),text});setMsg('round '+n+' graded: the picks file and his words are saved','ok');await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}}));
+ p.querySelectorAll('.pairGrSkip').forEach(b=>b.onclick=()=>busy(b,async()=>{const n=+b.dataset.round;try{await api(pairBase()+'/picks',{round:n,ungraded_by_his_word:true});await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}}));}
 
 Object.assign(flowEntry('pair'),{
  panels:{import:pairImport,relation:pairRelation,verdict:pairVerdict,render:pairRender,skeptic:pairSkeptic,page:pairPage,grades:pairGrades},

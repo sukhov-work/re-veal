@@ -21,7 +21,7 @@ VERDICT_STAGE: dict[str, Any] = {
     "script": "reveal",
     "terminal": "metrics.json",
     "identity": ["metrics.json"],
-    "what": "Reveal's strict alignment of B onto A, run on demand. Exit 2 with a FAILED: line is a refusal: the photos share too little detail to align. On success it writes metrics.json and two full-resolution aligned stills, the align flow's outputs.",
+    "what": "Reveal's strict alignment of B onto A, run on demand. A refusal ends with a FAILED: line, which says why: most often the photos share too little detail to align. On success it writes metrics.json and two full-resolution aligned stills, the align flow's outputs.",
     "knobs": [],
 }
 

@@ -31,7 +31,7 @@ async function api(path,body,method){let r;try{r=await fetch(path,body?{method:m
 function typing(el){const a=document.activeElement;return !!(el&&a&&el.contains(a)&&a.matches('input,textarea,select'));}
 // The focus across a rebuild by innerHTML (Fable review F3): the focused element's identity inside root (its id, else
 // its tag, first class and data attributes, and its place among the matches), and its restore on the rebuilt element.
-const FOCUS_SKIP=['data-v','data-src'];
+const FOCUS_SKIP=['data-v','data-src','data-busy'];
 function focusKey(root){const a=document.activeElement;if(!root||!a||a===document.body||!root.contains(a))return null;
  if(a.id)return {sel:'#'+CSS.escape(a.id),i:0};
  const sel=a.tagName.toLowerCase()+(a.classList.length?'.'+CSS.escape(a.classList[0]):'')+[...a.attributes].filter(x=>x.name.startsWith('data-')&&!FOCUS_SKIP.includes(x.name)).map(x=>'['+x.name+'="'+CSS.escape(x.value)+'"]').join('');
@@ -40,6 +40,11 @@ function restoreFocus(root,k){if(!k||!root)return false;const all=root.querySele
 // A focus the page puts back after a rebuild opens no hint: a hint follows the owner's own moves (Tab, the arrows).
 let quietFocus=false;
 function focusQuiet(el){if(!el||document.activeElement===el)return;quietFocus=true;try{el.focus({preventScroll:true});}finally{quietFocus=false;}}
+// A button inert while its request runs (DESIGN.md Buttons, Loading; critique B, P2 3; backlog T106): "working…" in
+// place of its label until the request settles, and a second press sends nothing. It keeps the keyboard focus (a
+// disabled button would drop it); its label comes back when it is still on the page, since a rebuild draws a new one.
+async function busy(btn,fn){if(!btn||btn.dataset.busy)return;const t=btn.textContent;btn.dataset.busy='1';btn.setAttribute('aria-busy','true');btn.textContent='working…';
+ try{return await fn();}finally{if(btn.isConnected){btn.textContent=t;delete btn.dataset.busy;btn.removeAttribute('aria-busy');}}}
 function setMsg(text,cls){S.msg={text,cls};const m=$('#msg');if(m){m.className='msg '+(cls||'');m.textContent=text;m.style.display=text?'':'none';}}
 // hints: one popover, from the registry's table
 const pop=$('#pop');

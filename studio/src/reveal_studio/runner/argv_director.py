@@ -255,8 +255,6 @@ def _repo_file(settings: Settings, given: str, what: str) -> Path:
 def argv_page(
     settings: Settings, flags: ScriptFlags, stage: Json, d: Path, job: Json, knobs: Json, rec_dir: Path
 ) -> Argv:
-    if knobs.get("variants"):
-        raise StudioError("director_page.py lists every full render of run/ and takes no list of variants", 400)
     root = job_root(settings, job)
     full = [c for c in candidates(settings, d, job) if c["kind"] == "full"]
     names = [c["name"] for c in full]

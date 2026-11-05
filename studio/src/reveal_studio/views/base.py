@@ -15,13 +15,14 @@ from pathlib import Path
 from typing import Any
 
 from reveal_studio.config import Settings
-from reveal_studio.fs import Json, inside
+from reveal_studio.fs import Json, inside, read_json
 from reveal_studio.jobs.candidates import candidate, candidates, requests_of, rounds
 from reveal_studio.jobs.grades import owner_frames
 from reveal_studio.jobs.plans import plans_of
 from reveal_studio.jobs.records import progress_of, records
 from reveal_studio.jobs.store import job_root
 from reveal_studio.media.pictures import frames_dir
+from reveal_studio.registry.schema import VERDICTS
 
 
 @dataclass
@@ -119,6 +120,23 @@ def base_tile(d: Path, s: Json, hist: list[Json]) -> Json:
         if latest["state"] == "running":
             v["progress"] = progress_of(d / "stages" / latest["id"])
     return v
+
+
+def skeptic_state(settings: Settings, req: Json) -> tuple[str, str]:
+    """The skeptic tile's state and detail for a two-photo flow's latest request: waiting, answered, or answered with
+    no verdict in the answer, which leaves every render unjudged and the page gated (critique B, minor 12: the tile
+    read a green "answered" over three unjudged renders). The parenthesis keeps the chip's hint chip.answered."""
+    if not req["answered"]:
+        return "waiting", f"{req['name']} · {req['age_s']} s old"
+    ans = read_json(settings.root / req["answer"]) if req.get("answer") else None
+    n = sum(
+        1
+        for v in ((ans or {}).get("candidates") or {}).values()
+        if isinstance(v, dict) and v.get("verdict") in VERDICTS
+    )
+    if n:
+        return "answered", f"{req['name']} answered"
+    return "answered (0 verdicts)", f"{req['name']} answered with no verdict"
 
 
 def attempt_note(rec: Json) -> str:

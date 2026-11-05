@@ -19,12 +19,14 @@
     <ul id="jobs"></ul>
     <div class="new"><span id="newJobs"></span> <button class="btn ghost" id="btnAdopt" data-hint="control.adopt">adopt a run folder…</button></div>
     <div id="newForm" style="display:none;padding:8px 16px 0">
+      <h3 class="formhead">new loop job</h3>
       <div class="label muted"><label for="newFolder">folder of JPGs</label> <button class="hint" data-hint="control.new_job" tabindex="-1" aria-label="about new jobs">?</button></div><input id="newFolder" data-hint="control.new_job" style="width:100%" placeholder="/Users/…/angel-portrait">
       <label class="label muted" for="newSeq" style="display:block;margin-top:6px">sequence name</label><input id="newSeq" data-hint="control.new_job" style="width:100%" placeholder="angel">
       <div style="margin-top:6px"><button class="btn primary" id="newGo" data-hint="control.new_job">create</button> <button class="btn ghost" id="newCancel" data-hint="control.new_job">cancel</button></div>
       <div id="newErr" style="color:var(--failed);font-size:.75rem;margin-top:6px"></div>
     </div>
     <div id="adoptForm" style="display:none;padding:8px 16px 0">
+      <h3 class="formhead">adopt a loop run folder</h3>
       <div class="label muted"><label for="adoptRoot">run folder under benchmarks/runs</label> <button class="hint" data-hint="control.adopt" tabindex="-1" aria-label="about adopting a run folder">?</button></div><input id="adoptRoot" data-hint="control.adopt" style="width:100%" placeholder="benchmarks/runs/2026-11-04/angel">
       <label class="label muted" for="adoptSeq" style="display:block;margin-top:6px">sequence (the folder under in/)</label><input id="adoptSeq" data-hint="control.adopt" style="width:100%" placeholder="angel">
       <div style="margin-top:6px"><button class="btn primary" id="adoptGo" data-hint="control.adopt">adopt</button> <button class="btn ghost" id="adoptCancel" data-hint="control.adopt">cancel</button></div>

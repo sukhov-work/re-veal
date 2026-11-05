@@ -399,11 +399,14 @@ def _digest(obj: Any) -> str:
 # the two keys the slice added, the hints without its two chips, the plan schema and the rulings. Phase B's repaint leg
 # moved two digests on purpose: the hints (290 to 294: its four keys, and repaint named in plan.timeline.method's
 # sentence; then the main thread's five flow-neutral rewordings of 2026-11-05: region.viewer, chip.tag, control.render,
-# control.candidate, chip.above_6, digest 164bc46d1a2b4bb2)
+# control.candidate, chip.above_6, digest 164bc46d1a2b4bb2; then the phase B fix round's copy pass, ten rows split
+# or cleaned with their facts kept: region.inspector, region.viewer, region.axis, control.page, control.render and
+# prep.windows_jpg under 40 words a sentence, plan.timeline.slide.mode and .fill split at their semicolons, chip.within
+# and chip.past bar without the inline "(loops.md §6)"; digest 9af43c6c9d8c8c39)
 # sentence) and the schema (151 to 155 entries, digest d9bdc86dd439f099 before); the stages and the rulings held.
 LOOP_REGISTRY_2026_11_05 = {
     "stages": "83b7f497d40f9380",
-    "hints": "164bc46d1a2b4bb2",
+    "hints": "9af43c6c9d8c8c39",
     "hint_count": 294,
     "schema": "28130182bcbb2232",
     "schema_rows": 155,

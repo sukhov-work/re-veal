@@ -340,7 +340,7 @@ def test_a_director_job_without_tables_or_mattes_still_opens(settings: Settings,
     ("pair", "code", "text"),
     [
         ("mismatch_7", 400, "no plan under scripts/research/plans/ names the pair mismatch_7"),
-        ("", 400, "a director job names its pair"),
+        ("", 400, "choose a pair"),  # the critique's clarify pass: the refusal names the missing choice
         ("bad name", 400, "a director job names its pair"),
     ],
 )

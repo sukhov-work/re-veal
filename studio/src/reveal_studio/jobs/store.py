@@ -367,7 +367,9 @@ def create_director_job(settings: Settings, pair: str | None) -> Json:
     """A director job for a fixture pair that a director plan names: the two photos linked as records (the renderer
     reads fixtures/ by the plan's pair), the layer table and the matte count of each photo, and the helper files the
     pair's plans name, hashed. A pair without a plan is refused before any folder is made."""
-    if not pair or not NAME_RE.match(pair):
+    if not pair:
+        raise StudioError("choose a pair: a director job starts from a fixture pair that a plan names", 400)
+    if not NAME_RE.match(pair):
         raise StudioError("a director job names its pair: letters, digits, dash and underscore", 400)
     plans = director_plans_of(settings, pair)
     if not plans:

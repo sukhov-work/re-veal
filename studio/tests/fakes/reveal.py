@@ -6,7 +6,8 @@ It writes DIR/before.jpg and DIR/after_aligned.jpg (copies of A and B), then DIR
 writes its metrics last: {"metrics": {"method": "sift", "inliers": 481, "rmse_px": 0.79, "confidence": 94,
 "passed": true}} (the first real pair's numbers on this laptop, HANDOFF.md §11). The environment steers it:
 FAKE_SLOW="align=2" spends that many seconds before writing, FAKE_REFUSE="align" prints a FAILED: line and exits 2
-with nothing written, FAKE_FAIL="align" exits 1 after a traceback line. In a tmp root it also stands for the root's
+with no metrics written (its work folder DIR/jobs/fake/ made first, as reveal.py align makes DIR/jobs/<id>/ before it
+refuses), FAKE_FAIL="align" exits 1 after a traceback line. In a tmp root it also stands for the root's
 marker file reveal.py.
 """
 
@@ -35,9 +36,9 @@ def steer(name: str) -> None:
 
 
 def cmd_align(a: argparse.Namespace) -> None:
-    steer("align")
     out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
+    (out / "jobs" / "fake").mkdir(parents=True, exist_ok=True)
+    steer("align")
     shutil.copyfile(a.before, out / "before.jpg")
     shutil.copyfile(a.after, out / "after_aligned.jpg")
     metrics = {"metrics": {"method": "sift", "inliers": 481, "rmse_px": 0.79, "confidence": 94, "passed": True}}

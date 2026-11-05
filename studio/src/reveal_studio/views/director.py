@@ -31,7 +31,7 @@ from reveal_studio.jobs.records import records
 from reveal_studio.jobs.store import fixture_photos
 from reveal_studio.media.overlays import matte_dir, photo_of, step_series, table_dir
 from reveal_studio.registry.director import GLOBAL_KEYS, SET_KEYS, TRANSFORM_KEYS
-from reveal_studio.views.base import TileContext, TileFn, attempt_note, base_render_view
+from reveal_studio.views.base import TileContext, TileFn, attempt_note, base_render_view, skeptic_state
 
 DEFAULT_FPS = 30
 """The playback rate when neither the terminal file nor the record names one: director clips run at 30 fps
@@ -610,6 +610,7 @@ def tile_verdict(ctx: TileContext, v: Json, latest: Json | None) -> None:
         v["detail"] = "aligned" + (": " + ", ".join(bits) if bits else "")
     elif latest["state"] == "refused":
         v["detail"] = "refused: the photos share too little detail to align"
+        v["reason"] = None  # the panel prints the refusal once, in its box (critique B, minor 5)
 
 
 def tile_resolve(ctx: TileContext, v: Json, latest: Json | None) -> None:
@@ -633,7 +634,9 @@ def tile_resolve(ctx: TileContext, v: Json, latest: Json | None) -> None:
 def tile_plan(ctx: TileContext, v: Json, latest: Json | None) -> None:
     frozen = pair_plans(ctx.settings, str(ctx.job.get("pair")))
     saved = ctx.plans
-    v["state"] = "saved" if saved else "none"
+    n = len(frozen) + len(saved)  # the chip counts the plans the panel offers (critique B, minor 13: it read "none")
+    v["state"] = f"{n} plan" + ("s" if n != 1 else "")
+    v["chip_key"] = "director.plans"
     v["detail"] = f"{len(frozen)} frozen plan" + ("s" if len(frozen) != 1 else "") + f"; {len(saved)} saved in this job"
 
 
@@ -658,9 +661,7 @@ def tile_render(ctx: TileContext, v: Json, latest: Json | None) -> None:
 def tile_skeptic(ctx: TileContext, v: Json, latest: Json | None) -> None:
     sk = [r for r in ctx.reqs if r["kind"] == "skeptic"]
     if sk:
-        last = sk[-1]
-        v["state"] = "answered" if last["answered"] else "waiting"
-        v["detail"] = f"{last['name']} answered" if last["answered"] else f"{last['name']} · {last['age_s']} s old"
+        v["state"], v["detail"] = skeptic_state(ctx.settings, sk[-1])
     else:
         v["detail"] = "no request yet"
     v["verdicts"] = verdicts(ctx.d)

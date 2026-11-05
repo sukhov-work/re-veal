@@ -202,8 +202,18 @@ def test_the_render_and_resolve_knobs_carry_the_renderers_defaults_and_flags() -
     resolve = {k["key"]: k["flag"] for k in stage_def("director", "resolve")["knobs"]}
     assert resolve == {"plan": None, "concept": "--concept", "max_long": "--max-long", "set": "--set"}
     page = [k["key"] for k in stage_def("director", "page")["knobs"]]
-    assert page == ["title", "key", "head", "keyframes", "variants"]
+    assert page == ["title", "key", "head", "keyframes"]  # director_page.py takes no list of renders (Fable F8)
     assert all(k["range"] is None for s in director.DIRECTOR_STAGES for k in s["knobs"])  # none is stated
+
+
+def test_every_director_measure_hint_names_the_line_it_reads() -> None:
+    """The hints of the resolve's and the render's numbers (anchors.json, info.json, the resolve panel) each name the
+    renderer's line they read (Fable review F9: info.step_second, info.step_last and resolve.front_elements had none).
+    Mutation: a measure row without its source turns this red."""
+    rows = {k: h for k, h in DIRECTOR_HINTS.items() if k.split(".")[0] in ("info", "resolve", "anchors")}
+    assert len(rows) > 40 and [k for k, h in rows.items() if not h.get("source")] == []
+    assert DIRECTOR_HINTS["info.step_second"]["source"] == "director_render.py:2014, 2052"
+    assert DIRECTOR_HINTS["resolve.front_elements"]["source"] == "director_render.py:713-731"
 
 
 def test_the_set_table_has_the_four_tables_of_the_research() -> None:
@@ -235,7 +245,7 @@ def test_the_director_hints_use_the_flows_prefixes() -> None:
         k for k in DIRECTOR_HINTS if not k.startswith(prefixes)
     ]
     assert all(HINTS[k] is DIRECTOR_HINTS[k] for k in DIRECTOR_HINTS)
-    assert len(DIRECTOR_HINTS) == 192
+    assert len(DIRECTOR_HINTS) == 196  # four rows of the phase B fix round: plans, next_knobs, planner_notes, set_group
     keys = {"pair", "concept", "canvas", "frames", "anchors", "layers", "info", "camera", "renderer_md5"}
     assert {k.split(".", 1)[1] for k in DIRECTOR_HINTS if k.startswith("anchors.")} == keys
     ro = DIRECTOR_HINTS["set.tr.edge"]["what"]
@@ -473,8 +483,7 @@ def test_the_page_runs_in_place_behind_the_gate_and_keeps_the_previous_page(
         name: {"look": "the pane at t 0.6", "faults": "a smear over the forest"}
     }
     assert "--head" not in rec2["argv"] and "round two" in (d / "run" / "index.html").read_text()
-    with pytest.raises(StudioError, match="takes no list of variants"):
-        runner.start_stage(d, j, stage_def("director", "page"), {"variants": [name]})
+    assert "variants" not in rec["knobs"] and "variants" not in rec2["knobs"]  # build_page passes none (Fable F8)
 
 
 # ---------------------------------------------------------------- the views
@@ -497,6 +506,10 @@ def test_a_director_jobs_view_carries_its_keys_and_tiles(
     assert tiles["import"]["thumb"] == f"/api/jobs/{j['id']}/thumb/raw/0"
     assert tiles["import"]["detail"] == "A 3 el. · 2 mattes; B 3 el. · 0 mattes"
     assert (tiles["resolve"]["detail"], tiles["verdict"]["detail"]) == ("not run", "optional, not run")
+    # the plan tile's chip counts the plans the panel offers, with its own hint key (critique B, minor 13: it read
+    # "none" beside five frozen plans). Mutation: the old "saved"/"none" state turns this red.
+    assert (tiles["plan"]["state"], tiles["plan"]["chip_key"]) == ("2 plans", "director.plans")
+    assert tiles["plan"]["detail"] == "2 frozen plans; 0 saved in this job"
     rec = run(runner, d, j, "resolve", {"plan": f"frozen:{R12}", "concept": "c1"})
     run(runner, d, j, "render", DRAFT)
     v = job_view(runner, d, j)
@@ -670,3 +683,18 @@ def test_a_director_draft_marks_a_frame_and_bounds_it_by_its_frames(
     ).is_file()
     with pytest.raises(StudioError, match=r"outside 0\.\.89"):
         mark_frame(settings, d, j, {"kind": "draft", "name": name, "frame": 90})
+
+
+def test_a_refused_verdict_shows_its_reason_once_and_keeps_no_part_folder(
+    settings: Settings, runner: Runner, djob: tuple[Path, Json], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shared verdict on a director job, refused: the tile's detail names the refusal, the tile carries no reason
+    for the panel head (the panel's box prints it: critique B, minor 5), and the work folder goes (the drive's defect
+    7). Mutation: the tile keeping the record's reason turns this red."""
+    d, j = djob
+    monkeypatch.setenv("FAKE_REFUSE", "align")
+    rec = wait_record(d, runner.start_stage(d, j, stage_def("director", "verdict"), {})["id"])
+    assert rec["state"] == "refused" and not (d / "verdict.part").exists()
+    t = {t["name"]: t for t in job_view(runner, d, j)["stages"]}["verdict"]
+    assert (t["state"], t["reason"]) == ("refused", None)
+    assert t["detail"] == "refused: the photos share too little detail to align"

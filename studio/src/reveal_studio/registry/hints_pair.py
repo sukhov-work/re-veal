@@ -42,7 +42,7 @@ HINTS: dict[str, dict[str, Any]] = {
         source=B,
     ),
     "control.pair_verdict_run": H(
-        "Runs reveal.py align on A and B, the strict reshot profile (2 to 16 s per pair). It writes metrics.json and two aligned stills, or exits 2 with a FAILED: line when the photos share too little detail.",
+        "Runs reveal.py align on A and B with the strict reshot profile, in 2 to 18 s per pair; mismatch_3 took 9.0 to 17.5 s on 2026-11-05. It writes metrics.json and two aligned stills, or stops with a FAILED: line when the photos share too little detail.",
         stage="verdict",
         source=B,
     ),
@@ -140,7 +140,7 @@ HINTS: dict[str, dict[str, Any]] = {
     ),
     # Reveal's verdict
     "verdict.refused": H(
-        "reveal.py exited 2 with this FAILED: line and wrote no metrics.json. A refusal usually means the photos share too little detail to align; a decode failure also exits 2, and the line's text tells the two apart.",
+        "reveal.py refused the pair with this FAILED: line and wrote no metrics.json. A refusal usually means the photos share too little detail to align. A photo it cannot decode is refused the same way, and the line's text tells the two apart.",
         stage="verdict",
         source="reveal.py:2517-2534; STUDIO.md §7",
     ),
@@ -240,11 +240,11 @@ HINTS: dict[str, dict[str, Any]] = {
         source="harness checks 21 and 31; TRANSITIONS.md:241, 247",
     ),
     "report.flicker_max": H(
-        "The largest adjacent-frame change on 0..1 grey over the 480 px proxies. The bar is below 0.12, about 31 grey levels.",
+        "The largest adjacent-frame change, in grey from 0 to 1, over the 480 px proxies. The bar is below 0.12, about 31 grey levels.",
         source="harness check 21",
     ),
     "report.flicker_mean": H(
-        "The mean adjacent-frame change on 0..1 grey over the 480 px proxies, before the encode. No bar is recorded.",
+        "The mean adjacent-frame change, in grey from 0 to 1, over the 480 px proxies, before the encode. No bar is recorded.",
         source=T + "; transitions.py:1156-1164",
     ),
     "report.spikiness": H(
@@ -252,7 +252,7 @@ HINTS: dict[str, dict[str, Any]] = {
         source=T + "; transitions.py:1156-1164",
     ),
     "report.warping_error": H(
-        "The mean absolute difference after warping each next frame back by DIS flow, 0..1 grey. No fixed bar: a coherent pan reads below 0.03 and unrelated frames above 0.1. Compare a pair against itself.",
+        "The mean absolute difference after warping each next frame back by DIS flow, in grey from 0 to 1. No fixed bar: a coherent pan reads below 0.03 and unrelated frames above 0.1. Compare a pair against itself.",
         source="harness check 26; transitions.py:1116, 1134",
     ),
     "report.feat_floor": H(

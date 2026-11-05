@@ -55,6 +55,17 @@ def _remove(p: Path) -> None:
         p.unlink()
 
 
+def _written_since(p: Path, term: str | None, rec: Json) -> bool:
+    """Whether the stage's terminal file (`p` itself for a file, else `p/term`) was written after the record started:
+    a run that finished, not an output an earlier run left (an in-place page, a relation or a prep that a rerun
+    replaces)."""
+    f = p / term if (p.is_dir() and term) else p
+    try:
+        return f.is_file() and f.stat().st_mtime >= dt.datetime.fromisoformat(rec["started"]).timestamp()
+    except (OSError, ValueError, KeyError):
+        return False
+
+
 class Runner:
     """Holds the children this process started (`procs`), the records re-attached after a restart (`watching`) and
     the lock every record write takes (`state_lock`)."""
@@ -174,6 +185,8 @@ class Runner:
             rec: Json | None = read_json(rec_dir / "stage.json")
             if not rec or rec["state"] not in ("running", "cancelling"):
                 return rec
+            if rc is None and (rec_dir / "done").exists():
+                return rec  # another server wrote the done marker and writes the record next (backlog T88)
             out_part = (root / rec["out_part"]) if rec.get("out_part") else None
             out_final = (root / rec["out_final"]) if rec.get("out_final") else None
             term = rec.get("terminal")
@@ -181,8 +194,10 @@ class Runner:
             if out_part is not None and out_part.exists():
                 have = (out_part / term).exists() if out_part.is_dir() else True
             in_place = out_part is not None and out_part == out_final
-            if in_place and rc is None:
-                have = False  # an in-place file cannot say whether the restarted run finished: the record is lost
+            if in_place and rc is None and out_final is not None:
+                # after a restart an in-place file was written by this run when it is newer than the record's start
+                # (Fable review F5): done, and a page opens its round; an older file is the previous run's
+                have = _written_since(out_final, term, rec)
             lines = [ln for ln in tail_lines(rec_dir / "log.txt", 60) if ln.strip()]
             failed_line = next((ln for ln in reversed(lines) if ln.startswith("FAILED:")), None)
             if rec["state"] == "cancelling":
@@ -228,6 +243,16 @@ class Runner:
             elif failed_line and (rc == 2 or rc is None):
                 rec["state"] = "refused"
                 rec["reason"] = failed_line
+                if (
+                    out_part is not None
+                    and out_part.exists()
+                    and ".part" in out_part.name
+                    and inside(out_part, self.settings.runs)
+                ):  # a refusal's work folder (reveal.py align writes jobs/<id>/ under --out) goes, as a cancel's does
+                    _remove(out_part)
+                    rec["note"] = "the .part folder was removed"
+            elif rc is None and self._finished_elsewhere(rec_dir, rec, out_final, term, in_place):
+                return read_json(rec_dir / "stage.json") or rec  # that server's record stands; nothing is written here
             elif rc is None:
                 rec["state"] = "lost"
                 rec["reason"] = "the server restarted while the stage ran and no terminal file was found: run it again"
@@ -297,6 +322,19 @@ class Runner:
         if rec["state"] == "done":
             self.after_done(d, rec)
         return rec
+
+    @staticmethod
+    def _finished_elsewhere(rec_dir: Path, rec: Json, out_final: Path | None, term: str | None, in_place: bool) -> bool:
+        """Before a gone process's record is marked lost: whether another server finalizes it (the phase B drive's
+        defect 2, backlog T88: two servers watched one render, and the second wrote "lost" 2 ms after the first wrote
+        "done"; the state lock holds inside one process only). Its done marker, the terminal file it renamed into
+        out_final after this record started, or a terminal state on disk says so."""
+        if (rec_dir / "done").exists():
+            return True
+        if not in_place and out_final is not None and out_final.exists() and _written_since(out_final, term, rec):
+            return True
+        disk = read_json(rec_dir / "stage.json") or {}
+        return disk.get("state") not in (None, "running", "cancelling")
 
     def after_done(self, d: Path, rec: Json) -> None:
         """What a finished stage adds to the job: a page opens a round (jobs/rounds.py: page.md5 beside the page)."""

@@ -24,7 +24,8 @@ def open_round(
 ) -> Json:
     """Opens the next round of job folder `d` on the written `page`: page.md5 beside the page, a copy of the page and
     rounds/<n>/round.json naming the candidates the page lists (`names`), the variants asked for ([] = every full
-    render in name order), the record that wrote it (None for a page the studio wrote) and the override's text."""
+    render in name order), the record that wrote it (a script's page record, or the builtin page record the pair's
+    writer makes; None only when no record exists) and the override's text."""
     md5v = md5_file(page)
     (page.parent / "page.md5").write_text(md5v + "\n")
     n = len(rounds(d)) + 1

@@ -7,7 +7,11 @@
 .d-side.a{color:var(--pa)}.d-side.b{color:var(--pb)}
 .d-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
 .d-acts .muted{font-size:.75rem;max-width:80ch;overflow-wrap:anywhere}
-.d-prose{max-width:75ch}
+.d-prose,#dBody p.d-prose{max-width:50ch}
+/* a director panel's sentence and the knob table's sentences stay under the detector's 80 characters a line */
+#dBody > p.muted{max-width:54ch}
+.d-what{display:block;max-width:56ch}
+.d-why{margin-top:16px}
 /* the import: the photos with their overlays stacked, the element tables beside each other */
 .d-ovctl{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-bottom:8px}
 .d-ovctl input[type=range]{width:120px;vertical-align:middle;accent-color:var(--amber)}
@@ -23,7 +27,6 @@
 .d-scroll table{width:100%}
 .d-el{cursor:pointer}
 .d-el.sel td{background:var(--raised)}
-.d-el.sel td:first-child{box-shadow:inset 2px 0 0 var(--amber)}
 .d-el:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
 /* the resolve: the two canvases with the anchors and the quad drawn over them */
 .d-canvases{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
@@ -55,8 +58,14 @@
 .d-bar:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .d-ms{display:flex;gap:8px 16px;flex-wrap:wrap;font-size:.8125rem}
 .d-ms>span{display:inline-flex;gap:8px;align-items:center}
+/* both tables fit their panel at 1440×900 (the drive's defect 3: the knob table ran 910 px in an 832 px panel):
+   fixed columns, long keys and values wrap */
+.d-knobs{width:100%;table-layout:fixed}
+.d-knobs th:nth-child(1){width:20%}.d-knobs th:nth-child(2){width:18%}.d-knobs th:nth-child(3){width:11%}.d-knobs th:nth-child(4){width:10%}.d-knobs th:nth-child(5){width:136px}
+.d-knobs td,.d-set td{overflow-wrap:anywhere}
 .d-knobs td input:not([type=checkbox]){width:120px}
-.d-set{width:100%;margin:4px 0 8px}
+.d-set{width:100%;margin:4px 0 8px;table-layout:fixed}
+.d-set th:nth-child(1){width:48px}.d-set th:nth-child(2){width:28%}.d-set th:nth-child(3){width:16%}.d-set th:nth-child(4){width:166px}
 .d-set td input:not([type=checkbox]),.d-set td select{width:150px}
 .d-set .d-when{font-size:.75rem;max-width:44ch}
 tr.d-off td{color:var(--faint)}
@@ -66,6 +75,29 @@ tr.d-changed td:nth-child(2){color:var(--amber);font-weight:600}
 .panel details summary{cursor:pointer;color:var(--muted)}
 .panel details summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 #dExtra{min-height:64px;max-width:80ch}
+.d-ask{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* the render's next-render controls in the viewer's side column (critique B, P2 4) */
+.d-nextctl{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+.d-ctlgrid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 8px;align-items:center}
+.d-ctlgrid select,.d-ctlgrid input{width:100%;min-width:0;max-width:none}
+.d-setline{font-size:.75rem;overflow-wrap:anywhere;margin:6px 0 0}
+.d-alone{max-width:440px}
+/* the plots: the title with its unit and its "?" above each one, aligned with the axis at x 40 */
+.d-plot{margin-top:6px}
+.d-ptitle{display:flex;align-items:center;gap:2px;margin-left:40px;color:var(--text)}
+/* the inspector: the measures in two rows each, the read-only knobs the panel sends */
+.d-meas{width:100%;table-layout:fixed}
+.d-meas td{overflow-wrap:anywhere}
+.d-meas td.num{width:42%}
+.d-meas tr.d-m1 td{border-bottom:0;padding-bottom:0}
+.d-meas tr.d-m2 td{font-size:.75rem;padding-top:2px}
+.d-next{table-layout:fixed}
+.d-next td{overflow-wrap:anywhere}
+.d-next td:first-child{width:38%;color:var(--muted)}
+.d-setro{font-size:.75rem;overflow-wrap:anywhere}
+/* a graded round's picks fit its box: fixed columns, the names and notes wrap */
+.d-picks table{width:100%;table-layout:fixed}
+.d-picks th,.d-picks td{overflow-wrap:anywhere}
 /* the page and the grades */
 .d-note{display:grid;grid-template-columns:minmax(0,1fr) 1fr 1fr;gap:6px;margin-top:4px;align-items:center}
 .d-note .data{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

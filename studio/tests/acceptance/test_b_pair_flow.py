@@ -8,9 +8,10 @@ rerun reproduces both and says unchanged), Reveal's verdict refused with its FAI
 preset at 1 s (the relation's own spec, so its mp4 md5 is the relation's), a full render at 1920 and a second one under
 another name with the same md5 (harness check 33), the render view's frames, tags, step series and bars, a skeptic
 request the test answers itself, the page behind the gate with an override, a grade in the picks shape, and a server
-restart during a render that the new server re-attaches. Every `serve` start reconciles the running records of every
-job of the tree (backlog T88), so before each start the test waits until no other job has a running record (it skips
-after 5 minutes).
+restart during a render that the new server re-attaches. The acceptance driver of phase B added the fixture list and
+the request's listing by `reveal-studio requests` before and after its answer (b_acceptance.md, 2026-11-05). Every
+`serve` start reconciles the running records of every job of the tree (backlog T88), so before each start the test
+waits until no other job has a running record (it skips after 5 minutes).
 
 It skips when the repo root, the main venv's python, transitions.py at md5 7ef5dcae070c223e360c9c2e533df6c1 (the
 tool the recorded md5s belong to), reveal.py or the two photos at their recorded sha256s are absent. Run it alone:
@@ -23,6 +24,8 @@ from __future__ import annotations
 import contextlib
 import os
 import signal
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +92,18 @@ def test_the_pair_flow_on_mismatch_3(settings: Settings, tmp_path: Path) -> None
         assert (job["seq"], [i["sha256"] for i in job["inputs"]]) == (PAIR, list(PHOTOS.values()))
         assert [os.readlink(s.root / i["link"]) for i in job["inputs"]] == [str(p) for p in photos]  # linked
         lines.append(f"job {jid}: A and B linked under raw/{PAIR}/")
+
+        # the fixture picker's list (GET /api/fixtures, b_acceptance.md, 2026-11-05): every <name>_S.<ext> with a
+        # <name>_F.<ext> under fixtures/, whatever the two extensions (mismatch_7 is .jpg and .png, the fabra pairs
+        # .heic); red if the scan reads one extension only or drops a pair
+        code, fx, _ = client.get("/api/fixtures")
+        on_disk = {q.name.rsplit("_S.", 1)[0] for q in s.fixtures.glob("*_S.*")} & {
+            q.name.rsplit("_F.", 1)[0] for q in s.fixtures.glob("*_F.*")
+        }
+        assert code == 200 and {f["name"] for f in fx} == on_disk, (code, sorted(on_disk))
+        mine = next(f for f in fx if f["name"] == PAIR)
+        assert (mine["A"]["name"], mine["B"]["name"]) == (f"{PAIR}_S.jpg", f"{PAIR}_F.jpg")
+        assert (mine["A"]["bytes"], mine["B"]["bytes"]) == tuple(p.stat().st_size for p in photos)
 
         # the relation; red if its argv drifts from --max-long 480 --seconds 1, the view reads another file, or the
         # runner hashes another script than the record's argv[1]
@@ -194,11 +209,18 @@ def test_the_pair_flow_on_mismatch_3(settings: Settings, tmp_path: Path) -> None
         )
         assert code == 201, req
         assert read_json(s.root / req["file"])["crops"] == crops
+        # the request is listed by `reveal-studio requests` (STUDIO.md §9 row "B (continued)", b_acceptance.md) until
+        # its answer exists; red if the CLI's scan of open requests skips a pair job
+        cli = [sys.executable, "-m", "reveal_studio", "requests", "--root", str(s.root)]
+        out = subprocess.run(cli, capture_output=True, text=True, timeout=60).stdout
+        assert any(req["file"] in ln for ln in out.splitlines()), out
         write_json(
             d / "answers" / req["name"],
             {"at": now_iso(), "candidates": {}, "note": "the acceptance test answered its own request; nothing judged"},
         )
         assert req["name"] not in [q["name"] for q in client.get("/api/requests")[1]]
+        out = subprocess.run(cli, capture_output=True, text=True, timeout=60).stdout
+        assert not any(req["file"] in ln for ln in out.splitlines()), out
         lines.append(f"skeptic {req['name']}: written with the crops and answered by the test")
 
         # the page behind the gate with an override; red if the builtin page skips the gate, the override leaves the

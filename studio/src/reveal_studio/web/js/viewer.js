@@ -26,7 +26,10 @@ function showInViewer(url,label){const st=vstate();const hit=sources().find(s=>s
 function panelMeasure(){return '<p class="muted">'+esc(stageOf('measure').what)+' '+hintBtn('control.measure')+'</p><p class="muted">The stability plots sit under the step series of the render chosen here; the inspector runs a measure on the render its knob names.</p>'+panelRender();}
 // the render and its frames
 async function selectCand(kind,name){S.cand={kind,name};S.frame=0;stopPlay();document.querySelectorAll('.cand').forEach(b=>b.setAttribute('aria-selected',b.dataset.kind===kind&&b.dataset.name===name));await loadRender();}
-async function loadRender(){if(!S.cand)return;const v=S.view;try{S.render=await api('/api/jobs/'+encodeURIComponent(v.job.id)+'/render/'+S.cand.kind+'/'+encodeURIComponent(S.cand.name));}catch(e){setMsg(e.message,'bad');return;}renderViewer();syncInspector();}
+// An answer whose job or render changed while it was out is dropped (the phase B drive's defect 1: a director job's
+// panel drew a pair render's 404 and the loop's md5 after a switch).
+async function loadRender(){if(!S.cand)return;const c=S.cand,jid=S.view.job.id;let r;try{r=await api('/api/jobs/'+encodeURIComponent(jid)+'/render/'+c.kind+'/'+encodeURIComponent(c.name));}catch(e){if(S.cand===c&&S.jid===jid)setMsg(e.message,'bad');return;}
+ if(S.cand!==c||S.jid!==jid||!S.view||S.view.job.id!==jid)return;S.render=r;renderViewer();syncInspector();}
 // The inspector draws the render's measures, stability and plan from S.render, which loadRender fetches after the
 // panel and the inspector are drawn: a fetch that brings another render or other measures redraws the inspector,
 // unless a field there holds the focus (T97: the Stability section came only after a second click on the render).
@@ -49,11 +52,12 @@ function renderViewer(){const w=$('#viewerWrap');if(!w||!S.view||!viewerHosts().
  const frame='<div class="framewrap"><div class="tag" id="frameTag"></div><div class="frame" id="frameBox"><div class="cmpstack" id="cmpStack"><img id="frameImg" class="base" alt="A"><img id="cmpOver" class="over" alt="B"><canvas id="cmpDiff" class="over"></canvas><span class="side a" id="sideA">A</span><span class="side b" id="sideB">B</span><div class="seam" id="wipeSeam"></div><div class="wipehandle" id="wipeHandle" role="slider" tabindex="0" aria-label="the split between A and B" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(st.wipe)+'" data-hint="control.wipe_handle"></div></div></div></div>';
  let h;
  if(axis){const last=Math.max(0,(v.prep?v.prep.n:1)-1);
-  h='<div class="viewer">'+frame+'<div class="vside" id="vside"><div class="vtitle"><h3>'+esc(candLabel(r))+hintBtn('region.viewer')+'</h3>'+(r.kind==='draft'?chip('draft '+r.draft,'info'):(r.unjudged?chip('unjudged','info'):chip(r.verdict.verdict,r.verdict.verdict==='NOT READY'?'bad':'ok')))+'</div>'+(r.title?'<p class="muted vsub" title="'+esc(r.title)+'">'+esc(r.title)+'</p>':'')+modes+ctl+candList()
+  h='<div class="viewer">'+frame+'<div class="vside" id="vside"><div class="vtitle"><h3>'+esc(candLabel(r))+hintBtn('region.viewer')+'</h3>'+(r.kind==='draft'?chip('draft '+r.draft,'info'):(r.unjudged?chip('unjudged','info'):chip(r.verdict.verdict,r.verdict.verdict==='NOT READY'?'bad':'ok')))+'</div>'+(r.title?'<p class="muted vsub" title="'+esc(r.title)+'">'+esc(r.title)+'</p>':'')+modes+ctl+candList()+(flowUI().vside?flowUI().vside():'')
    +'<div class="refs">'+(v.prep?'<figure class="a"><img src="/api/jobs/'+esc(v.job.id)+'/thumb/still/0" alt="the first still"><figcaption>k0 · the first still</figcaption></figure><figure class="b"><img src="/api/jobs/'+esc(v.job.id)+'/thumb/still/'+last+'" alt="the last still"><figcaption>k'+last+' · the last still</figcaption></figure>':'')+'<div class="keys muted"><span class="kbd">space</span> play · <span class="kbd">←</span><span class="kbd">→</span> one frame · <span class="kbd">shift</span> ten · <span class="kbd">m</span> mark a fault</div></div></div></div>';
   h+='<div class="axis"><div class="ctl"><button class="btn" id="play" data-hint="control.play">'+(S.playing?'pause':'play')+'</button><span class="data" id="frameNo"></span><span class="muted label">of '+n+' · '+esc(r.fps||25)+' fps '+hintBtn('region.axis')+'</span><input id="markText" data-hint="control.mark_frame" placeholder="what you see at this frame" style="width:260px" aria-label="note for the marked frame"><button class="btn ghost" id="markBtn" data-hint="control.mark_frame">mark this frame as a fault</button>'+hintBtn('control.mark_frame')+'<span class="muted" id="markNote"></span></div><input type="range" id="scrub" data-hint="control.scrub" min="0" max="'+Math.max(0,n-1)+'" value="'+S.frame+'" step="1" aria-label="frame"><div id="plots"></div>'+(stageOf('measure')?measureCtl(r):'')+'</div>';}
  else h='<div class="head vhead"><h3>Viewer'+hintBtn('region.viewer')+'</h3>'+modes+ctl+'</div><div class="viewer solo">'+frame+'</div>';
  w.innerHTML=h;if(axis)plots();
+ if(axis&&flowUI().wireSide)flowUI().wireSide(w);
  sizeFrame();wireViewer();if(axis){$('#play').onclick=togglePlay;$('#scrub').oninput=e=>{S.frame=+e.target.value;showFrame();};$('#markBtn').onclick=markFrame;}
  showFrame();
  // the focus back on the same control (a zoom or compare button after Enter: critique A2, P2 2), or on the panel's
@@ -72,7 +76,9 @@ function wireViewer(){const st=vstate();const w=$('#viewerWrap');
  const fl=$('#abFlip');if(fl)fl.onclick=()=>{st.ab=st.ab==='A'?'B':'A';applyCompare();};
  const oa=$('#onionAlpha');if(oa)oa.oninput=e=>{st.onion=+e.target.value;applyCompare();};
  const stack=$('#cmpStack'),hd=$('#wipeHandle');
- stack.onpointerdown=e=>{if(st.cmp!=='wipe')return;stack.setPointerCapture(e.pointerId);const move=ev=>{const rc=stack.getBoundingClientRect();st.wipe=Math.max(0,Math.min(100,(ev.clientX-rc.left)/rc.width*100));applyCompare();};move(e);stack.onpointermove=move;stack.onpointerup=()=>{stack.onpointermove=null;};};
+ // the drag ends on the button's release, a cancelled pointer or a lost capture, so the split never follows a mouse
+ // with no button held (critique B, harden; backlog T106)
+ stack.onpointerdown=e=>{if(st.cmp!=='wipe')return;stack.setPointerCapture(e.pointerId);const move=ev=>{const rc=stack.getBoundingClientRect();st.wipe=Math.max(0,Math.min(100,(ev.clientX-rc.left)/rc.width*100));applyCompare();};move(e);stack.onpointermove=move;stack.onpointerup=stack.onpointercancel=stack.onlostpointercapture=()=>{stack.onpointermove=null;};};
  hd.onkeydown=e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();e.stopPropagation();st.wipe=Math.max(0,Math.min(100,st.wipe+(e.shiftKey?10:1)*(e.key==='ArrowLeft'?-1:1)));applyCompare();};
  $('#frameImg').onload=()=>{sizeBase();if(st.cmp==='diff')applyCompare();};
  const mg=$('#mGo');if(mg){$('#mWin').oninput=e=>{S.measureWin=e.target.value;};$('#mRef').oninput=e=>{S.measureRef=e.target.value;};mg.onclick=runMeasure;}}
@@ -173,7 +179,7 @@ function plots(){const p=flowUI().plots;if(p)p();}
 // playback at the clip's own rate: 1000/fps ms a frame (40 ms at the loop's 25 fps, 33.3 ms at 30)
 function togglePlay(){if(!S.render||!$('#scrub'))return;if(S.playing)stopPlay();else{const n=S.render.frames_available||S.render.frames;S.playing=setInterval(()=>{S.frame=(S.frame+1)%n;showFrame();},1000/(S.render.fps||25));const b=$('#play');if(b)b.textContent='pause';}}
 function stopPlay(){if(S.playing){clearInterval(S.playing);S.playing=null;}const b=$('#play');if(b)b.textContent='play';}
-async function markFrame(){if(!S.render||!$('#markBtn'))return;const inp=$('#markText');const note=inp?inp.value:'';try{await api('/api/jobs/'+encodeURIComponent(S.view.job.id)+'/frames/mark',{kind:S.cand.kind,name:S.cand.name,frame:S.frame,note});if(inp)inp.value='';const f=S.frame;await loadRender();S.frame=f;showFrame();}catch(e){setMsg(e.message,'bad');}}
+async function markFrame(){const b=$('#markBtn');if(!S.render||!b)return;await busy(b,async()=>{const inp=$('#markText');const note=inp?inp.value:'';try{await api('/api/jobs/'+encodeURIComponent(S.view.job.id)+'/frames/mark',{kind:S.cand.kind,name:S.cand.name,frame:S.frame,note});if(inp)inp.value='';const f=S.frame;await loadRender();S.frame=f;showFrame();}catch(e){setMsg(e.message,'bad');}});}
 // the a key flips A and B in the A/B mode (the frame keys stay boot.js's)
 document.addEventListener('keydown',e=>{if(e.key!=='a'||e.metaKey||e.ctrlKey||e.altKey||e.target.matches('input,textarea,select'))return;if(!$('#cmpStack')||!viewerHosts().includes(S.stage))return;const st=vstate();if(st.cmp!=='ab')return;st.ab=st.ab==='A'?'B':'A';applyCompare();e.preventDefault();});
 window.addEventListener('resize',()=>{if($('#frameBox'))sizeFrame();if(S.render&&$('#plots'))plots();});

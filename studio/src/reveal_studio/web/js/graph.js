@@ -39,7 +39,7 @@ function renderGraph(){const v=S.view;const host=$('#graph');if(!v||!host||S.vie
   const more=(m,side)=>m.length?'<div class="gport '+side+' more" data-port="+more" title="'+esc(m.map(q=>q.name).join(', '))+'"><i></i>+'+m.length+' more</div>':'';
   const img=firstImage(s.name);const canRun=s.kind==='script'&&s.name!=='page';const canShow=!!img&&gHosts().includes(s.name);
   h+='<div class="gnode'+((s.state==='failed'||s.state==='refused'||s.state==='lost')?' failed':'')+(s.state==='running'?' running':'')+(added?' added':'')+'" data-stage="'+esc(s.name)+'" data-row="'+p.row+'" data-col="'+p.col+'" data-hint="stage.'+esc(s.name)+'" tabindex="0" role="group" aria-label="'+esc(s.title+', '+st)+'" aria-current="'+(s.name===S.stage)+'" style="left:'+(G_PAD+p.col*(gw+G_COL))+'px;width:'+gw+'px">'
-   +'<div class="ghead"><span class="label">'+esc(s.title)+'</span>'+hintBtn('stage.'+s.name)+(s.generated?'<span class="tick" title="generated content"></span>':'')+chip(added?'not run':st+(s.progress?' '+s.progress.i+'/'+s.progress.n:''),added?'':stateClass(st))+'</div>'
+   +'<div class="ghead"><span class="label">'+esc(s.title)+'</span>'+hintBtn('stage.'+s.name)+(s.generated?'<span class="tick" title="generated content"></span>':'')+chip(added?'not run':st+(s.progress?' '+s.progress.i+'/'+s.progress.n:''),added?'':stateClass(st),added||s.stale?null:s.chip_key)+'</div>'
    +'<div class="gthumb'+(s.thumb?'':' empty')+'">'+(s.thumb?'<img src="'+esc(s.thumb)+'" alt="">':esc(s.title))+'</div>'
    +'<div class="gports"><div class="gin">'+ins.shown.map(q=>portRow(q,'in',inL[s.name]||new Set())).join('')+more(ins.more,'in')+'</div><div class="gout">'+outs.shown.map(q=>portRow(q,'out',outL[s.name]||new Set())).join('')+more(outs.more,'out')+'</div></div>'
    +'<div class="gacts">'+(canRun?(S.gConfirm===s.name?gConfirmHTML(s):'<button class="btn ghost" data-act="rerun" data-hint="control.rerun">rerun from here</button>'):'')+'<button class="btn ghost" data-act="show" data-hint="control.show"'+(canShow?'':' disabled')+'>show</button></div></div>';});
@@ -83,7 +83,10 @@ function wireGraph(){const nodes=[...document.querySelectorAll('#gcanvas .gnode'
    if(t){e.preventDefault();e.stopPropagation();t.focus();}
    if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();if(n.dataset.stage!==S.stage)selectStage(n.dataset.stage);}};});
  const ad=$('#gAdd');if(ad)ad.onchange=()=>{const name=ad.value;if(!name)return;const id=S.view.job.id;(S.graphAdded[id]=S.graphAdded[id]||[]).push(name);selectStage(name);};}
-async function graphRerun(name){const v=S.view,s=stageOf(name);const K=knobState(v,s);const knobs={};s.knobs.forEach(k=>{knobs[k.key]=K[k.key]!==undefined?K[k.key]:knobBase(s,k);});
+// the knobs: the flow's own when it names them (the director's resolve and render send the plan panel's, which its
+// inspector shows: critique B, P1 (a)), else the inspector's fields over the last run's knobs
+async function graphRerun(name){const v=S.view,s=stageOf(name);const own=flowUI().runKnobs;let knobs=own?own(name):null;
+ if(!knobs){const K=knobState(v,s);knobs={};s.knobs.forEach(k=>{knobs[k.key]=K[k.key]!==undefined?K[k.key]:knobBase(s,k);});}
  selectStage(name);try{const r=await api('/api/jobs/'+encodeURIComponent(v.job.id)+'/stages/'+encodeURIComponent(name)+'/run',{knobs});setMsg('started '+r.record+' from the graph with the inspector\'s knobs','ok');await openJob(v.job.id,true);loadJobs();}catch(e){setMsg(e.message,'bad');}}
 window.addEventListener('resize',()=>{if(S.viewMode==='graph'&&$('#gcanvas'))renderGraph();});
 flowEntry('loop').graph={hosts:['registration','readers','probe','render'],cost:{registration:'The prep moves aside and the stages after it go stale',readers:'The readers folder is replaced',probe:'The probe folder is replaced',render:'A new render under the name the inspector holds',measure:'A new measure folder under the render'}};

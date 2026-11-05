@@ -127,7 +127,8 @@ def test_the_render_knobs_carry_the_ranges_clamp_states_and_no_other() -> None:
     assert [k for k, v in knobs.items() if v["flag"] is None] == ["name", "draft", "max_long"]
     assert knobs["preset"]["choices"] == pair.PRESETS and knobs["force_class"]["choices"] == ["", "A", "B"]
     assert knobs["max_long"]["default"] == 1920 and "fixture sweep" in knobs["max_long"]["what"]
-    assert "overrides every preset's own value" in knobs["warp"]["what"] and "T108" in knobs["warp"]["what"]
+    # the sentence states the override; its backlog row (T108) stays in the registry's comment (critique B, copy pass)
+    assert "overrides every preset's own value" in knobs["warp"]["what"] and "T108" not in knobs["warp"]["what"]
     assert [k["key"] for k in stage_def("pair", "page")["knobs"]] == ["title", "intro", "footer", "variants"]
 
 
@@ -347,7 +348,8 @@ def test_a_refused_render_keeps_the_cli_failed_line(
 def test_the_verdict_view_shows_the_refusal_and_its_reason(
     settings: Settings, runner: Runner, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Mutation: a refused verdict shown with metrics, or its reason dropped, turns this red."""
+    """Mutation: a refused verdict shown with metrics, or its reason dropped, turns this red; so does the tile keeping
+    the reason, which the panel head then prints beside the panel's own box (critique B, minor 5: three times)."""
     d, j = pair_job(settings, fixture_pair)
     assert pv.verdict_view(settings, d, j)["state"] == "none"
     monkeypatch.setenv("FAKE_REFUSE", "align")
@@ -357,6 +359,7 @@ def test_the_verdict_view_shows_the_refusal_and_its_reason(
     assert v["reason"] == "FAILED: the photos share too little detail"
     t = tiles(runner, d, j)["verdict"]
     assert t["state"] == "refused" and t["detail"] == v["reason"] and t["branch"] and t["parent"] == "import"
+    assert t["reason"] is None  # the panel's box prints it once
 
 
 def test_the_verdict_view_shows_the_metrics_and_the_stills(
@@ -550,6 +553,15 @@ def test_the_skeptic_request_carries_the_pairs_crops(settings: Settings, runner:
     req = read_json(settings.root / r["file"])
     assert req["crops"] == crops and [c["md5_mp4"] for c in req["candidates"]] == [md5["f1"]]
     assert tiles(runner, d, j)["skeptic"]["state"] == "waiting"
+    # an answer naming no verdict leaves f1 unjudged: the tile says so, in a muted chip with chip.answered's hint
+    # (critique B, minor 12: a green "answered" sat over three unjudged renders). Mutation: the tile reading any
+    # answer as "answered" turns this red.
+    ans = d / "answers" / Path(r["file"]).name
+    write_json(ans, {"at": "2026-11-05T22:00:00", "candidates": {}})
+    t = tiles(runner, d, j)["skeptic"]
+    assert (t["state"], t["detail"]) == ("answered (0 verdicts)", f"{ans.name} answered with no verdict")
+    write_json(ans, {"at": "2026-11-05T22:00:00", "candidates": {"f1": {"verdict": "READY", "judged_md5": md5["f1"]}}})
+    assert tiles(runner, d, j)["skeptic"]["state"] == "answered"
 
 
 # ---------------------------------------------------------------- a restart, the job view, the fixtures

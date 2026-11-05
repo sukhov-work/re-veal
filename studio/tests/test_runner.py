@@ -4,6 +4,7 @@ readers' replacement, the page's rounds, the round gate, the "unchanged" rule, t
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 import subprocess
 import sys
@@ -256,7 +257,9 @@ def test_reconcile_reads_a_refusal_and_a_cancel_from_the_files(
         settings,
     )
     (d / "stages" / rec["id"] / "log.txt").write_text("PROGRESS 1 9 frames\nFAILED: no prep for this plan\n")
+    (d / "tiny" / "r3.part").mkdir(parents=True)
     assert r.reconcile(d, rec)["state"] == "refused"
+    assert not (d / "tiny" / "r3.part").exists()  # a refusal keeps no .part folder (the phase B drive's defect 7)
     part = d / "tiny" / "r4.part"
     part.mkdir(parents=True)
     rec2 = hand_record(
@@ -590,8 +593,9 @@ def test_the_verdict_runs_reveal_align_on_a_pair_job(settings: Settings, runner:
 def test_a_verdict_refusal_is_refused_with_reveals_failed_line(
     settings: Settings, runner: Runner, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Exit 2 with a FAILED: line is a refusal: the photos share too little detail. Mutation: reading exit 2 as a
-    failure turns this red."""
+    """Exit 2 with a FAILED: line is a refusal: the photos share too little detail. Its work folder goes with it (the
+    phase B drive's defect 7: ten job folders kept a verdict.part/). Mutation: reading exit 2 as a failure, or the
+    refused branch keeping the .part folder, turns this red."""
     d, j = pair_job(settings, fixture_pair)
     monkeypatch.setenv("FAKE_REFUSE", "align")
     rec = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
@@ -600,7 +604,8 @@ def test_a_verdict_refusal_is_refused_with_reveals_failed_line(
         2,
         "FAILED: the photos share too little detail",
     )
-    assert not (d / "verdict").exists()
+    assert not (d / "verdict").exists() and not (d / "verdict.part").exists()
+    assert rec["note"] == "the .part folder was removed"
     monkeypatch.setenv("FAKE_REFUSE", "")
     monkeypatch.setenv("FAKE_FAIL", "align")
     rec2 = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
@@ -722,12 +727,103 @@ def test_a_stage_written_in_place_keeps_the_previous_file_beside_the_record(
     # a second run keeps the first run's page as its previous copy
     rec2 = wait_record(d, runner.start_stage(d, j, stage, {})["id"])
     assert (d / "stages" / rec2["id"] / "previous_index.html").read_text() == "new page " + rec["id"]
-    # after a restart an in-place record cannot tell whether the run finished: it is lost, and the file stays
+    # a server that died while the script ran (no done marker): after a restart the page, newer than the record's
+    # start, says the run finished (Fable review F5): done, and the page opens its round
     rec3 = runner.start_stage(d, j, stage, {})
     wait_record(d, rec3["id"])
     r = read_json(d / "stages" / rec3["id"] / "stage.json")
     r["state"] = "running"
     r["pid"] = dead_pid()
     write_json(d / "stages" / rec3["id"] / "stage.json", r)
+    (d / "stages" / rec3["id"] / "done").unlink()
+    n_rounds = len(list((d / "rounds").glob("*/round.json")))
     out = Runner(settings, FLAGS).reconcile(d, r)
-    assert out["state"] == "lost" and page.exists()
+    assert out["state"] == "done" and page.read_text() == "new page " + rec3["id"]
+    assert len(list((d / "rounds").glob("*/round.json"))) == n_rounds + 1
+
+
+def _in_place_page_record(d: Path, rid: str, settings: Settings, page: Path) -> Json:
+    """A director page record as a server that died while director_page.py ran would have left it: in place (the
+    out_part is the out_final, run/index.html), no done marker."""
+    rec = hand_record(d, rid, "page", dead_pid(), page, page, "index.html", settings)
+    rec.update(in_place=True, previous=None, knobs={"title": "", "notes": {}})
+    write_json(d / "stages" / rid / "stage.json", rec)
+    return rec
+
+
+def test_an_in_place_record_after_a_restart_is_done_when_its_file_is_newer_than_its_start(
+    settings: Settings, job: tuple[Path, Json]
+) -> None:
+    """Fable review F5: after a restart a gone page script's record reads its file's mtime against the record's start.
+    Newer: the run wrote it, so done, and the round opens. Older: the previous run's page, so lost, the file kept. A
+    done marker on disk means another server finishes the record: nothing is written and no second round opens.
+    Mutation: the old rule (an in-place record after a restart is always lost) turns the first case red; dropping the
+    done-marker return opens a second round in the third case."""
+    d, j = job
+    page = settings.root / j["root"] / "index.html"
+    page.write_text("<html>the page</html>")
+    rec = _in_place_page_record(d, "20261105-230001_page", settings, page)
+    t0 = dt.datetime.fromisoformat(rec["started"]).timestamp()
+    os.utime(page, (t0 + 1, t0 + 1))
+    out = Runner(settings, FLAGS).reconcile(d, rec)
+    assert (out["state"], out["exit_code"]) == ("done", None) and "finished after a restart" in out["note"]
+    assert read_json(d / "rounds" / "1" / "round.json")["record"] == rec["id"]
+    assert (page.parent / "page.md5").read_text().strip() == md5_file(page)
+    # older than the record's start: the previous run's page; lost, and the file stays as it was
+    rec2 = _in_place_page_record(d, "20261105-230002_page", settings, page)
+    t2 = dt.datetime.fromisoformat(rec2["started"]).timestamp()
+    os.utime(page, (t2 - 60, t2 - 60))
+    out2 = Runner(settings, FLAGS).reconcile(d, rec2)
+    assert out2["state"] == "lost" and page.read_text() == "<html>the page</html>"
+    assert not (d / "rounds" / "2").exists()
+    # another server wrote the done marker and writes the record next: this one writes nothing
+    rec3 = _in_place_page_record(d, "20261105-230003_page", settings, page)
+    t3 = dt.datetime.fromisoformat(rec3["started"]).timestamp()
+    os.utime(page, (t3 + 1, t3 + 1))
+    (d / "stages" / rec3["id"] / "done").write_text(now_iso())
+    assert Runner(settings, FLAGS).reconcile(d, rec3)["state"] == "running"
+    assert read_json(d / "stages" / rec3["id"] / "stage.json")["state"] == "running"
+    assert not (d / "rounds" / "2").exists()
+
+
+def test_a_second_server_never_writes_lost_over_a_record_another_server_finishes(
+    settings: Settings, registered: tuple[Path, Json]
+) -> None:
+    """The phase B drive's defect 2 (backlog T88 at runtime): two servers watched one render; the first renamed the
+    .part and wrote done, the second found no .part and wrote lost over it 2 ms later. Before writing lost, the
+    second now looks for the terminal file in out_final, written after the record started, and re-reads the record.
+    Mutation: dropping the out_final check (the second server writes lost) turns this red; the control, an out_final
+    older than the record (a run that never finished), stays lost."""
+    d, _ = registered
+    final = d / "tiny" / "r6"
+    rec = hand_record(
+        d, "20261105-230004_render", "render", dead_pid(), d / "tiny" / "r6.part", final, "measure.json", settings
+    )
+    final.mkdir(parents=True)
+    (final / "loop.mp4").write_bytes(b"whole")
+    write_json(final / "measure.json", {"frames": 9})
+    t0 = dt.datetime.fromisoformat(rec["started"]).timestamp()
+    os.utime(final / "measure.json", (t0 + 1, t0 + 1))
+    out = Runner(settings, FLAGS).reconcile(d, rec)
+    assert out["state"] == "running"  # the other server's record stands: nothing is written here
+    assert read_json(d / "stages" / rec["id"] / "stage.json") == rec
+    assert (final / "loop.mp4").is_file()
+    # the other server's write lands: the record is read back as it wrote it
+    write_json(d / "stages" / rec["id"] / "stage.json", {**rec, "state": "done", "exit_code": 0})
+    assert Runner(settings, FLAGS).reconcile(d, rec)["state"] == "done"
+    # the control: a terminal file older than the record is an earlier run's, so the gone process's record is lost
+    rec2 = hand_record(
+        d,
+        "20261105-230005_render",
+        "render",
+        dead_pid(),
+        d / "tiny" / "r7.part",
+        d / "tiny" / "r7",
+        "measure.json",
+        settings,
+    )
+    (d / "tiny" / "r7").mkdir(parents=True)
+    write_json(d / "tiny" / "r7" / "measure.json", {"frames": 9})
+    t2 = dt.datetime.fromisoformat(rec2["started"]).timestamp()
+    os.utime(d / "tiny" / "r7" / "measure.json", (t2 - 60, t2 - 60))
+    assert Runner(settings, FLAGS).reconcile(d, rec2)["state"] == "lost"

@@ -36,7 +36,7 @@ CONTROL_HINTS: dict[str, dict[str, Any]] = {
         "The fixture pairs some director plan names, with each photo's layer table and matte count; a pair without a plan has no director job (mismatch_7, the match and fabra pairs)."
     ),
     "control.director_resolve": H(
-        "Runs director_render.py --resolve-only on the plan and concept chosen here: the canvases, the anchors, the camera and every layer's resolved numbers, in about 10 to 14 s at 1920 px. The resolve writes into resolve/<stamp>/ beside run/.",
+        "Runs director_render.py --resolve-only on the plan and concept chosen here: the canvases, the anchors, the camera and every layer's resolved numbers, in about 9 s at 1920 px (8.7 s for mismatch_3 on 2026-11-05). The resolve writes into resolve/<stamp>/ beside run/.",
         stage="resolve",
         source="b_director_research.md §1",
     ),
@@ -48,8 +48,8 @@ CONTROL_HINTS: dict[str, dict[str, Any]] = {
         source="director_render.py:2095",
     ),
     "control.director_timeline": H(
-        "One bar per beat in clip time, 0 the first frame and 1 the last, and one for the end effect. Drag a bar to move its window, or within 6 px of an end to resize it; the window is rounded to 0.01, at least 0.02 wide and kept inside 0 to 1. A dragged bar becomes <name>.window or end_window in the set dict.",
-        source="scripts/research/director_ui.py:1042-1059",
+        "One bar per beat in clip time, 0 the first frame and 1 the last, and one for the end effect. Drag a bar to move its window, or within 6 px of an end to resize it. On a focused bar the arrows move the window by 0.01, Shift with the arrows moves its end, Alt with the arrows its start, and Page Up and Page Down move it by 0.1. The window is rounded to 0.01, at least 0.02 wide and kept inside 0 to 1. A moved bar becomes <name>.window or end_window in the set dict; Cmd-Z and Shift-Cmd-Z undo and redo a change of the set dict.",
+        source="the workbench director_ui.py:1042-1059 (removed 2026-11-06; in git at 226cbb5)",
     ),
     "control.director_mute": H(
         "Mute sets <name>.skip=true: the renderer leaves the transform out and records it under unplaced.",
@@ -72,13 +72,15 @@ CONTROL_HINTS: dict[str, dict[str, Any]] = {
         "Loads the knobs of the newest round render of this plan and concept (benchmarks/runs/*/director_r*/<stem>_<concept>/info.json) into the set dict. Off until pressed: the plan stage never pre-fills them, because the pre-fill hid two knobs in the workbench's acceptance.",
         source="b_design.md decision 2",
     ),
-    "control.director_clear": H("Empties the set dict: the next render reads the plan as written."),
+    "control.director_clear": H(
+        "Empties the set dict and the extra --set lines after a yes, so the next render reads the plan as written; Cmd-Z brings them back."
+    ),
     "control.director_draft": H(
-        "Renders a draft at 480 px under drafts/<stem>_<concept>[-<tag>]/, outside run/, so the page never lists it; about 10 to 14 s for 90 frames.",
+        "Renders a draft at 480 px under drafts/<stem>_<concept>[-<tag>]/, outside run/, so the page never lists it: 14 to 18 s for 90 frames on 2026-11-05.",
         stage="render",
     ),
     "control.director_full": H(
-        "Renders the full size under run/<stem>_<concept>[-<tag>]/, a candidate for the page; 33 to 66 s at 1920 px. A new round's first full render waits for the previous round's grade.",
+        "Renders the full size under run/<stem>_<concept>[-<tag>]/, a candidate for the page: about 150 s for 90 frames at 1920 px (146 to 153 s on 2026-11-05). A new round's first full render waits for the previous round's grade.",
         stage="render",
     ),
     "control.director_tag": H(
@@ -137,6 +139,19 @@ DIRECTOR_HINTS: dict[str, dict[str, Any]] = {
         "Under the motion model the renderer may move a beat earlier to overlap the one before; the resolve's motion.adjusted lists where.",
         source="SCHEMA.md:184-190",
     ),
+    "director.plans": H(
+        "The plans this job can render: the pair's frozen plans under scripts/research/plans/ and the plans saved in this job. The plan panel opens the newest frozen plan."
+    ),
+    "director.next_knobs": H(
+        "The knobs the panel's run button sends, read-only here: the plan, the concept, the set dict and the command. Change them in the plan panel and in the resolve or render panel."
+    ),
+    "director.planner_notes": H(
+        "The planner's idea for this concept and its risk note, from the plan file, folded under the timeline.",
+        source="SCHEMA.md:15, 23",
+    ),
+    "director.set_group": H(
+        "A folded group of the renderer's --set keys: the sky keys, read under a disc container, or the keys of one transform. Enter or a click opens it."
+    ),
     "director.verdict": H(
         "Reveal's strict alignment of B onto A, run on demand as the shared branch under the import; on mismatch_3 it refuses, since the photos are unrelated."
     ),
@@ -177,6 +192,7 @@ RESOLVE_HINTS: dict[str, dict[str, Any]] = {
     "resolve.front_elements": H(
         "B's front: the elements nearer than the container, each with its median disparity; forced marks the plan's front_ids.",
         stage="resolve",
+        source="director_render.py:713-731",
     ),
     "resolve.matte_fallbacks": H(
         "photo:id of each element drawn with its hard mask, because its el_<id>.png is missing.",
@@ -278,9 +294,19 @@ INFO_HINTS: dict[str, dict[str, Any]] = {
         stage="render",
         source="director_render.py:2014, 2052",
     ),
-    "info.step_second": H("The step between decoded frames 1 and 2, in levels.", stage="render"),
-    "info.step_last": H("The step between the last two decoded frames, in levels.", stage="render"),
-    "info.step_max": H("The largest step between consecutive decoded frames, in levels.", stage="render"),
+    "info.step_second": H(
+        "The step between decoded frames 1 and 2, in levels.", stage="render", source="director_render.py:2014, 2052"
+    ),
+    "info.step_last": H(
+        "The step between the last two decoded frames, in levels.",
+        stage="render",
+        source="director_render.py:2014, 2052",
+    ),
+    "info.step_max": H(
+        "The largest step between consecutive decoded frames, in levels.",
+        stage="render",
+        source="director_render.py:2014, 2052",
+    ),
     "info.steps_decoded": H(
         "The whole step series, decoded from transition.mp4 by the studio with the renderer's own rule and cached under cache/steps/; info.json keeps four values of it.",
         stage="render",

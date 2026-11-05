@@ -65,3 +65,9 @@ Edit-only.
 - The three jobs of 2026-11-04 are listed, and the adopted one opens with its grade text.
 - The detector reports 0 anti-patterns at the three viewports.
 - `make qa` is green with its counts; the GitHub workflow is green on the last push.
+
+## What phase B taught the routine (2026-11-06)
+- A flow is built in waves: one generalization slice first, alone and green, with a snapshot test of the incumbent path pinned before the first edit (`tests/test_loop_snapshot.py`, never regenerated); then the flow builders in parallel on disjoint files, each with a fake script under `tests/fakes/`; then the drive, the review and the critique in one wave; then one fix round. The design note that fixes the shared shapes (`research/2026-11-05/b_design.md`) comes before the slice.
+- An acceptance anchor is re-measured from the record's argv (`render.json`, `stage.json`) before it is pinned: the workbench's md5 carried two knobs its report never named (DECISIONS 2026-11-05 eighth and ninth lines).
+- Every long chain runs under `caffeinate -i`: this laptop sleeps on battery and a frozen wait expires on wake (four sleeps on 2026-11-05 stalled the drives). One rendering drive at a time on the tree (T88, T119).
+- The wave-3 agents read the builders' reports and the design note, not the session; the critique's score (26 of 40 for B, 28 for A2) is read against the previous one, and the fix round takes every P1 and P2 and the one-line minors.

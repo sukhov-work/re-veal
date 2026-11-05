@@ -139,7 +139,7 @@ DIRECTOR_STAGES: list[dict[str, Any]] = [
         "optional": False,
         "terminal": None,
         # P:3-4, and registry/loop.py's skeptic for the verdict
-        "what": "A request file for the Claude Code session: a subagent reads every candidate's frames and answers with a verdict on the md5 it judged, and per clip with what to look at and the faults to expect, which the page prints from notes.json.",
+        "what": "A request file for the Claude Code session. A subagent reads every candidate's frames and answers with a verdict on the md5 it judged. Per clip it also writes what to look at and the faults to expect, which the page prints from notes.json.",
         "knobs": [],
     },
     {
@@ -179,13 +179,6 @@ DIRECTOR_STAGES: list[dict[str, Any]] = [
                 "keyframes.json of the generated helpers (name -> model, seed, steps, size)",
                 "--keyframes",
             ),
-            # studio: views/page.build_page passes the list for every flow; director_page.py has no flag for one
-            K(
-                "variants",
-                "list",
-                [],
-                "director_page.py lists every full render of run/ in name order and takes no list; a name here is refused before the page is built",
-            ),
         ],
         # the studio writes notes.json from the skeptic's answers and passes --notes (P:27, P:39, P:74-83)
     },
@@ -208,7 +201,7 @@ GUARD_KINDS = ("recede", "line_to", "morph_to", "move_to", "keyframe_chain")
 (D:1332)."""
 END_KINDS = ["luma_reveal", "edge_reveal", "b_luma_reveal", "radial_reveal"]
 
-PARALLAX_GATE = "the plan's parallax kind is depth and its own gain is above 0 (director_render.py:674-676)"
+PARALLAX_GATE = "the plan's parallax kind is depth and its own gain is above 0"  # D:674-676
 QUAD = "a quad or rect container"
 DISC = "a disc container"
 FRONT = "B has a front layer (a quad or rect container with front elements)"
@@ -283,10 +276,10 @@ TABLE_A: list[dict[str, Any]] = [
         "A",
         "bool",
         None,
-        default_from="the concept's reveal.guard, else on when the motion model is on (director_render.py:449)",
+        default_from="the concept's reveal.guard, else on when the motion model is on",  # D:449
         read_at="director_render.py:447",
         plan_path="reveal.guard",
-        when="a transform with a b, other than colour, hold or exit (director_render.py:1332)",
+        when="a transform with a b, other than colour, hold or exit",  # D:1332
         what="B's target of every transform that has a b cannot show before the transform has delivered it; guard=false turns the guard off.",
         source="SCHEMA.md:199-203",
     ),
@@ -1617,7 +1610,7 @@ TABLE_D: list[dict[str, Any]] = [
         plan_path=_PARAMS + "ease",
         what="A layer's ease, read from the plan before the knob loop.",
         source="director_render.py:877-881",
-        readonly="the renderer reads a layer's ease from the plan at line 878, one line before the knob loop at line 881; "
+        readonly="the renderer reads a layer's ease from the plan just before its knob loop, so a --set key never reaches it; "
         + _PLAN_ONLY.format("ease"),
     ),
     R(
@@ -1632,7 +1625,7 @@ TABLE_D: list[dict[str, Any]] = [
         plan_path=_PARAMS + "edge",
         what="A beat's own trapezoid edge, read from the plan before the knob loop.",
         source="director_render.py:879",
-        readonly="read from the plan at line 879, before the knob loop; SCHEMA.md:221 lists name.edge=0.2 as a knob, "
+        readonly="read from the plan before the knob loop; SCHEMA.md:221 lists name.edge=0.2 as a knob, "
         "which reaches no frame; " + _PLAN_ONLY.format("edge"),
     ),
     R(
@@ -1647,7 +1640,7 @@ TABLE_D: list[dict[str, Any]] = [
         plan_path=_PARAMS + "rate",
         what="A beat's rate, fast_in or fast_out, read from the plan before the knob loop.",
         source="director_render.py:880",
-        readonly="read from the plan at line 880, before the knob loop; SCHEMA.md:222 lists name.rate=fast_in as a "
+        readonly="read from the plan before the knob loop; SCHEMA.md:222 lists name.rate=fast_in as a "
         "knob, which reaches no frame; " + _PLAN_ONLY.format("rate"),
     ),
     R(
@@ -1662,7 +1655,7 @@ TABLE_D: list[dict[str, Any]] = [
         plan_path="<name>.depth",
         what="A layer's depth, front or inside, read from the transform itself.",
         source="director_render.py:877, 1136",
-        readonly="depth is a transform key the renderer reads as tr['depth'] (lines 877 and 1136), never from params; "
+        readonly="depth is a transform key the renderer reads as tr['depth'], never from params; "
         "edit the transform's depth in a plan saved in this job",
     ),
     R(
@@ -1677,7 +1670,7 @@ TABLE_D: list[dict[str, Any]] = [
         plan_path=_PARAMS + "hide_target",
         what="Whether a line_to's target line is hidden in B's plate, read from the plan.",
         source="director_render.py:751",
-        readonly="read from the plan's params in hide_targets_in_plate (line 751), where the knobs never reach; "
+        readonly="read from the plan's params in hide_targets_in_plate, where the knobs never reach; "
         + _PLAN_ONLY.format("hide_target"),
     ),
     R(
@@ -1691,8 +1684,8 @@ TABLE_D: list[dict[str, Any]] = [
         when="never: every layer with a footprint sets its own hole_from",
         what="The fallback start of a vacated footprint's reveal.",
         source="director_render.py:1407, 1477, 1485",
-        readonly="a fallback that never fires: every layer with a footprint sets its own hole_from (lines 1407 and "
-        "1485); use the row <name>.hole_from",
+        readonly="a fallback that never fires: every layer with a footprint sets its own hole_from; use the row "
+        "<name>.hole_from",
     ),
     R(
         "hole_reveal_over",
@@ -1705,8 +1698,8 @@ TABLE_D: list[dict[str, Any]] = [
         when="never: every layer with a footprint sets its own hole_over",
         what="The fallback span of a vacated footprint's reveal.",
         source="director_render.py:1408, 1477, 1485",
-        readonly="a fallback that never fires: every layer with a footprint sets its own hole_over (lines 1408 and "
-        "1485); use the row <name>.hole_over",
+        readonly="a fallback that never fires: every layer with a footprint sets its own hole_over; use the row "
+        "<name>.hole_over",
     ),
     R(
         "key_end",
@@ -1720,7 +1713,7 @@ TABLE_D: list[dict[str, Any]] = [
         plan_path="container.params.sky.key_end",
         what="A key the sky dict never reads; the sky's key window is sky.key_window.",
         source="director_render.py:1448-1459",
-        readonly="the sky dict has no key_end reader (lines 1448 to 1459); use sky.key_window, or the top-level "
+        readonly="the sky dict has no key_end reader; use sky.key_window, or the top-level "
         "key_end under a disc without one",
     ),
 ]

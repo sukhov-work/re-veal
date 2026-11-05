@@ -26,7 +26,7 @@ from reveal_studio.media.pictures import frames_dir
 from reveal_studio.registry.pair import RELATION_LONG
 from reveal_studio.registry.schema import NAME_RE
 from reveal_studio.runner.argv import coerce
-from reveal_studio.views.base import TileContext, TileFn, attempt_note, base_render_view, file_url
+from reveal_studio.views.base import TileContext, TileFn, attempt_note, base_render_view, file_url, skeptic_state
 
 DEFAULT_FPS = 30
 """The playback rate when neither the terminal file nor the record names one: a pair's report.json keeps the
@@ -41,10 +41,10 @@ BASKET: list[Json] = [
     {"key": "endpoint.first_vs_A", "label": "frame 0 against A", "unit": "levels", "bar": "eq", "at": 0},
     {"key": "endpoint.last_vs_B", "label": "the last frame against B", "unit": "levels", "bar": "eq", "at": 0},
     {"key": "flicker.edge_ratio", "label": "edge ratio", "unit": "", "bar": "lt", "at": 1.5},
-    {"key": "flicker.max", "label": "flicker max", "unit": "0..1 grey", "bar": "lt", "at": 0.12},
-    {"key": "flicker.mean", "label": "flicker mean", "unit": "0..1 grey", "bar": None},
+    {"key": "flicker.max", "label": "flicker max", "unit": "grey, 0 to 1", "bar": "lt", "at": 0.12},
+    {"key": "flicker.mean", "label": "flicker mean", "unit": "grey, 0 to 1", "bar": None},
     {"key": "flicker.spikiness", "label": "spikiness", "unit": "max / mean", "bar": None},
-    {"key": "warping_error", "label": "warping error", "unit": "0..1 grey", "bar": None},
+    {"key": "warping_error", "label": "warping error", "unit": "grey, 0 to 1", "bar": None},
     {"key": "goal.feat_floor", "label": "feat floor", "unit": "", "bar": None},
     {"key": "goal.laplace_floor", "label": "laplace floor", "unit": "", "bar": None},
     {"key": "goal.contrast_floor", "label": "contrast floor", "unit": "", "bar": None},
@@ -293,6 +293,8 @@ def tile_verdict(ctx: TileContext, v: Json, latest: Json | None) -> None:
         )
     elif latest.get("reason"):
         v["detail"] = str(latest["reason"])[:160]
+    if latest["state"] == "refused":
+        v["reason"] = None  # the panel prints the refusal once, in its box (critique B, minor 5)
 
 
 def tile_render(ctx: TileContext, v: Json, latest: Json | None) -> None:
@@ -318,9 +320,7 @@ def tile_render(ctx: TileContext, v: Json, latest: Json | None) -> None:
 def tile_skeptic(ctx: TileContext, v: Json, latest: Json | None) -> None:
     sk = [r for r in ctx.reqs if r["kind"] == "skeptic"]
     if sk:
-        last = sk[-1]
-        v["state"] = "answered" if last["answered"] else "waiting"
-        v["detail"] = f"{last['name']} answered" if last["answered"] else f"{last['name']} · {last['age_s']} s old"
+        v["state"], v["detail"] = skeptic_state(ctx.settings, sk[-1])
     else:
         v["detail"] = "no request yet"
     v["verdicts"] = verdicts(ctx.d)
@@ -393,9 +393,19 @@ def decode_checks(dec: Json, report: Json) -> list[Json]:
     spec = report.get("spec") or {}
     n, canvas, fps = report.get("n_frames"), report.get("canvas"), spec.get("fps")
     rows = [
-        ("frames", dec.get("frames"), f"= n_frames {n}", dec.get("frames") == n),
-        ("size", dec.get("size"), f"= canvas {canvas}", dec.get("size") == canvas),
-        ("fps", dec.get("fps"), f"= spec fps {fps}", isinstance(fps, int | float) and abs(dec["fps"] - fps) < 0.01),
+        ("frames", dec.get("frames"), f"the report's {n} frames", dec.get("frames") == n),
+        (
+            "size",
+            dec.get("size"),
+            "the report's canvas " + "×".join(str(x) for x in canvas or []),
+            dec.get("size") == canvas,
+        ),
+        (
+            "fps",
+            dec.get("fps"),
+            f"the report's {fps} fps",
+            isinstance(fps, int | float) and abs(dec["fps"] - fps) < 0.01,
+        ),
         ("darkest", dec.get("darkest_mean"), "above 5", (dec.get("darkest_mean") or 0) > 5),
     ]
     return [

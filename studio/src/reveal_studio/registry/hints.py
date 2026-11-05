@@ -331,13 +331,13 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
     ),
     "region.panel": H("The selected stage's content: its outputs, its history, rerun from here."),
     "region.inspector": H(
-        "One row per knob of the selected stage: the literal key, the value, the range, the default, the sentence; the provenance (the plan's sha256, the script's md5, the outputs' md5s); the command line that reproduces the stage from the shell; cancel for a running stage."
+        "One row per knob of the selected stage: the literal key, the value, the range, the default and the sentence. Below them sit the provenance (the plan's sha256, the script's md5, the outputs' md5s), the command line that reproduces the stage from the shell, and cancel for a running stage. A director resolve or render shows the knobs its panel sends, read-only."
     ),
     "region.viewer": H(
-        "One large picture under judgement: source A (the render's current frame by default), with B beside it as a wipe, a flicker, an onion skin or a difference; the first and the last still sit small beside it. Space plays at the clip's own rate (the loop 25 fps, a director clip 30, a pair its spec's) while the focus is on the picture, the scrubber or no control; left and right step one frame, shift by ten; `,` and `.` likewise; m marks the frame as a fault (saved under owner_frames/)."
+        "One large picture under judgement: source A (the render's current frame by default), with B beside it as a wipe, a flicker, an onion skin or a difference. The first and the last still sit small beside it. Space plays at the clip's own rate (the loop 25 fps, a director clip 30, a pair its spec's) while the focus is on the picture, the scrubber or no control. Left and right step one frame, shift by ten, and `,` and `.` do the same. m marks the frame as a fault, saved under owner_frames/."
     ),
     "region.axis": H(
-        "The shared frame axis: the scrubber, the step series with its stalls (bands) and jumps (ticks), the generated bands, the skeptic's markers and one stability plot per measured window, all at the same x; a click moves the scrubber; the dashed line is the 0.3 stall bar."
+        "The shared frame axis: the scrubber, the step series with its stalls (bands) and jumps (ticks), the generated bands, the skeptic's markers and one stability plot per measured window, all at the same x. A click on a plot moves the scrubber. On the loop's step plot the dashed line is the 0.3 stall bar."
     ),
     "control.rerun": H(
         "Runs the stage again with the inspector's knobs into a new record; the stages after it go stale until they run again."
@@ -352,13 +352,13 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         "Saves the editor's JSON as a new plan of this job with a provenance block (from which plan, which keys changed, your words); a plan saved from the page is recorded as the owner's. Unknown top-level keys, methods, eases and effect kinds are refused with the known list."
     ),
     "control.render": H(
-        "Renders into <seq>/<name>/ (full) or drafts/<seq>/<name>/ (a draft): the loop renders the chosen plan with the job's prep as `in`, a pair its knobs, a director concept its plan under run/. The record shows the progress number and the log."
+        "Renders into <seq>/<name>/ (full) or drafts/<seq>/<name>/ (a draft). The loop renders the chosen plan with the job's prep as `in`, a pair its knobs, a director concept its plan under run/. The record shows the progress number and the log."
     ),
     "control.request_skeptic": H(
         "Writes requests/skeptic_<stamp>.json with the candidates' md5s and your brief; the session answers with answers/skeptic_<stamp>.json (a verdict per candidate on the md5 judged) and a report with crops."
     ),
     "control.page": H(
-        "Builds the review page over every full render of the sequence by loop_seq.py page, behind the review gate: refused while a candidate is unjudged or NOT READY unless you override; the override is printed on the page; the page's md5 opens a round."
+        "Builds the review page over every full render of the sequence by loop_seq.py page, behind the review gate. The gate refuses the page while a candidate is unjudged or NOT READY, unless you override, and the page prints the override. The page's md5 opens a round."
     ),
     "control.grade": H(
         "Saves his words verbatim for the round, with the page md5 they were given on. The next round's first render waits for this text, or for 'ungraded by his word'."
@@ -413,7 +413,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         source="research/2026-11-05/loopseq_a2.md",
     ),
     "prep.windows_jpg": H(
-        "windows.jpg: frame 0 at a 960 px long edge with the windows and their names, one panel per registered frame; each fit draws an arrow from the window's centre at 8 times its offset (all orange, far blue, chain magenta, ecc green, final red). Show sends it to the viewer.",
+        "windows.jpg: frame 0 at a 960 px long edge with the windows and their names, one panel per registered frame. Each fit draws an arrow from the window's centre at 8 times its offset (all orange, far blue, chain magenta, ecc green, final red). Show sends it to the viewer.",
         stage="registration",
         source="SCHEMA.md 2026-11-05",
     ),
@@ -445,8 +445,8 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         "This offset's peak lies on the border of the search, so the number is a bound: the content sits at least this far.",
         stage="registration",
     ),
-    "chip.within": H("The measure is inside its bar (loops.md §6)."),
-    "chip.past bar": H("The measure crosses its bar (loops.md §6): look at the frames it names before the page."),
+    "chip.within": H("The measure is inside its bar."),
+    "chip.past bar": H("The measure crosses its bar: look at the frames it names before the page."),
     "chip.not run": H("The stage has no record in this job yet: set its knobs in the inspector and run it."),
     "measure.stability": H(
         "Per window, where frame ref's window content sits in every frame (dx, dy px, sub-pixel by template match over the window grown 30 px; positive right and down): an object's stability under the loop's motion and effects. dx is the solid line in the text colour and dy the dashed line in the muted colour, on the shared frame axis.",
@@ -650,7 +650,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         source="loop_seq.py",
     ),
     "plan.timeline.slide.mode": H(
-        "fly: her cutout travels between her two places with a motion blur over a RIFE base with her removed; dissolve: her old cutout fades out in place and the new one fades in at the destination while the others morph underneath.",
+        "fly: her cutout travels between her two places with a motion blur over a RIFE base with her removed. dissolve: her old cutout fades out in place and the new one fades in at the destination while the others morph underneath.",
         default="fly",
         stage="render",
         source="loop_seq.py",
@@ -686,7 +686,7 @@ LOOP_HINTS: dict[str, dict[str, Any]] = {
         "fly only: the blur's length in px per px of her speed.", default=0.5, stage="render", source="loop_seq.py"
     ),
     "plan.timeline.slide.fill": H(
-        "How her spot in the next still is filled for the base: vertical takes the wall from above and the floor from below; donor+vertical then puts back the current still's own background where it shows one; any other value takes the current still's background, else the wall extended.",
+        "How her spot in the next still is filled for the base: vertical takes the wall from above and the floor from below. donor+vertical then puts back the current still's own background where it shows one. Any other value takes the current still's background, else the wall extended.",
         default="donor+vertical",
         stage="render",
         source="loop_seq.py",

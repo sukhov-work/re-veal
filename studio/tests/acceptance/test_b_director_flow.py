@@ -7,7 +7,10 @@ frozen:mismatch_3_r12 c1 at 1920 px; the plan view's knob map; three 480 px draf
 md5 01b3cf3c…, the workbench's four knobs at md5 5b3ee379…, and a re-render of the first from its record's knobs under
 a new tag); the measures, the series and the decoded steps of the first; a marked frame; a full 1920 render across a
 server restart; the page through director_page.py behind the gate with an override and a rebuild; a grade in the picks
-shape. About 3 minutes on this laptop; it writes into no other job. Every `serve` start reconciles the running records
+shape. The acceptance driver of phase B added the API checks of its drive (b_acceptance.md, 2026-11-05): the Host
+refusal, the pair list, the overlays at 960 px, Reveal's verdict on a director job, the refused --set keys and frame
+count, the page's keyframe tile and the file route's bases over HTTP. About 3 minutes on this laptop; it writes into no
+other job. Every `serve` start reconciles the running records
 of every job of the tree (backlog T88), so the test waits until no other job has a running record before its start and
 before the full render, and skips at the restart when another job's record started meanwhile.
 
@@ -20,12 +23,15 @@ tables, the mattes, the depth model's manifest or the plan's keyframe are absent
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import os
+import re
 import signal
 import struct
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 import pytest
 
@@ -85,7 +91,14 @@ def settings(tmp_path: Path) -> Settings:
 
 def png_size(p: Path) -> tuple[int, int]:
     """A PNG's width and height from its IHDR chunk."""
-    w, h = struct.unpack(">II", p.read_bytes()[16:24])
+    return png_bytes_size(p.read_bytes())
+
+
+def png_bytes_size(b: bytes) -> tuple[int, int]:
+    """A PNG's width and height from its IHDR chunk; (0, 0) when the bytes are no PNG."""
+    if b[:8] != b"\x89PNG\r\n\x1a\n":
+        return 0, 0
+    w, h = struct.unpack(">II", b[16:24])
     return int(w), int(h)
 
 
@@ -127,6 +140,11 @@ def test_the_director_flow_on_mismatch_3(settings: Settings, tmp_path: Path) -> 
         server.start()
         t0 = time.time()
 
+        # the server answers 127.0.0.1 only (b_acceptance.md, added 2026-11-05); red if the handler's Host check is
+        # dropped, so that a page served under another name could drive the runner
+        code, body, _ = client.get("/api/jobs", headers={"Host": f"evil.example:{s.port}"})
+        assert code == 403 and "127.0.0.1" in body["error"], (code, body)
+
         # check 1: a job by pair name; red if the import copies a photo, or the matte count counts mattes.json
         jobs_before = len(list(s.runs.glob("*/studio/*/job.json")))
         code, body, _ = client.post("/api/jobs", {"flow": "director", "pair": "mismatch_7"})
@@ -143,6 +161,15 @@ def test_the_director_flow_on_mismatch_3(settings: Settings, tmp_path: Path) -> 
         assert (job["tables"]["B"]["elements"], job["mattes"]["B"]["count"]) == (56, 51)
         assert job["mattes"]["B"]["missing"] == [9, 19, 24, 26, 32]
         lines.append(f"job {jid}: A 75 elements, 43 mattes; B 56 and 51, missing 9, 19, 24, 26, 32; mismatch_7 400")
+
+        # the new-job form's pair list (GET /api/pairs, b_acceptance.md); red if a matte folder's mattes.json or
+        # sheet.jpg is counted as a matte, or a plan of the pair drops out of the list
+        code, pairs, _ = client.get("/api/pairs")
+        row = next(p for p in pairs if p["pair"] == PAIR)
+        assert code == 200 and row["plans"] == ["mismatch_3", "mismatch_3_r9", "mismatch_3_r10", "mismatch_3_r11", STEM]
+        ph = row["photos"]
+        assert (ph["A"]["elements"], ph["A"]["mattes"], ph["B"]["elements"], ph["B"]["mattes"]) == (75, 43, 56, 51)
+        assert ph["B"]["missing"] == [9, 19, 24, 26, 32] and ph["A"]["layers"] is ph["B"]["layers"] is True
 
         # check 2: the resolve at 1920; red if it writes under run/ or --layers-dir is dropped
         rec, _ = run_stage(client, jid, "resolve", {"plan": PLAN, "concept": CONCEPT})
@@ -163,6 +190,26 @@ def test_the_director_flow_on_mismatch_3(settings: Settings, tmp_path: Path) -> 
         assert "--layers-dir" in rec["argv"] and "--mattes-dir" in rec["argv"] and "--resolve-only" in rec["argv"]
         lines.append(f"resolve {rec['id']} {rec['wall_s']} s: 1920×1440, camera homog, fallbacks {fallbacks}")
 
+        # the import panel's overlays (b_acceptance.md): every kind on both photos, scaled to a long side of 960 px
+        # (director_ui.py:59); matte_9 on B is the hard-mask fallback (no el_9.png). Red if an overlay leaves the
+        # 960 px scale, the fallback answers an error, or an unknown kind is served
+        for side in ("A", "B"):
+            for kind in ("base", "elements", "disparity", "matte_1", "matte_9"):
+                code, png, hdrs = client.get(f"/api/jobs/{jid}/overlay/{side}/{kind}.png")
+                assert code == 200 and hdrs["content-type"] == "image/png", (side, kind, code)
+                assert png_bytes_size(png) == (960, 720), (side, kind, png_bytes_size(png))
+        assert client.get(f"/api/jobs/{jid}/overlay/A/bogus.png")[0] == 404
+        # the import tile's picture after a resolve; red if the thumbnail stops reading the latest canvas_A.png
+        code, _, hdrs = client.get(f"/api/jobs/{jid}/thumb/canvas/A")
+        assert code == 200 and hdrs["content-type"].startswith("image/"), (code, hdrs)
+
+        # Reveal's verdict, the shared branch, on a director job: refused on this pair with its FAILED: line; red if
+        # the director flow drops the shared stage or the runner reads exit 2 with FAILED: as a failure
+        rec_v, _ = run_stage(client, jid, "verdict", {})
+        assert rec_v["state"] == "refused" and str(rec_v["reason"]).startswith("FAILED:"), rec_v
+        assert rec_v["argv"][1:3] == ["reveal.py", "align"] and rec_v["argv"][0] == str(s.python)
+        lines.append(f"overlays 5 kinds × 2 photos at 960×720; verdict {rec_v['id']} {rec_v['wall_s']} s refused")
+
         # check 3: the plan opened; red if the plan stage pre-fills the round-12 knobs or a name form fails to map
         code, pv, _ = client.get(f"/api/plans/director/{STEM}")
         assert code == 200 and pv["sha256"] == PLAN_SHA256
@@ -181,6 +228,22 @@ def test_the_director_flow_on_mismatch_3(settings: Settings, tmp_path: Path) -> 
         lines.append(
             "plan: three knobs mapped, parallax_push 2.5 here, two bars; the last round's knobs on request only"
         )
+
+        # a --set key that reaches no frame, and fewer than 3 frames, are refused before the renderer starts, with no
+        # record (b_acceptance.md); red if check_set is dropped (the renderer stores such a key and never reads it,
+        # D:878-881) or the refusal comes after the record folder is made
+        n_records = len(list((d / "stages").iterdir()))
+        for bad_set in ({"pane_becomes_view.ease": "linear"}, {"no_such_key": 1}):
+            code, body, _ = client.post(
+                f"/api/jobs/{jid}/stages/render/run", {"knobs": {**DRAFT, "name": "refused", "set": bad_set}}
+            )
+            assert code == 400 and body["refused_keys"] == sorted(bad_set), (code, body)
+        code, body, _ = client.post(
+            f"/api/jobs/{jid}/stages/render/run", {"knobs": {**DRAFT, "name": "short", "seconds": 0.05}}
+        )
+        assert code == 400 and "3 or more" in body["error"], (code, body)
+        assert len(list((d / "stages").iterdir())) == n_records
+        assert not list((d / "drafts").glob(f"{STEM}_{CONCEPT}-refused*")) + list((d / "drafts").glob("*-short*"))
 
         # check 4: the two-knob draft; red if --progress is dropped or a knob is sent with another value
         rec, seen = run_stage(client, jid, "render", {**DRAFT, "name": "two", "set": TWO})
@@ -285,6 +348,26 @@ def test_the_director_flow_on_mismatch_3(settings: Settings, tmp_path: Path) -> 
         rnd = read_json(d / "rounds" / "1" / "round.json")
         assert rnd["page_md5"] == page_md5 and rnd["candidates"] == [f"{STEM}_{CONCEPT}-full"]
         lines.append(f"page {page['id']}: md5 {page_md5}, round 1 on the override")
+
+        # the page's keyframe tile over HTTP (UNVERIFIED by a drive in b_director_research.md §6 until b_acceptance.md):
+        # its <img> source, relative to the page's URL, resolves through the file route's helper rule to the plan's
+        # keyframe, byte for byte. Red if the file route serves only the job folder: the tile breaks
+        srcs = re.findall(r"<img[^>]*\ssrc=['\"]([^'\"]+)['\"]", html)
+        assert KEYFRAME in srcs, srcs
+        code, png, hdrs = client.get(urljoin(f"/api/jobs/{jid}/file/index.html", KEYFRAME))
+        assert code == 200 and hdrs["content-type"] == "image/png", (code, hdrs)
+        assert hashlib.sha256(png).hexdigest() == sha256_file(s.root / KEYFRAME)
+        # the file route's other read-only bases, and what it never serves; red if it serves a repo path outside the
+        # job, fixtures/, the layer and matte roots and the plans' helpers, or follows a raw/ link out of the job
+        code, jpg, _ = client.get(f"/api/jobs/{jid}/file/fixtures/{PAIR}_S.jpg")
+        assert code == 200 and hashlib.sha256(jpg).hexdigest() == PHOTO_SHA256["A"]
+        assert client.get(f"/api/jobs/{jid}/file/layers/{PAIR}_S/layers.json")[0] == 200
+        assert client.get(f"/api/jobs/{jid}/file/mattes/{PAIR}_F/el_1.png")[0] == 200
+        for never in ("AGENTS.md", "reveal.py", f"raw/{PAIR}/A.jpg", "models/DEPTH_MANIFEST.json"):
+            assert client.get(f"/api/jobs/{jid}/file/{never}")[0] == 404, never
+        # a `..` in the path is refused as such (server/handler.py:173-175); red if the traversal check is dropped
+        assert client.get(f"/api/jobs/{jid}/file/../../../../AGENTS.md")[0] == 403
+        lines.append("the page's keyframe tile served by the helper rule; the file route's bases and refusals held")
 
         # check 8: a grade in the picks shape; red if the key checks of director_ui.py:695-707 are dropped
         clip = {

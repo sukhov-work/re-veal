@@ -66,7 +66,7 @@ def build_page(runner: Runner, d: Path, job: Json, body: Json) -> Json:
     override = bool(body.get("override"))
     knobs: Json = {k["key"]: str(body.get(k["key"]) or "") for k in stage["knobs"] if k["type"] == "str"}
     knobs["notes"] = body.get("notes") or {}
-    if any(k["key"] == "variants" for k in stage_def(job["flow"], "page")["knobs"]):
+    if any(k["key"] == "variants" for k in stage["knobs"]):
         knobs["variants"] = variants  # the loop's and the pair's page list the named renders
     if bad and not override:
         raise StudioError(

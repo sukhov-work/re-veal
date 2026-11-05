@@ -23,12 +23,15 @@ h3{font:600 0.875rem/1.3 var(--sans);margin:0 0 8px}
 .btn.ghost{background:none;border-color:transparent;color:var(--muted);padding:2px 6px}
 .btn.ghost:hover{color:var(--text)}
 .btn[disabled]{opacity:.4;pointer-events:none}
+.btn[aria-busy="true"]{opacity:.6;cursor:progress}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
 .seg button{font:500 0.75rem/1.3 var(--sans);background:var(--raised);color:var(--muted);border:0;border-right:1px solid var(--line);padding:5px 12px;cursor:pointer}
 .seg button:last-child{border-right:0}.seg button:hover{color:var(--text)}
 .seg button[aria-pressed="true"]{background:var(--ground);color:var(--text);box-shadow:inset 0 -2px 0 var(--amber)}
 input,select,textarea{background:var(--ground);color:var(--text);border:1px solid var(--line);border-radius:3px;font:400 0.8125rem/1.4 var(--mono);padding:4px 8px}
 input:focus,select:focus,textarea:focus{border-color:var(--amber);outline:none}
+/* a checkbox or a radio draws no border, so its keyboard focus takes the ring (critique B, P2 2) */
+input[type=checkbox]:focus-visible,input[type=radio]:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 ::placeholder{color:var(--faint);opacity:1}
 input[type=checkbox]{width:14px;height:14px;accent-color:var(--amber)}
 textarea{width:100%;min-height:120px;resize:vertical}
@@ -60,6 +63,7 @@ tr:hover td{background:var(--raised)}
 .kv{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:3px 16px}
 .rail .kv{flex-wrap:wrap}
 .rail .new{margin:8px 16px 0}
+.rail .formhead{font-size:.8125rem;margin:0 0 6px}
 .work{padding:16px 24px 0;overflow:auto;min-width:0}
 .jobhead{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
 .stripwrap{margin:12px 0 0;padding:3px 3px 16px;border-bottom:1px solid var(--line)}
