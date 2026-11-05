@@ -216,7 +216,7 @@ The owner's order of 2026-11-05 is quoted verbatim in DECISIONS 2026-11-05: "we 
 - The three import-linter contracts: no tool, research script or model library is imported; cv2 only in `media`; the layers are server > views > runner | media > jobs > registry > config | errors | fs.
 - `make test` adds the integration layer: the real research script's `--help` against the registry, and the three jobs of 2026-11-04 opened.
 - `make acceptance` runs the scripted drives on the owner's stills: the a2 md5 through the package, and a draft that writes into a job.
-- `.github/workflows/studio.yml` runs `make qa` on ubuntu with the unit layer. It is an addition beyond the epistemic-filter project's practice of local gates. Its first run is UNVERIFIED until the push.
+- `.github/workflows/studio.yml` runs `make qa` on ubuntu with the unit layer. It is an addition beyond the epistemic-filter project's practice of local gates. Its first two runs on 2026-11-05 failed: in setup, because the major tag `astral-sh/setup-uv@v10` does not exist, and in `uv sync`, because the lock named a work mirror this laptop's shell exports. The third run was green in 64 s after the package pinned PyPI as its only index (`tests/test_lock.py` guards the lock).
 - A test runs the no-slop checker over every hint and stage sentence, so his answer 4 of section 10 is a mechanism.
 
 **Rules the package adds** (the conventions file is normative).
