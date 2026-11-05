@@ -2,8 +2,9 @@
 name: reveal
 description: >
   Universal work skill for Reveal, the local before/after photo aligner (reveal.py + harness.py),
-  and for Transitions, the photo-to-photo transition renderer beside it (transitions.py +
-  transitions_harness.py). Implementation, fixes, design, research, review, and whole-repo
+  for Transitions, the photo-to-photo transition renderer beside it (transitions.py +
+  transitions_harness.py), and for the studio, the local page over every flow (the package
+  reveal-studio under studio/). Implementation, fixes, design, research, review, and whole-repo
   audits. Parallel-first, evidence-cited, falsification-gated. Trigger on: "implement", "build",
   "add", "fix", "debug", "design", "plan", "investigate", "research", "review", "critique",
   "double-check", "verify this claim", "audit", "comprehensive review", a new matching mode, a
@@ -23,7 +24,8 @@ morph / dissolve / portal / luma video (design of record `TRANSITIONS.md`); the 
 import each other. Canonical docs, all under `.claude/claude-docs/`: `HANDOFF.md` (Reveal design of
 record — invariants §2, pipeline §3, decisions §6, harness coverage §7, risks §9, amendments §11),
 `TRANSITIONS.md` (transitions design of record — invariants §1, pipeline §2, harness §5, numbers §6),
-`EXPLORATION_PLAN.md` (work plan, ranked by the owner on 2026-09-13). Prose rule: `.claude/rules/prose.md`
+`EXPLORATION_PLAN.md` (work plan, ranked by the owner on 2026-09-13), `STUDIO.md` (the studio's design of
+record; §9 the phases, §13 the package). Prose rule: `.claude/rules/prose.md`
 (every dev-facing text passes the `no-slop` skill before it is saved or shown). Standards: `.claude/conventions/` (architecture ·
 testing · naming · error-handling · verify · contracts). Known debt lives in exactly one place:
 `references/tracked-backlog.md`.
@@ -32,10 +34,10 @@ testing · naming · error-handling · verify · contracts). Known debt lives in
 
 | Generic term | In this repo |
 |---|---|
-| **artifact** | a section of `reveal.py` or `transitions.py` (the `# ----` blocks mapped in `conventions/architecture.md`), a lettered section of `harness.py` or `transitions_harness.py`, a doc |
-| **gate** | Gate 0 `py_compile` (the four tool files plus the bench and research scripts touched) · Gate 1 `harness.py` (82 checks) · Gate 1b `transitions_harness.py` (count in `TRANSITIONS.md §5`) · Gate 2 `reveal.py check` + `transitions.py check` |
-| **verify** | harnesses green, then a catalogued real pair (`fixtures/MANIFEST.md`) through `align` or the page with `metrics.json` quoted, or through `transitions.py pair` with `report.json` quoted and the strip looked at |
-| **live drive** | `reveal.py align` on a real pair, or the served page (`conventions/verify.md`) |
+| **artifact** | a section of `reveal.py` or `transitions.py` (the `# ----` blocks mapped in `conventions/architecture.md`), a lettered section of `harness.py` or `transitions_harness.py`, a module of `studio/src/reveal_studio/` with its test (`conventions/studio.md`), a doc |
+| **gate** | Gate 0 `py_compile` (the four tool files plus the bench and research scripts touched) · Gate 1 `harness.py` (82 checks) · Gate 1b `transitions_harness.py` (count in `TRANSITIONS.md §5`) · Gate 2 `reveal.py check` + `transitions.py check` · Gate 3 `make -C studio qa` (ruff, mypy strict, the unit tests, import-linter, deptry, vulture, pip-audit, radon, the prose check; `make -C studio test` adds the integration layer) |
+| **verify** | harnesses green, then a catalogued real pair (`fixtures/MANIFEST.md`) through `align` or the page with `metrics.json` quoted, or through `transitions.py pair` with `report.json` quoted and the strip looked at; for the studio, `make -C studio acceptance` (the owner's stills through the served page: the a2 md5 c302623f… reproduced) and the routine of `references/studio.md` before his eye |
+| **live drive** | `reveal.py align` on a real pair, or the served page (`conventions/verify.md`); the studio served on a free port with its own lock path (`reveal-studio serve --port <free> --lock <tmp> --no-browser`), never on the owner's 8380 |
 | **the deploy** | laptop only; "shipped" = committed on `main` and pushed to `origin main` by the agent at Phase 4 — no branches, no PRs (owner ruling 2026-09-13) |
 | **the backlog** | `references/tracked-backlog.md` |
 
@@ -70,9 +72,9 @@ order ⇒ **Audit**, not Review.
 
 | Tier | Trigger | What runs |
 |---|---|---|
-| **Quick** | one section; "see if…"; a one-function fix; a constant; a new transitions preset (a `PRESETS` entry + one section-F assertion) | No fan-out. Inline evidence. One refutation attempt. Inline answer. |
-| **Standard** | one pipeline stage plus its harness section; a normal plan slice; a new video style; a new transitions style (an `iter_frames` branch + a decoded-mp4 observable); a measured performance pass on one stage | Fan out only on real gaps (memory/docs first). Standard gate. |
-| **Deep** | a new matching mode or estimator (touches ladder + arbitration + harness + page + CLI); a residual-field change; a new correspondence method, dense matcher or generative backend in `transitions.py` (weights, device, offline proof); a doc critique; "very heavy" | Full fan-out + escalation (see Heavy-task escalation). Full gate. |
+| **Quick** | one section; "see if…"; a one-function fix; a constant; a new transitions preset (a `PRESETS` entry + one section-F assertion); a studio hint, chip or knob default | No fan-out. Inline evidence. One refutation attempt. Inline answer. |
+| **Standard** | one pipeline stage plus its harness section; a normal plan slice; a new video style; a new transitions style (an `iter_frames` branch + a decoded-mp4 observable); a measured performance pass on one stage; a studio stage, panel, route or view (one module and its test) | Fan out only on real gaps (memory/docs first). Standard gate. |
+| **Deep** | a new matching mode or estimator (touches ladder + arbitration + harness + page + CLI); a residual-field change; a new correspondence method, dense matcher or generative backend in `transitions.py` (weights, device, offline proof); a doc critique; a new studio flow, a change to the runner's rules or the job folder layout; "very heavy" | Full fan-out + escalation (see Heavy-task escalation). Full gate. |
 
 Calibrate silently and record the tier as a tag in the DECISIONS line (`[tier: Standard]`). Two
 failure shapes: ballooning a "see if" into an XL apparatus; under-scoping a Deep task into a thin pass.
@@ -152,6 +154,8 @@ Never narrate parallelism you are not running.
    defaults — derive from source or ask.
 2. Read `.claude/conventions/` + the plan slice + 2–3 neighbour functions in the same section and
    the harness section that pins them. Match the neighbourhood; name the conventions you applied.
+   A studio change reads `conventions/studio.md` and `references/studio.md`, lands in the package
+   with its test alongside, and never in the retired script.
 3. **Fix the baseline.** Gates green BEFORE the first edit — or snapshot and classify the
    pre-existing red. "Was it me?" must be answerable at every step.
 4. Smallest vertical slice → change → **external truth decides** (harness output, `metrics.json`,
@@ -241,6 +245,7 @@ harness-tested   every time:  .venv/bin/python -m py_compile reveal.py harness.p
                               .venv/bin/python transitions_harness.py               # Gate 1b (~5 s; count in TRANSITIONS.md §5)
                               .venv/bin/python reveal.py check                      # Gate 2
                               .venv/bin/python transitions.py check
+                              make -C studio qa                                     # Gate 3 (the studio package; `make -C studio test` with the main venv)
 ```
 Fix all failures before claiming success.
 
@@ -282,7 +287,9 @@ at a time.
    facts · phased plan · gate baseline with known reds · record checklist · harness facts) and
    advance "Next step" in `mem:core`. **Work discovered mid-session goes here, not into this
    session.**
-4. **Doc-sync** — a shipped behaviour change that contradicts `HANDOFF.md` gets a dated amendment
+4. **Doc-sync** — a studio change amends `STUDIO.md §13` with a dated paragraph, `studio/ARCHITECTURE.md`
+   when a module moved, and `conventions/contracts.md`'s studio section when a route or a shape changed;
+   a shipped behaviour change that contradicts `HANDOFF.md` gets a dated amendment
    row in its §11 the SAME session (the `82 checks` count, the coverage paragraph §7, a new decision
    row in §6 when a §6 alternative was reopened); a transitions change updates `TRANSITIONS.md`
    §5 (check count and coverage) and §6 (numbers); the plan slice is marked; `conventions/contracts.md`
@@ -339,3 +346,6 @@ remain the OUTER loop; the engine's gate complements them, never replaces them.
 | A performance change that alters frames silently | Hash the harness pair's frames before and after; byte-identical, or the DECISIONS line says what moved |
 | A model or device (MPS/MLX) added to `transitions.py` without an offline proof and a CPU-equivalence check | Warmup + manifest + refuse-to-download (decisions 24–27) and a harness check comparing device output to the CPU field on a fixture |
 | Presenting or saving dev-facing prose without the `no-slop` pass | `.claude/rules/prose.md`: load the skill, run the pass, then save |
+| A studio change on the retired script, or a page sentence no test checks | The package under `studio/` with its test; the hints table (the prose test runs the checker over every sentence) |
+| A studio server started on the owner's port 8380 for a drive | A free port with its own `--lock` path; the owner's server is his to close |
+| A UI change shown to the owner after `make qa` alone | The routine of `references/studio.md`: the acceptance drive, the Fable review, the critique with the detector at 0, the prose pass |

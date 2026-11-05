@@ -172,3 +172,104 @@ listed stills slide across the base as sheets, back to front, over `n` frames, a
     between the two stills exceeds 14 and 30, to 4 places. The distance is the one `change_matte` thresholds: on
     2 px blurred copies, before the matte's opening and closing. The shares depend on the registration: the angel
     pair reads 0.3021 on its locked canvas (`in/angel/`) and 0.1964 on the all-keypoint fit without the ring lock.
+
+## 2026-11-05: windows, probe, measure, variants (for the studio)
+
+Four additions, each off unless named: `prep --windows`, the `probe` command, the `measure` command and
+`page --variants`. When none is named, `prep`, `render` and `page` write the same bytes as before. Checked on 2026-11-05:
+a2 renders `c302623f293eacd069218fd7518e0967` and s6 `5908af3d5300046579548848679b0cbb` with both scripts, the angel
+prep's `k*.png` and `depth_k*.npy` equal the recorded `in/angel/` byte for byte, and the angel page rebuilds to
+`72dadc4f5ea4db16152fe0c7062a3f94`. A malformed or missing input to any of the four prints one `FAILED: …` line on
+stderr and exits 2.
+
+### `prep --windows "name:x0,y0,x1,y1;…"`
+
+The windows are in frame-0 px before the crop, the px of `--lock-window`; each side is 4 px or more. The windows are
+measured and never applied: the stills, the depth maps and every other `prep.json` key stay as they are without the flag.
+For every frame i ≥ 1 that is not a cut, and every window, the prep finds frame 0's window content in frame i under
+each fit below. The match is `_window_shift`, the lock's own measure: a template match over a ±30 px search, sub-pixel
+by a parabola.
+- `all`: the SIFT fit on every keypoint, direct to frame 0. Under `--bg-depth` the prep computes it for the windows
+  only; a rejected all-keypoint fit gets no entry and a log line.
+- `far`: the masked SIFT fit of `--bg-depth`.
+- `chain`: the fit through frame i − 1, when the direct fit was rejected.
+- `ecc`: the ECC fallback, or the masked refinement of `--ecc-refine`.
+- `final`: frame i as the prep writes it (after `--lock-window`, with the written stills' resampling) against frame 0,
+  both on the canvas before the crop, so a window at the crop's edge still finds content beyond it.
+
+The first four are read on frame i warped onto frame 0 by the fit (cubic). A fit that made no map has no entry.
+
+`prep.json` gains a top-level `"windows": {"<name>": [x0, y0, x1, y1]}` and, per frame i ≥ 1, `frames[i].windows`:
+`{"<name>": {"box": [x0, y0, x1, y1], "box_canvas": [x0, y0, x1, y1] | null, "fits": {"<fit>": {"dx", "dy", "corr",
+"edge"}}}}`. `dx` and `dy` are px (positive: right and down), to 2 places. `corr` is the match's peak, −1 to 1, to 3 places.
+`edge` is true when the peak lies on the search's border; the offset is then a bound, not a measurement. `box_canvas`
+is the window in the px of the written `k<i>.png` (carried by the canvas map, less the crop's origin; null when less
+than 4 px of a side stays inside the crop). `OUT/windows.jpg` holds one panel per frame i ≥ 1: frame 0 at a 960 px long
+edge with the windows and their names. Each fit draws one arrow from the window's centre, 8 times the offset: `all`
+orange, `far` blue, `chain` magenta, `ecc` green, `final` red.
+
+On the angel pair (2026-11-05) the windows reproduce the sheet's registration table (`benchmarks/2026-11-04-angel.md`)
+in every cell at its 0.1 px precision. Under the lock, `final` holds the three ring windows within 2.14 px.
+
+### `probe PREP_DIR --out DIR [--long 960] [--pairs "i,j;k,l"]`
+
+The probe compares three in-between methods before a plan is written. It reads the prep folder's `k<i>.png`, scales
+them to `--long` (downscale only, sides made even) and takes every adjacent pair, or the listed pairs. Per pair it
+makes the in-betweens at t 0.25, 0.5 and 0.75 by three methods:
+- `rife`: RIFE v4.26 over the whole frame, as a `matte: {"all": true}` leg renders it. RIFE loads only behind
+  `RIFE_MANIFEST.json`, offline. When the manifest is missing, or `rife_probe` refuses a weight, the probe skips the
+  RIFE strips with a log line, and `rife_skipped` says why.
+- `morph`: transitions.py's DIS morph (`prepare` and `iter_frames`, as `frames_morph` calls them). Its three frames sit
+  at 1/4, 1/2 and 3/4 of a five-frame morph, where the morph preset's sine ease puts the warp and the mix at 0.15, 0.5
+  and 0.85.
+- `dissolve`: the plain blend.
+
+It writes `DIR/probe_<i>_<j>_<method>.jpg` (the three frames side by side, each labelled with its t) and `DIR/crops/`.
+The crops are 1:1 at the YuNet face boxes of the pair: a face of still i and the nearest face of still j share one box,
+grown by 25 % on every side. Their names are `<i>_<j>_k<i>_face<k>.jpg` and `<i>_<j>_k<j>_face<k>.jpg` for the two
+stills, and `<i>_<j>_<method>_t<t>_face<k>.jpg` for the in-betweens.
+
+`probe.json` holds `prep`, `long`, `size` [W, H], `t`, `matte` (the change matte's settings), `rife_version` (the
+manifest's model string, or null), `rife_skipped` (null or the reason), `faces_model`, `seconds` and `script_md5`.
+Its `pairs` list holds, per pair, `{"a", "b", "matte_share", "faces": [{"box", "a", "b"}], "methods": {"<method>":
+{"strip", "flow" (morph only), "frames": [{"t", "dexp", "dexp_frame", "step_a", "step_b", "seconds" (rife only),
+"crops"}]}}}`. `dexp` is rule 7's double-exposure share (`rife_probe.dexp_share`: pixels within 20 levels of the two
+stills' mean and more than 20 from each) inside the change matte, where the stills differ. `dexp_frame` is the same
+share over the whole frame, the value a `matte: {"all": true}` render records in `frames.json`. `step_a` and `step_b`
+are the mean absolute differences to still i and still j (0–255).
+
+On the angel pair at 960 px (2026-11-05): RIFE's `dexp` is 0.0223–0.0494 on the unlocked prep, the sheet's 0.022–0.049;
+it is 0.0341–0.0611 on the locked prep. Two to three seconds per pair.
+
+### `measure MP4 --out DIR [--frames-json PATH] [--window "name:x0,y0,x1,y1;…"] [--ref 0] [--margin 30]`
+
+`measure` computes the measures of `render` on any mp4, without rendering. `render` calls the same function
+(`measures_of`), so on the five angel candidates the 16 measure keys of `measure` equal the render's own `measure.json`.
+`DIR/measure.json` holds `mp4`, `frames_json`, `frames` (the decoded count), `fps` (the container's), `canvas`,
+`seconds`, then the render's keys in the render's order: `step_mean`, `step_max`, `step_max_at`, `seam_step`, `steps`,
+`faces_per_frame`, `faces_keyframes`, `generated_frames`, `generated_share`, `dexp_max`, `rife_seconds_per_frame`, and
+`md5_mp4` and `script_md5`. Five of them need the render's `frames.json`, because only the render knows which frame is
+a still or generated and what its double-exposure share was: `faces_keyframes`, `generated_frames`, `generated_share`,
+`dexp_max` and `rife_seconds_per_frame`. They are null unless `--frames-json` is given, and its row count must equal
+the decoded frame count.
+
+With `--window` (px of the clip), `measure` also writes `stability_ref`, `stability_margin`, `stability` and
+`stability_max`. `stability` maps each window name to one `[dx, dy, corr]` per decoded frame: where frame `--ref`'s
+window content sits in that frame. `stability_max` gives per window `box`, `dx_max` and `dy_max` (the largest absolute
+offsets, px) with `dx_max_at` and `dy_max_at` (their frames), `corr_min`, and `edge_frames` (frames whose peak lies on
+the search's border). `--margin` (default 30 px) is the search around the window.
+
+On the a2 mp4 (2026-11-05) the ring's top window (393, 371, 553, 441) moves at most 1.18 px sideways and 3.96 px up.
+Over a1–a3 the largest are 1.22 and 4.15 px, the sheet's "1.2 and 4.2". Margins 12 and 30 give the same numbers.
+The count of sheets moving at once per frame (the seasons s9 reading) is absent: it is a count of the plan's schedule
+(the per-sheet displacement `d` in `frames.json`), not of the decoded frames.
+
+### `page --variants a2,a3`
+
+`--variants` lists only the named full renders of each sequence, in the given order; a full render is a folder of
+`<root>/<seq>/` that holds `measure.json`. The list applies to every sequence on the page, so pass `--order` with one
+sequence when the names belong to one. A name that is not a full render of a sequence, or a name given twice, is a
+`FAILED:` exit 2 before anything is written. When the flag is absent, the page lists every full render in name order,
+as before.
+On a copy of the angel run the page with the recorded title, intro, footer and notes gives md5
+72dadc4f5ea4db16152fe0c7062a3f94, the recorded page's, with and without `--variants a1,a2,a3,a4,a5`.

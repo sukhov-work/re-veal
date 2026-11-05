@@ -35,7 +35,7 @@ The owner asks for a transition or a loop in words; the session registers the ph
 - Models on the laptop, offline behind manifests: DISK+LightGlue (the learned matcher), Depth Anything V2 Small (depth), RIFE v4.26 (in-betweens), YuNet (faces), ViTMatte (mattes), SAM 3 (layers, a scratch venv). On the box: FLUX.2 klein 9B at 8-bit and Qwen image edit (keyframes). No 4-bit quants; licences never a constraint.
 - Permanently out (`AGENTS.md`): LoFTR, GPU inference for Reveal, a settings file, ffmpeg xfade, dense residual flow in the alignment output, a pixel-similarity score term, lazy model download at runtime.
 - Terminology: a pair (two photos), a sequence (two to six stills), a plan (the JSON that drives a render), a round (one page of candidates and his grades), a candidate (one render on the page), a draft (a 480 or 960 px render), the skeptic (a review pass before the page), a watch (a reproduction check by md5).
-- Undecided: whether the UI becomes a third root tool or stays a research script (`ui_design.md §9 Q1`, answered "research script" on 2026-10-21 for phase 1; open for the rebuild).
+- Decided 2026-11-05 (his order of that day; `STUDIO.md §13`): the studio is a Python package, `reveal-studio` under `studio/`, with its own venv, tests and gates, a third surface beside the two single-file tools. `ui_design.md §9 Q1` had answered "research script" for phase 1 on 2026-10-21.
 
 ## Evidence on Hand
 

@@ -6,8 +6,10 @@ This page adds only what agents need to navigate and extend the single file with
 ## The single-file rule
 `reveal.py` is one module by design (mirrors the media-organizer's `organize.py`/`viewer.py`).
 New capability = a new function inside the matching section below, or a new section with the same
-`# ----` divider style. No packages, no `src/` — a helper that needs its own file is a design
-decision for `DECISIONS.md`, not a refactor. One such decision exists (2026-09-13): `transitions.py`
+`# ----` divider style. No packages, no `src/` for the two tools — a helper that needs its own file is
+a design decision for `DECISIONS.md`, not a refactor. The studio is the one package in the repo
+(`studio/`, `reveal-studio`, since 2026-11-05 by owner order; its conventions are `studio.md`); it
+imports neither tool and runs them as subprocesses. One such decision exists (2026-09-13): `transitions.py`
 is a SECOND single-file tool with the same section style and its own harness; the two never import
 each other (transitions harness 1–2). Its design of record is `TRANSITIONS.md`.
 

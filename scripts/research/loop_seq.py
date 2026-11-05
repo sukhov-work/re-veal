@@ -16,6 +16,12 @@ Subcommands
       ECC affine on blurred 600 px proxies (the motion-blurred frames); otherwise identity, said on the log.
       Frame 0 is never warped. All frames are cropped to the common valid rectangle (even sides). Writes
       OUT/k<i>.png and OUT/prep.json (the method, inliers, residual, the map and the crop per frame).
+      `--windows "name:x0,y0,x1,y1;..."` (2026-11-05, for the studio; frame-0 px before the crop) measures and never
+      applies: per registered frame i >= 1 and window, where the window's content sits (dx, dy px, sub-pixel by template
+      match, and the correlation) under every fit the prep made for the frame: `all` (every keypoint), `far` (with
+      --bg-depth), `chain`, `ecc`, and `final` (frame i as the prep writes it, after --lock-window, read on the canvas
+      before the crop). Written to prep.json (`frames[i].windows`, and the boxes as `windows`) and drawn on
+      OUT/windows.jpg; without it prep.json is unchanged.
   render PLAN.json --out OUT [--fps 25] [--draft 0] [--progress] [--frames]
       Renders the loop the plan describes (see plans/loops/SCHEMA.md): keyframes by index into the prep
       folder, holds per visit, a `through` chain of stills under one global speed profile (the inner stills
@@ -43,6 +49,22 @@ Subcommands
       of pixels whose Lab distance on 2 px blurred copies (the change matte's measure) is above 14 and above 30.
       Writes DIR/readers.json and DIR/depth_k<i>.jpg (the map stretched min..max); DIR defaults to
       PREP_DIR/readers.
+  probe PREP_DIR --out DIR [--long 960] [--pairs i,j;...]
+      The in-between methods side by side before a plan is written (2026-11-05): per adjacent pair of registered stills
+      (or the listed pairs), scaled to the long edge, the in-betweens at t 0.25, 0.5 and 0.75 by RIFE over the whole frame
+      (behind its manifest, offline; without the manifest the RIFE strip is skipped with a log line), the DIS morph
+      (transitions.py's, the morph preset's own ease) and the plain dissolve. Writes DIR/probe_<i>_<j>_<method>.jpg (three
+      tiles with their t), DIR/crops/ (1:1 crops at the YuNet face boxes) and DIR/probe.json (per frame the double-exposure
+      share inside the change matte and over the whole frame, and the mean absolute step to each still).
+  measure MP4 --out DIR [--frames-json PATH] [--window "name:x0,y0,x1,y1;..."] [--ref 0] [--margin 30]
+      The measures of `render` on any mp4, without rendering (2026-11-05; `render` calls the same code): the step series,
+      its mean, max and argmax, the seam step, YuNet faces per frame; with the render's frames.json also the faces on the
+      stills' frames, the generated share and the largest double-exposure share; with --window each window's offset
+      against frame --ref in every frame (an object's stability, dx, dy px and the correlation). Writes DIR/measure.json.
+  page --root ROOT --out HTML [--order seq,...] [--notes JSON] [--title ...] [--intro ...] [--footer ...] [--variants a,b]
+      The review page: per sequence the keyframes strip (written to ROOT/in/<seq>/keys.jpg), and per full render (a
+      folder of ROOT/<seq>/ holding measure.json, in name order) the mp4, the gif, the numbers and the note. `--variants`
+      (2026-11-05) lists only the named renders, in that order; a name that is not a full render is a FAILED exit 2.
 """
 import argparse
 import datetime
@@ -85,6 +107,13 @@ def sha256(p):
 
 def md5(p):
     return hashlib.md5(Path(p).read_bytes()).hexdigest()
+
+
+def fail(msg):
+    """A refusal of a malformed or missing input (2026-11-05): `FAILED: msg` on stderr and exit 2, the convention of
+    reveal.py that the studio's runner reads."""
+    print(f"FAILED: {msg}", file=sys.stderr, flush=True)
+    sys.exit(2)
 
 
 # `render --progress` (2026-11-04, for the studio): PROGRESS lines on stderr. The switch is off unless cmd_render sets
@@ -228,10 +257,153 @@ def _window_shift(a, b, box, margin=30):
     return px - (x0 - ox) + sub(0), py - (y0 - oy) + sub(1), float(mx)
 
 
-def register_all(frames, cuts=(), masks=None, ecc_refine=False):
+# `prep --windows` and `measure --window` (2026-11-05, the studio): named windows, their offsets per fit, windows.jpg
+WINDOW_FITS = ("all", "far", "chain", "ecc", "final")
+WINDOW_COLOURS = {"all": (0, 165, 255), "far": (255, 128, 0), "chain": (255, 0, 255), "ecc": (0, 200, 0), "final": (0, 0, 255)}   # BGR
+WINDOW_ARROW = 8                       # windows.jpg draws each offset 8 times its length
+
+
+def parse_windows(s, flag):
+    """'name:x0,y0,x1,y1;...' -> {name: [x0, y0, x1, y1]} (int px, each side 4 px or more); a malformed list is a FAILED
+    exit that names the flag and the part."""
+    wins = {}
+    for part in s.split(";"):
+        if not part.strip():
+            continue
+        name, sep, rest = part.partition(":")
+        name = name.strip()
+        try:
+            box = [int(v) for v in rest.split(",")]
+        except ValueError:
+            box = []
+        if not sep or not name or len(box) != 4 or box[2] - box[0] < 4 or box[3] - box[1] < 4:
+            fail(f"{flag}: {part.strip()!r} is not name:x0,y0,x1,y1 with x1 >= x0 + 4 and y1 >= y0 + 4")
+        if name in wins:
+            fail(f"{flag}: the name {name!r} is given twice")
+        wins[name] = box
+    if not wins:
+        fail(f"{flag}: no window in {s!r}")
+    return wins
+
+
+def check_boxes(wins, W, H, flag, what):
+    """Every window inside the image it is read on (W x H px), else a FAILED exit naming the window."""
+    for name, (x0, y0, x1, y1) in wins.items():
+        if x0 < 0 or y0 < 0 or x1 > W or y1 > H:
+            fail(f"{flag}: the window {name} [{x0}, {y0}, {x1}, {y1}] leaves {what} ({W}x{H} px)")
+
+
+def _label(img, text, org, scale=0.5, colour=(255, 255, 255)):
+    """Text with a dark outline, readable on any still: the text drawn dark 1 px off in the eight directions, then in
+    `colour`, all at one thickness (OpenCV's glyph advance grows with the thickness, so a thicker outline drifts)."""
+    th = max(1, int(round(2 * scale)))
+    for ox in (-1, 0, 1):
+        for oy in (-1, 0, 1):
+            if ox or oy:
+                cv2.putText(img, text, (org[0] + ox, org[1] + oy), cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), th, cv2.LINE_AA)
+    cv2.putText(img, text, org, cv2.FONT_HERSHEY_SIMPLEX, scale, colour, th, cv2.LINE_AA)
+
+
+def _shift_edge(a, b, box, margin=30):
+    """`_window_shift` plus whether its peak lies on the border of the search (the window grown by `margin` px, cut by b's
+    edges): there the content may sit beyond the search, and the offset is a bound, not a measurement."""
+    dx, dy, c = _window_shift(a, b, box, margin)
+    x0, y0, x1, y1 = box
+    lo_x, hi_x = max(0, x0 - margin) - x0, min(x1 + margin, b.shape[1]) - x1
+    lo_y, hi_y = max(0, y0 - margin) - y0, min(y1 + margin, b.shape[0]) - y1
+    return dx, dy, c, bool(dx < lo_x + 0.5 or dx > hi_x - 0.5 or dy < lo_y + 0.5 or dy > hi_y - 0.5)
+
+
+def _carry_box(box, Hr, W, H):
+    """A window of frame 0 (px) carried onto the canvas by Hr (frame 0 -> the canvas frame): the bounding box of its
+    corners, clipped to W x H; None when less than 4 px of a side remain."""
+    x0, y0, x1, y1 = box
+    c = cv2.perspectiveTransform(np.float32([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]).reshape(-1, 1, 2), Hr).reshape(-1, 2)
+    b = [max(0, int(round(float(c[:, 0].min())))), max(0, int(round(float(c[:, 1].min())))),
+         min(W, int(round(float(c[:, 0].max())))), min(H, int(round(float(c[:, 1].max()))))]
+    return b if b[2] - b[0] >= 4 and b[3] - b[1] >= 4 else None
+
+
+def window_offsets(frames, warped, regs, fits, wins, masks, Hr, crop, out):
+    """`prep --windows`: per registered frame i >= 1 and named window (frame-0 px), where frame 0's window content sits in
+    frame i (dx, dy px, sub-pixel by `_window_shift`, a ±30 px search), the peak correlation, and `edge` (the peak on the
+    search's border: the offset is a bound), under every fit the prep produced for the frame. `all`, `far`, `chain`,
+    `ecc`: frame i warped onto frame 0 by that fit (cubic), as the lock measures; the all-keypoint fit is computed for
+    this when the prep's own fit is the far field's. `final`: frame i as the prep warps it onto the canvas (after
+    `--lock-window`, with the written stills' resampling) against frame 0 on the canvas, before the crop, the window
+    carried onto the canvas; `box_canvas` is that window in the written stills' px (less the crop's origin). A fit that
+    produced no map has no entry. Writes regs[i]["windows"] and out/windows.jpg."""
+    H0, W0 = frames[0].shape[:2]
+    Hc, Wc = warped[0].shape[:2]
+    fboxes = {name: _carry_box(box, Hr, Wc, Hc) for name, box in wins.items()}
+    cboxes = {}
+    for name, b in fboxes.items():
+        cb = None if b is None else [max(0, b[0] - crop[0]), max(0, b[1] - crop[1]), min(crop[2], b[2]) - crop[0], min(crop[3], b[3]) - crop[1]]
+        cboxes[name] = cb if cb is not None and cb[2] - cb[0] >= 4 and cb[3] - cb[1] >= 4 else None
+    drawn = {}
+    for i in range(1, len(frames)):
+        if regs[i]["method"].startswith("cut"):
+            continue
+        maps_i = dict(fits.get(i, {}))
+        if "all" not in maps_i:
+            if masks is not None:
+                Ha, ia = register_sift(frames[0], frames[i])
+                if Ha is not None:
+                    maps_i = {"all": Ha, **maps_i}
+                else:
+                    log(f"prep: frame {i} windows: the all-keypoint fit was rejected ({ia.get('inliers')} inliers, {ia.get('why')}); no `all` offsets")
+            else:
+                log(f"prep: frame {i} windows: the all-keypoint fit was rejected (the frame's `direct` entry); no `all` offsets")
+        res = {name: {"box": list(box), "box_canvas": cboxes[name], "fits": {}} for name, box in wins.items()}
+        for fit in WINDOW_FITS[:-1]:
+            if fit not in maps_i:
+                continue
+            wf = cv2.warpPerspective(frames[i], maps_i[fit], (W0, H0), flags=cv2.INTER_CUBIC)
+            for name, box in wins.items():
+                dx, dy, c, e = _shift_edge(frames[0], wf, box)
+                res[name]["fits"][fit] = {"dx": round(dx, 2), "dy": round(dy, 2), "corr": round(c, 3), "edge": e}
+        for name in wins:
+            if fboxes[name] is not None:
+                dx, dy, c, e = _shift_edge(warped[0], warped[i], fboxes[name])
+                res[name]["fits"]["final"] = {"dx": round(dx, 2), "dy": round(dy, 2), "corr": round(c, 3), "edge": e}
+            log(f"prep: frame {i} window {name}: " + "; ".join(f"{fit} ({o['dx']:+.2f}, {o['dy']:+.2f}) corr {o['corr']:.3f}"
+                                                              + (" AT THE SEARCH EDGE" if o["edge"] else "") for fit, o in res[name]["fits"].items()))
+        regs[i]["windows"] = res
+        drawn[i] = res
+    draw_windows(frames[0], wins, drawn, out / "windows.jpg")
+
+
+def draw_windows(img0, wins, per_frame, path, long=960):
+    """windows.jpg: per frame i >= 1 a panel of frame 0 (scaled to `long` px) with the windows and their names, and per
+    fit an arrow from the window's centre along its offset, WINDOW_ARROW times its length, in the fit's colour."""
+    s = min(1.0, long / max(img0.shape[:2]))
+    base = cv2.resize(img0, None, fx=s, fy=s, interpolation=cv2.INTER_AREA) if s < 1 else img0.copy()
+    panels = []
+    for i, res in per_frame.items():
+        p = base.copy()
+        for name, box in wins.items():
+            bx0, by0, bx1, by1 = [int(round(v * s)) for v in box]
+            cv2.rectangle(p, (bx0, by0), (bx1, by1), (255, 255, 255), 1, cv2.LINE_AA)
+            _label(p, name, (bx0 + 2, max(14, by0 - 5)), 0.45)
+            cx, cy = (bx0 + bx1) / 2.0, (by0 + by1) / 2.0
+            for fit, o in res[name]["fits"].items():
+                tip = (int(round(cx + WINDOW_ARROW * s * o["dx"])), int(round(cy + WINDOW_ARROW * s * o["dy"])))
+                cv2.arrowedLine(p, (int(round(cx)), int(round(cy))), tip, WINDOW_COLOURS[fit], 2, cv2.LINE_AA, tipLength=0.25)
+        _label(p, f"frame {i} on frame 0: offsets x{WINDOW_ARROW}", (8, 20), 0.55)
+        for k, fit in enumerate(f for f in WINDOW_FITS if any(f in r["fits"] for r in res.values())):
+            _label(p, fit, (8, 42 + 20 * k), 0.55, WINDOW_COLOURS[fit])
+        panels.append(p)
+    if panels:
+        gap = np.full((base.shape[0], 6, 3), 24, np.uint8)
+        cv2.imwrite(str(path), np.hstack([x for q in panels for x in (q, gap)][:-1]), [cv2.IMWRITE_JPEG_QUALITY, 88])
+
+
+def register_all(frames, cuts=(), masks=None, ecc_refine=False, fits=None):
     """Maps frame i -> frame 0 for every frame: direct SIFT, else SIFT to the previous frame composed with
     its map, else ECC seeded by the previous frame's map, else identity (said on the log). A frame listed
-    in cuts is not registered at all (identity, untrusted): the plan joins it by a cut."""
+    in cuts is not registered at all (identity, untrusted): the plan joins it by a cut. `fits` (a dict, given by
+    `prep --windows` only) collects per frame index every map a fit produced: `all` (the direct SIFT fit without
+    masks) or `far` (with them), `chain`, `ecc` (the fallback or the masked refinement)."""
     ref = frames[0]
     mk = (lambda i: None) if masks is None else (lambda i: masks[i])
     maps = [np.eye(3)]; regs = [{"method": "reference", "trusted": True}]
@@ -241,18 +413,24 @@ def register_all(frames, cuts=(), masks=None, ecc_refine=False):
             log(f"prep: frame {i} is a cut: identity, excluded from the crop")
             continue
         H, info = register_sift(ref, f, mk(0), mk(i))
+        if fits is not None and H is not None:
+            fits.setdefault(i, {})["all" if masks is None else "far"] = H
         if H is None:
             log(f"prep: frame {i} direct sift rejected ({info.get('inliers')} inliers, {info.get('why')}); chaining")
             Hc, infoc = register_sift(frames[i - 1], f, mk(i - 1), mk(i))
             if Hc is not None and regs[i - 1]["trusted"]:
                 H = maps[i - 1] @ Hc
                 info = {"method": "sift+magsac via frame %d" % (i - 1), "direct": info, **{k: v for k, v in infoc.items() if k != "method"}}
+                if fits is not None:
+                    fits.setdefault(i, {})["chain"] = H
             else:
                 log(f"prep: frame {i} chained sift rejected ({infoc.get('inliers')} inliers, {infoc.get('why')}); trying ECC")
                 seed = maps[i - 1] if regs[i - 1]["trusted"] else None
                 He, infoe = register_ecc(ref, f, seed=seed)
                 info = {"direct": info, "chain": infoc, **infoe}
                 H = He
+                if fits is not None and He is not None:
+                    fits.setdefault(i, {})["ecc"] = He
         if H is None:
             log(f"prep: frame {i} ECC rejected ({info.get('why')}, cc {info.get('cc')}); IDENTITY used")
             H = np.eye(3); info["method"] = "identity"; info["trusted"] = False
@@ -262,6 +440,8 @@ def register_all(frames, cuts=(), masks=None, ecc_refine=False):
                 He, infoe = register_ecc(ref, f, seed=H, mask=mk(i), long=PROXY_LONG, blur=2.0)
                 if He is not None:
                     H = He; info["method"] += " + ecc (masked)"; info["ecc_cc"] = infoe["cc"]
+                    if fits is not None:
+                        fits.setdefault(i, {})["ecc"] = He
                 else:
                     log(f"prep: frame {i} masked ECC refinement rejected ({infoe.get('why')}, cc {infoe.get('cc')}); the SIFT fit kept")
         maps.append(H); regs.append(info)
@@ -275,6 +455,7 @@ def cmd_prep(args):
     files = sorted(p for p in src.iterdir() if p.suffix.lower() in (".jpg", ".jpeg"))
     if len(files) < 2:
         sys.exit(f"{src}: {len(files)} developed JPGs, need 2 or more")
+    named = parse_windows(args.windows, "prep --windows") if args.windows else None    # the named windows of --windows
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     frames, meta = [], []
     for p in files:
@@ -285,6 +466,8 @@ def cmd_prep(args):
                      "native": [rgb.shape[1], rgb.shape[0]], "scaled": [frames[-1].shape[1], frames[-1].shape[0]]})
         log(f"prep: {p.name} {rgb.shape[1]}x{rgb.shape[0]} -> {frames[-1].shape[1]}x{frames[-1].shape[0]}")
     cuts = tuple(int(c) for c in args.cut.split(",") if c != "")
+    if named:
+        check_boxes(named, frames[0].shape[1], frames[0].shape[0], "prep --windows", "frame 0")
     depths, masks = None, None
     if args.bg_depth > 0:
         # the far field by the depth model (offline): keypoints only where the relative depth is below the gate
@@ -293,7 +476,8 @@ def cmd_prep(args):
         log(f"prep: bg-depth {args.bg_depth}: far-field shares " + ", ".join(f"{(m > 0).mean():.2f}" for m in masks))
     global MIN_INLIERS
     MIN_INLIERS = args.min_inliers
-    maps, regs = register_all(frames, cuts, masks, ecc_refine=args.ecc_refine)
+    fits = {} if named else None
+    maps, regs = register_all(frames, cuts, masks, ecc_refine=args.ecc_refine, fits=fits)
     if args.lock_window:
         # the gag object stays put: each frame's map gains the translation that zeroes the mean offset of the listed
         # windows (reference-frame px) between the reference and the warped frame, measured by template match (sub-pixel)
@@ -385,6 +569,8 @@ def cmd_prep(args):
     if (y1 - y0) % 2: y1 -= 1
     crop = [x0, y0, x1, y1]
     log(f"prep: canvas = frame {ref_i}; common crop {crop} of {W0}x{H0} -> {x1 - x0}x{y1 - y0}")
+    if named:
+        window_offsets(frames, warped, regs, fits, named, masks, Hr, crop, out)
     for i, wf in enumerate(warped):
         cv2.imwrite(str(out / f"k{i}.png"), wf[y0:y1, x0:x1])
         if depths is not None or args.depth_maps:   # the registered still's own map, for the depth effects of a plan
@@ -396,6 +582,8 @@ def cmd_prep(args):
            "min_inliers": args.min_inliers, "ecc_refine": bool(args.ecc_refine), "ref_requested": args.ref, "lock_window": args.lock_window or "",
            "reference": ref_i, "reference_size": [W0, H0], "crop": crop,
            "canvas": [x1 - x0, y1 - y0], "frames": regs}
+    if named:                                  # only with --windows: without it prep.json keeps its keys and bytes
+        rep["windows"] = named
     (out / "prep.json").write_text(json.dumps(rep, indent=1))
     print(json.dumps({"seq": rep["seq"], "n": len(frames), "ref": ref_i, "canvas": rep["canvas"],
                       "methods": [r["method"] for r in regs],
@@ -1561,31 +1749,13 @@ def render_plan(plan, out, fps, draft=0, frames_jpg=False):
         th.append(np.zeros_like(th[0]))
     sheet = np.vstack([np.hstack(th[i:i + 8]) for i in range(0, len(th), 8)])
     cv2.imwrite(str(out / "sheet.jpg"), sheet, [cv2.IMWRITE_JPEG_QUALITY, 85])
-    # measures on the decoded mp4
-    cap = cv2.VideoCapture(str(mp4)); dec = []
-    while True:
-        ok, f = cap.read()
-        if not ok: break
-        dec.append(f)
-    steps = [float(np.mean(cv2.absdiff(dec[i + 1], dec[i]))) for i in range(len(dec) - 1)]
-    seam = float(np.mean(cv2.absdiff(dec[-1], dec[0])))
-    faces = []
-    try:
-        import rife_probe as R
-        faces = [len(R.faces_of(f)) for f in dec]
-    except SystemExit:
-        pass
-    gen = [r for r in rows if not r["generated"].startswith("none")]
-    meas = {"frames": N, "fps": fps, "canvas": [W, H], "seconds": round(N / fps, 3), "render_s": render_s,
-            "step_mean": round(float(np.mean(steps)), 3), "step_max": round(max(steps), 3), "step_max_at": int(np.argmax(steps)),
-            "seam_step": round(seam, 3), "steps": [round(x, 2) for x in steps],
-            "faces_per_frame": faces, "faces_keyframes": sorted(set(faces[i] for i, r in enumerate(rows) if "key" in r)) if faces else None,
-            "generated_frames": len(gen), "generated_share": round(len(gen) / N, 3),
-            "dexp_max": max([r.get("dexp", r.get("dexp_rest", 0.0)) for r in gen], default=0.0),
-            "rife_seconds_per_frame": round(float(np.mean([r["seconds"] for r in gen if "seconds" in r])), 2) if any("seconds" in r for r in gen) else None,
-            "md5_mp4": md5(mp4), "md5_gif": md5(gif), "gif_bytes": gif.stat().st_size, "mp4_bytes": mp4.stat().st_size,
-            "draft": draft, "plan_sha256": hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()[:16],
-            "script_md5": md5(Path(__file__)), "rife_version": _rife_version()}
+    # measures on the decoded mp4 (`measures_of`, shared with the `measure` command; the keys keep their order)
+    dec = decode_mp4(mp4)
+    meas = {"frames": N, "fps": fps, "canvas": [W, H], "seconds": round(N / fps, 3), "render_s": render_s}
+    meas.update(measures_of(dec, rows, N))
+    meas.update({"md5_mp4": md5(mp4), "md5_gif": md5(gif), "gif_bytes": gif.stat().st_size, "mp4_bytes": mp4.stat().st_size,
+                 "draft": draft, "plan_sha256": hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()[:16],
+                 "script_md5": md5(Path(__file__)), "rife_version": _rife_version()})
     (out / "frames.json").write_text(json.dumps(rows, indent=0))
     (out / "measure.json").write_text(json.dumps(meas, indent=1))
     (out / "plan.json").write_text(json.dumps(plan, indent=1))
@@ -1607,6 +1777,105 @@ def cmd_render(args):
         k, v = kv.split("=", 1); plan[k] = json.loads(v)
     _PROG["on"] = bool(args.progress)
     render_plan(plan, args.out, args.fps, args.draft, frames_jpg=bool(args.frames))
+
+
+# ------------------------------------------------------------------ measure: the render's measures on any decoded mp4 (2026-11-05, the studio)
+
+def decode_mp4(mp4):
+    """Every frame of an mp4 as decoded by OpenCV (BGR uint8), in order."""
+    cap = cv2.VideoCapture(str(mp4)); dec = []
+    while True:
+        ok, f = cap.read()
+        if not ok: break
+        dec.append(f)
+    return dec
+
+
+def measures_of(dec, rows=None, n=None):
+    """The measures `render` writes into measure.json, on decoded frames, in the render's key order: the step series (the
+    mean absolute difference of neighbouring frames, 0..255), its mean, max and argmax, the seam step (last frame to the
+    first), YuNet faces per frame; with `rows` (frames.json: what each frame is) also the face counts on the stills' frames,
+    the generated frames and their share of `n` frames (default the decoded count), the largest double-exposure share
+    recorded for a generated frame, and the mean RIFE seconds per in-between. Without `rows` those keys are null."""
+    steps = [float(np.mean(cv2.absdiff(dec[i + 1], dec[i]))) for i in range(len(dec) - 1)]
+    seam = float(np.mean(cv2.absdiff(dec[-1], dec[0])))
+    faces = []
+    try:
+        import rife_probe as R
+        faces = [len(R.faces_of(f)) for f in dec]
+    except SystemExit:
+        pass
+    m = {"step_mean": round(float(np.mean(steps)), 3), "step_max": round(max(steps), 3), "step_max_at": int(np.argmax(steps)),
+         "seam_step": round(seam, 3), "steps": [round(x, 2) for x in steps],
+         "faces_per_frame": faces, "faces_keyframes": sorted(set(faces[i] for i, r in enumerate(rows) if "key" in r)) if faces and rows is not None else None}
+    if rows is None:
+        m.update({"generated_frames": None, "generated_share": None, "dexp_max": None, "rife_seconds_per_frame": None})
+        return m
+    N = len(dec) if n is None else n
+    gen = [r for r in rows if not r["generated"].startswith("none")]
+    m.update({"generated_frames": len(gen), "generated_share": round(len(gen) / N, 3),
+              "dexp_max": max([r.get("dexp", r.get("dexp_rest", 0.0)) for r in gen], default=0.0),
+              "rife_seconds_per_frame": round(float(np.mean([r["seconds"] for r in gen if "seconds" in r])), 2) if any("seconds" in r for r in gen) else None})
+    return m
+
+
+def window_series(dec, ref, wins, margin):
+    """Per named window (px of the clip): frame `ref`'s window content found in every decoded frame by `_window_shift`
+    (template match inside the window grown by `margin` px, sub-pixel by a parabola) as [dx, dy, corr]; and per window
+    the largest |dx| and |dy| with the frames where they occur, the lowest correlation, and the frames whose peak lay on
+    the search's border (`edge_frames`: there the offset is a bound, not a measurement)."""
+    series, summary = {}, {}
+    for name, box in wins.items():
+        s = [_shift_edge(dec[ref], f, box, margin) for f in dec]
+        series[name] = [[round(dx, 2), round(dy, 2), round(c, 3)] for dx, dy, c, _ in s]
+        adx = [abs(v[0]) for v in s]; ady = [abs(v[1]) for v in s]
+        summary[name] = {"box": list(box), "dx_max": round(max(adx), 2), "dx_max_at": int(np.argmax(adx)),
+                         "dy_max": round(max(ady), 2), "dy_max_at": int(np.argmax(ady)), "corr_min": round(min(v[2] for v in s), 3),
+                         "edge_frames": [k for k, v in enumerate(s) if v[3]]}
+    return series, summary
+
+
+def cmd_measure(args):
+    """The measures of `render` on any mp4, without rendering: `measures_of` on the decoded frames, plus per --window the
+    window's offset against frame --ref in every frame (an object's stability)."""
+    mp4 = Path(args.mp4)
+    if not mp4.is_file():
+        fail(f"measure: no mp4 at {mp4}")
+    wins = parse_windows(args.window, "measure --window") if args.window else {}
+    rows = None
+    if args.frames_json:
+        fj = Path(args.frames_json)
+        if not fj.is_file():
+            fail(f"measure --frames-json: no file at {fj}")
+        rows = json.loads(fj.read_text())
+    dec = decode_mp4(mp4)
+    if len(dec) < 2:
+        fail(f"measure: {mp4} decodes to {len(dec)} frames; the measures need 2 or more")
+    if rows is not None and len(rows) != len(dec):
+        fail(f"measure --frames-json: {len(rows)} rows for {len(dec)} decoded frames (not this mp4's frames.json)")
+    if not 0 <= args.ref < len(dec):
+        fail(f"measure --ref: no frame {args.ref} in {len(dec)} decoded frames")
+    H, W = dec[0].shape[:2]
+    if wins:
+        check_boxes(wins, W, H, "measure --window", "the clip")
+    cap = cv2.VideoCapture(str(mp4)); fps = float(cap.get(cv2.CAP_PROP_FPS)); cap.release()
+    fps = int(round(fps)) if abs(fps - round(fps)) < 0.01 else round(fps, 3)
+    meas = {"mp4": str(mp4), "frames_json": str(args.frames_json) if args.frames_json else None,
+            "frames": len(dec), "fps": fps, "canvas": [W, H], "seconds": round(len(dec) / fps, 3) if fps else None}
+    meas.update(measures_of(dec, rows))
+    meas["md5_mp4"] = md5(mp4)
+    if wins:
+        meas["stability_ref"] = args.ref
+        meas["stability_margin"] = args.margin
+        meas["stability"], meas["stability_max"] = window_series(dec, args.ref, wins, args.margin)
+        for name, s in meas["stability_max"].items():
+            log(f"measure: window {name} {s['box']} against frame {args.ref}: at most {s['dx_max']:.2f} px sideways (frame {s['dx_max_at']}) "
+                f"and {s['dy_max']:.2f} px vertically (frame {s['dy_max_at']}); correlation at least {s['corr_min']:.3f}")
+    meas["script_md5"] = md5(Path(__file__))
+    out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+    (out / "measure.json").write_text(json.dumps(meas, indent=1))
+    print(json.dumps({k: meas.get(k) for k in ("frames", "seconds", "canvas", "step_mean", "step_max", "step_max_at", "seam_step",
+                                               "faces_keyframes", "generated_share", "dexp_max", "md5_mp4", "stability_max")}))
 
 
 # ------------------------------------------------------------------ readers: what each still holds, beside the prep (2026-11-04, the studio)
@@ -1664,6 +1933,135 @@ def cmd_readers(args):
     print(json.dumps({"stills": len(entries), "faces": [len(e["faces"]) for e in entries], "lab_above_14": [q["lab_above_14"] for q in pairs]}))
 
 
+# ------------------------------------------------------------------ probe: the in-between methods side by side, before a plan (2026-11-05, the studio)
+
+PROBE_TS = (0.25, 0.5, 0.75)
+
+
+def _face_boxes(A, B, grow=0.25):
+    """The crop boxes at a pair's faces: YuNet on both stills; a face of A and the nearest face of B (centres closer than
+    half the larger side) share one box, their union; an unmatched face has its own; each box grown by `grow` of its
+    size on every side and clipped to the still. Sorted left to right."""
+    import rife_probe as R
+    fa = [[int(v) for v in f[:4]] + [round(float(f[14]), 3)] for f in R.faces_of(A)]
+    fb = [[int(v) for v in f[:4]] + [round(float(f[14]), 3)] for f in R.faces_of(B)]
+    used, faces = set(), []
+    for a in fa:
+        best = None
+        for k, b in enumerate(fb):
+            d = math.hypot(b[0] + b[2] / 2 - a[0] - a[2] / 2, b[1] + b[3] / 2 - a[1] - a[3] / 2)
+            if k not in used and d < 0.5 * max(a[2], a[3], b[2], b[3]) and (best is None or d < best[0]):
+                best = (d, k)
+        if best is not None:
+            used.add(best[1])
+        faces.append((a, fb[best[1]] if best is not None else None))
+    faces += [(None, b) for k, b in enumerate(fb) if k not in used]
+    H, W = A.shape[:2]; out = []
+    for a, b in faces:
+        bs = [x for x in (a, b) if x is not None]
+        x0 = min(x[0] for x in bs); y0 = min(x[1] for x in bs); x1 = max(x[0] + x[2] for x in bs); y1 = max(x[1] + x[3] for x in bs)
+        gx, gy = grow * (x1 - x0), grow * (y1 - y0)
+        out.append({"box": [max(0, int(x0 - gx)), max(0, int(y0 - gy)), min(W, int(math.ceil(x1 + gx))), min(H, int(math.ceil(y1 + gy)))],
+                    "a": a, "b": b})
+    return sorted(out, key=lambda f: (f["box"][0], f["box"][1]))
+
+
+def cmd_probe(args):
+    """Per pair of registered stills, the in-betweens at t 0.25, 0.5 and 0.75 by RIFE (the whole frame), the DIS morph and
+    the plain dissolve: a strip per method, the double-exposure share and the steps to both stills per frame, 1:1 crops at
+    the faces. RIFE runs only behind its manifest (offline); without it the RIFE strip is skipped with a log line."""
+    import rife_probe as R
+    src = Path(args.prep_dir)
+    stills = {int(p.stem[1:]): p for p in src.glob("k*.png") if p.stem[1:].isdigit()}
+    if len(stills) < 2:
+        fail(f"probe: {src} holds {len(stills)} k<i>.png; a probe needs 2 or more (loop_seq.py prep writes them)")
+    idx = sorted(stills)
+    if args.pairs:
+        pairs = []
+        for part in args.pairs.split(";"):
+            if not part.strip():
+                continue
+            try:
+                i, j = (int(v) for v in part.split(","))
+            except ValueError:
+                fail(f"probe --pairs: {part.strip()!r} is not i,j")
+            if i not in stills or j not in stills or i == j:
+                fail(f"probe --pairs: {i},{j} is not a pair of the stills {idx} of {src}")
+            pairs.append((i, j))
+        if not pairs:
+            fail(f"probe --pairs: no pair in {args.pairs!r}")
+    else:
+        pairs = list(zip(idx, idx[1:]))
+    keys = {}
+    for i in sorted({k for p in pairs for k in p}):
+        im = _scale_to(cv2.imread(str(stills[i])), args.long)
+        keys[i] = im[:im.shape[0] & ~1, :im.shape[1] & ~1]          # even sides, as a draft render crops them
+    H, W = keys[pairs[0][0]].shape[:2]
+    if any(k.shape[:2] != (H, W) for k in keys.values()):
+        fail(f"probe: the stills of {src} differ in size: not one prep canvas")
+    out = Path(args.out); (out / "crops").mkdir(parents=True, exist_ok=True)
+    rife_skip = None if R.MANIFEST.exists() else f"no {R.MANIFEST} (`rife_probe.py warmup` writes it once)"
+    if rife_skip:
+        log(f"probe: the RIFE strips are skipped: {rife_skip}")
+    face_ok = R.FACE_MODEL.exists()
+    if not face_ok:
+        log(f"probe: no YuNet model at {R.FACE_MODEL}: no face crops")
+    t_all = time.time(); rep_pairs = []
+    for i, j in pairs:
+        A, B = keys[i], keys[j]
+        m = change_matte(A, B); ones = np.ones((H, W), np.float32)
+        faces = _face_boxes(A, B) if face_ok else []
+        for k, f in enumerate(faces):
+            x0, y0, x1, y1 = f["box"]
+            for name, im in ((f"k{i}", A), (f"k{j}", B)):
+                cv2.imwrite(str(out / "crops" / f"{i}_{j}_{name}_face{k}.jpg"), im[y0:y1, x0:x1], [cv2.IMWRITE_JPEG_QUALITY, 92])
+        methods = {}
+        if rife_skip is None:                    # RIFE over the whole frame, as a `matte: {"all": true}` leg renders it
+            try:
+                fr, secs = [], []
+                for t in PROBE_TS:
+                    t0 = time.perf_counter(); fr.append(_RIFE.at(A, B, t)); secs.append(round(time.perf_counter() - t0, 2))
+                methods["rife"] = (fr, secs, {})
+            except SystemExit as e:              # rife_probe refuses (a weight missing or its sha256 off): skip, never crash
+                rife_skip = str(e)
+                log(f"probe: the RIFE strips are skipped: {rife_skip}")
+        rows = []
+        fr = frames_morph(A, B, len(PROBE_TS), "linear", 25, {}, rows)
+        methods["morph"] = (fr, None, {"flow": rows[0]["method"]})
+        methods["dissolve"] = (frames_dissolve(A, B, len(PROBE_TS), "linear", []), None, {})
+        entry = {"a": i, "b": j, "matte_share": round(float((m > 0.5).mean()), 4), "faces": faces, "methods": {}}
+        for name, (fr, secs, extra) in methods.items():
+            strip = f"probe_{i}_{j}_{name}.jpg"
+            tiles, rows_m = [], []
+            for n, (X, t) in enumerate(zip(fr, PROBE_TS)):
+                r = {"t": t, "dexp": R.dexp_share(X, A, B, m), "dexp_frame": R.dexp_share(X, A, B, ones),
+                     "step_a": round(float(np.mean(cv2.absdiff(X, A))), 3), "step_b": round(float(np.mean(cv2.absdiff(X, B))), 3)}
+                if secs is not None:
+                    r["seconds"] = secs[n]
+                r["crops"] = []
+                for k, f in enumerate(faces):
+                    x0, y0, x1, y1 = f["box"]
+                    c = f"crops/{i}_{j}_{name}_t{t:g}_face{k}.jpg"
+                    cv2.imwrite(str(out / c), X[y0:y1, x0:x1], [cv2.IMWRITE_JPEG_QUALITY, 92])
+                    r["crops"].append(c)
+                rows_m.append(r)
+                tl = X.copy(); _label(tl, f"{name} t {t:g}", (10, 30), 0.9)
+                tiles.append(tl)
+            gap = np.full((H, 6, 3), 24, np.uint8)
+            cv2.imwrite(str(out / strip), np.hstack([x for q in tiles for x in (q, gap)][:-1]), [cv2.IMWRITE_JPEG_QUALITY, 88])
+            entry["methods"][name] = {"strip": strip, **extra, "frames": rows_m}
+            log(f"probe: k{i}-k{j} {name}: double exposure " + ", ".join(f"{r['dexp']:.4f}" for r in rows_m)
+                + " (inside the change matte), " + ", ".join(f"{r['dexp_frame']:.4f}" for r in rows_m) + " (the whole frame)")
+        rep_pairs.append(entry)
+    rep = {"prep": str(src), "long": args.long, "size": [W, H], "t": list(PROBE_TS),
+           "matte": dict(zip(("thr", "grow", "feather", "min_share"), change_matte.__defaults__)), "rife_version": _rife_version(), "rife_skipped": rife_skip,
+           "faces_model": face_ok, "pairs": rep_pairs, "seconds": round(time.time() - t_all, 1), "script_md5": md5(Path(__file__))}
+    (out / "probe.json").write_text(json.dumps(rep, indent=1))
+    print(json.dumps({"pairs": [[p["a"], p["b"]] for p in rep_pairs], "size": [W, H], "rife_skipped": rife_skip,
+                      "dexp": {name: [min(v), max(v)] for name in ("rife", "morph", "dissolve")
+                               for v in [[r["dexp"] for p in rep_pairs if name in p["methods"] for r in p["methods"][name]["frames"]]] if v}}))
+
+
 # ------------------------------------------------------------------ page: the review page
 
 def _esc(t):
@@ -1700,6 +2098,18 @@ def cmd_page(args):
     root = Path(args.root)
     notes = json.loads(Path(args.notes).read_text()) if args.notes and Path(args.notes).exists() else {}
     order = args.order.split(",") if args.order else sorted(p.name for p in root.iterdir() if p.is_dir() and p.name not in ("in", "probe_morph", "probe_rife", "agents"))
+    names = None
+    if args.variants:                          # `--variants a,b` (2026-11-05): only these full renders, in this order, for every sequence
+        names = [v.strip() for v in args.variants.split(",") if v.strip()]
+        if not names:
+            fail(f"page --variants: no name in {args.variants!r}")
+        for n in names:
+            if names.count(n) > 1:
+                fail(f"page --variants: {n} is named twice")
+        for seq in order:                      # checked before anything is written
+            for n in names:
+                if not (root / seq / n / "measure.json").is_file():
+                    fail(f"page --variants: {n} is not a full render of {seq}: no {root / seq / n / 'measure.json'}")
     css = """:root{--bg:#fafaf8;--fg:#1b1b1b;--mut:#666;--card:#fff;--line:#ddd}
 @media (prefers-color-scheme:dark){:root{--bg:#141414;--fg:#eee;--mut:#aaa;--card:#1e1e1e;--line:#333}}
 body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0;padding:16px;max-width:1500px;margin:auto}
@@ -1713,7 +2123,10 @@ p.mut{color:var(--mut)}code{font-size:13px}h2{margin:4px 0 6px}h3{margin:10px 0 
     h.append(f"<p class='mut'>{_esc(args.intro)}</p>")
     for seq in order:
         d = root / seq
-        variants = sorted(v for v in d.iterdir() if v.is_dir() and (v / "measure.json").exists())
+        if names is None:
+            variants = sorted(v for v in d.iterdir() if v.is_dir() and (v / "measure.json").exists())
+        else:
+            variants = [d / n for n in names]
         if not variants:
             continue
         inp = root / "in" / seq
@@ -1759,6 +2172,11 @@ def main():
     p.add_argument("--ecc-refine", action="store_true", help="with --bg-depth: refine the far-field fit by a masked ECC on the far pixels")
     p.add_argument("--depth-maps", action="store_true", help="write depth_k<i>.npy (the depth model, offline) for the registered stills even without --bg-depth")
     p.add_argument("--lock-window", default="", help="windows of the reference frame (px, 'x0,y0,x1,y1;...') that must stay put: each map gains the translation that zeroes their mean measured offset (the gag object as the anchor)")
+    p.add_argument("--windows", default="", help="named windows of frame 0 (px before the crop, as --lock-window: 'name:x0,y0,x1,y1;...'), "
+                   "measured, never applied: per registered frame, where each window's content sits under every fit the prep made "
+                   "(dx, dy px, sub-pixel, the template match's correlation, and edge when the peak lies on the ±30 px search's "
+                   "border; fits all, far, chain, ecc and final), written to prep.json frames[i].windows and drawn on "
+                   "OUT/windows.jpg (arrows 8 times the offset); without it prep.json is unchanged")
     p.set_defaults(fn=cmd_prep)
     p = sp.add_parser("render"); p.add_argument("plan"); p.add_argument("--out", required=True)
     p.add_argument("--fps", type=int, default=25); p.add_argument("--draft", type=int, default=0, help="render at this long edge (0 = the prep canvas)")
@@ -1776,9 +2194,42 @@ def main():
     p.add_argument("prep_dir", help="a folder written by `loop_seq.py prep` (k<i>.png, prep.json)")
     p.add_argument("--out", default="", help="where readers.json and the depth previews go (default PREP_DIR/readers)")
     p.set_defaults(fn=cmd_readers)
+    p = sp.add_parser("probe", description="Per pair of registered stills (adjacent by index, or --pairs), the in-betweens at t 0.25, "
+                      "0.5 and 0.75 by three methods: RIFE over the whole frame (behind its manifest, offline; skipped with a log "
+                      "line when the manifest is missing), the DIS morph (transitions.py's prepare and iter_frames, the morph "
+                      "preset's own ease) and the plain dissolve. Writes OUT/probe_<i>_<j>_<method>.jpg (three tiles with their t), "
+                      "OUT/crops/ (1:1 crops at the YuNet face boxes of both stills, for the stills and every in-between) and "
+                      "OUT/probe.json: per frame the double-exposure share inside the change matte (dexp, the measure of a "
+                      "render's frames.json) and over the whole frame (dexp_frame), and the mean absolute step to each still.")
+    p.add_argument("prep_dir", help="a folder written by `loop_seq.py prep` (k<i>.png)")
+    p.add_argument("--out", required=True, help="where the strips, crops/ and probe.json go")
+    p.add_argument("--long", type=int, default=960, help="the long edge the stills are scaled to before the probe (px, downscale "
+                   "only, sides made even; default 960: a probe is a look, not a render)")
+    p.add_argument("--pairs", default="", help="the pairs to probe, 'i,j;k,l' by still index (default: every adjacent pair)")
+    p.set_defaults(fn=cmd_probe)
+    p = sp.add_parser("measure", description="The measures `render` writes, on any mp4, without rendering: the step series on "
+                      "the decoded frames (mean absolute difference of neighbours, 0..255), its mean, max and argmax, the seam "
+                      "step, YuNet faces per frame; with --frames-json the face counts on the stills' frames, the generated "
+                      "share and the largest recorded double-exposure share; with --window each window's offset against frame "
+                      "--ref in every frame (dx, dy px, sub-pixel, and the correlation). Writes OUT/measure.json and a summary line.")
+    p.add_argument("mp4", help="the clip to measure (any mp4 OpenCV decodes)")
+    p.add_argument("--out", required=True, help="where measure.json goes")
+    p.add_argument("--frames-json", default="", help="the render's frames.json (what each frame is: a still, a blend, a generated "
+                   "frame with its double-exposure share); its row count must equal the decoded frame count")
+    p.add_argument("--window", default="", help="named windows in the clip's px, 'name:x0,y0,x1,y1;...': each window's content "
+                   "of frame --ref found in every frame by template match (an object's stability)")
+    p.add_argument("--ref", type=int, default=0, help="the frame the windows are read from (default 0)")
+    p.add_argument("--margin", type=int, default=30, help="the template match searches the window grown by this many px on "
+                   "every side (default 30, as prep's lock); a frame whose peak lies on the search's border is listed in "
+                   "edge_frames, its offset a bound, not a measurement")
+    p.set_defaults(fn=cmd_measure)
     p = sp.add_parser("page"); p.add_argument("--root", required=True); p.add_argument("--out", required=True)
     p.add_argument("--notes", default=""); p.add_argument("--order", default=""); p.add_argument("--title", default="Halloween loops")
-    p.add_argument("--intro", default=""); p.add_argument("--footer", default=""); p.set_defaults(fn=cmd_page)
+    p.add_argument("--intro", default=""); p.add_argument("--footer", default="")
+    p.add_argument("--variants", default="", help="the full renders to list, 'a2,a3' (folder names under <root>/<seq>/), in this "
+                   "order, for every sequence on the page (default: every folder holding measure.json, in name order); a name "
+                   "that is not a full render of a sequence is a FAILED exit 2 before anything is written")
+    p.set_defaults(fn=cmd_page)
     args = ap.parse_args()
     args.fn(args)
 

@@ -31,3 +31,13 @@ __pycache__/
 
 # the Playwright MCP tools write page snapshots here
 .playwright-mcp/
+
+# the studio package (studio/): its own uv venv and tool caches; uv.lock is tracked
+/studio/.venv/
+/studio/.pytest_cache/
+/studio/.mypy_cache/
+/studio/.ruff_cache/
+/studio/.import_linter_cache/
+/studio/htmlcov/
+/studio/.coverage
+/studio/dist/

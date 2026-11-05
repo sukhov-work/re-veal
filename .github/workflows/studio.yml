@@ -1,0 +1,34 @@
+# The studio package's quality gate on GitHub (added 2026-11-05; the unit layer only: the
+# fixtures, the weights and the main venv are not on the runner, so the integration and
+# acceptance layers run on the laptop by `make -C studio test` and `make -C studio acceptance`).
+# This workflow is an addition beyond the epistemic-filter project's practice (its gates run
+# locally through `make qa`); its first run is UNVERIFIED until the push after 2026-11-05.
+name: studio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "studio/**"
+      - ".github/workflows/studio.yml"
+      - ".claude/skills/no-slop/scripts/slop-check.py"
+  pull_request:
+    paths:
+      - "studio/**"
+      - ".github/workflows/studio.yml"
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: studio
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: "studio/uv.lock"
+      - run: uv python install 3.13
+      - run: uv sync --frozen
+      - run: make qa

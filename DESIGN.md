@@ -138,6 +138,7 @@ A neutral grey ramp that does not tint the photographs, one warm accent, and fiv
 - **Info** (#6aa9f0): a note, a link, an UNVERIFIED tag.
 - **Generated** (#b48ef0): any frame or pixel a model produced (RIFE in-betweens, a keyframe): the badge, the tick on a strip, the outline of the frame.
 - **Photo A** (#6aa9f0) and **Photo B** (#f0a06a): the two photographs' identities in overlays, the blend slider's ends, the timeline's ends.
+- Open since 2026-11-05 (backlog row T102): Info and Photo A share #6aa9f0, so an "unjudged" chip and a "draft 480" chip wear k0's blue; the owner decides which of the two changes.
 
 ### Named Rules
 **The Neutral Ground Rule.** Nothing behind or beside a photograph is tinted: the greys are neutral to 2 units of chroma. A photograph's colour is judged against grey.
@@ -213,7 +214,7 @@ One tile per stage of the job's pipeline, left to right: the thumbnail of the st
 SVG line plots with axes, a baseline, the bar as a dashed line, markers for the frames the skeptic named; the step series, the seam, an object's stability per frame. Never a sparkline without axes.
 
 ### The viewer and the scrubber
-One large frame under judgement fills the space between the strip and the axis (sized from the window); A and B are small beside it or the two ends of the wipe; the active comparator mode is drawn pressed; play and pause at 25 fps sit beside the scrubber. The scrubber is a range input over the render's frames, keyboard-steppable (left and right by one frame, shift by ten), the frame index and its t in data type, the plots beneath aligned to the same x; its focus ring sits on the thumb, never on the whole track (the comp's 1,832 px amber rectangle was the loudest thing on the screen, the critique of 2026-11-04).
+One large frame under judgement fills the space between the strip and the axis (sized from the window); A and B are small beside it or the two ends of the wipe; the active comparator mode is drawn pressed; play and pause at 25 fps sit beside the scrubber. The scrubber is a range input over the render's frames, keyboard-steppable (left and right by one frame, shift by ten), the frame index and its t in data type, the plots beneath aligned to the same x; its focus ring sits on the thumb, never on the whole track (the comp's 1,832 px amber rectangle was the loudest thing on the screen, the critique of 2026-11-04). Since the fix round of 2026-11-05: the render's name, its modes, the sources A and B and the list of renders sit in a column of 300 to 400 px beside the frame. The frame's height comes from the window with a 240 px floor, so at 1280×800 the frame and its scrubber fit the window (backlog row T105 holds the trade: 17.8 % of the source on screen against 21.2 % below the fold). The violet outline marks the picture at fit and the box at 1:1 and 2×.
 
 ## Do's and Don'ts
 

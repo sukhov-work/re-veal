@@ -1,0 +1,79 @@
+/* viewer.css: the comparator (single, wipe, A/B, onion skin, difference at fit, 1:1 and 2x), its sources, the measure
+   control and the runs table under the axis; the registration's fits table and the probe's strips and crops, the two
+   panels that host the viewer beside the render's (DESIGN.md: the light table, one amber, chips with words). */
+.vhead{margin-top:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.vhead h3{margin:0;display:flex;align-items:center}
+.vhead .cmpctl{margin:0}
+.vhead .srcpick select{max-width:260px}
+.vmodes{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cmpctl{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 8px}
+.cmpmode{display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center}
+/* the render's viewer: the frame, and beside it a column with the render's name and chip, the modes, the sources, the
+   renders and the first and last stills; viewer.js sizes the frame from the window and caps the column at its height */
+.framewrap{position:relative;min-width:0}
+.framewrap>.tag{position:absolute;left:9px;top:9px;z-index:3;display:flex;flex-wrap:wrap;gap:4px;max-width:calc(100% - 18px)}
+.frame.gen{outline:2px solid var(--gen);outline-offset:-2px}
+.panel .head.vhead{margin-bottom:8px}
+.vside{display:flex;flex-direction:column;gap:12px;min-width:0;overflow:auto}
+.vside>*{flex-shrink:0}
+.vtitle{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.vtitle h3{margin:0;display:flex;align-items:center}
+.vsub{margin:0;font-size:.75rem;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.vside .cmpctl{flex-direction:column;align-items:stretch;gap:6px;margin:0}
+.vside .srcpick{display:flex}
+.vside .srcpick select{flex:1;min-width:0;max-width:none}
+.vcands h3{margin:0 0 6px;display:flex;align-items:center;gap:4px}
+/* the registration, readers and probe panels: the tables and pictures beside the viewer from 1800 px, the viewer first
+   and the tables under it below that (critique A2, P1 (c)) */
+.hostgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px 24px;align-items:start}
+.hostgrid>.hostview{order:-1;min-width:0}
+.hostgrid>.hostmain{min-width:0;overflow-x:auto}
+@media (min-width:1800px){.hostgrid{grid-template-columns:minmax(0,880px) minmax(480px,1fr)}.hostgrid>.hostview{order:0;position:sticky;top:0}}
+.srcpick{display:inline-flex;align-items:center;gap:6px}
+.srcpick select{max-width:340px}
+.srcpick.a .label{color:var(--text)}
+.srcpick.b .label{color:var(--muted)}
+.cmpctl input[type=range]{accent-color:var(--amber);vertical-align:middle;width:160px}
+.viewer.solo{grid-template-columns:minmax(0,1fr)}
+/* A sets the size; B, the difference canvas, the seam and the handle lie over it at A's size */
+.cmpstack{position:relative;display:inline-block;line-height:0;flex-shrink:0;touch-action:none;user-select:none}
+.cmpstack .base{display:block}
+.cmpstack .over{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.cmpstack.wiping{cursor:ew-resize}
+.cmpstack.gen{outline:2px solid var(--gen);outline-offset:-2px}
+.cmpstack .px,.frame img.px,.frame canvas.px{image-rendering:pixelated}
+.cmpstack .seam{position:absolute;top:0;bottom:0;width:0;border-left:1.5px solid var(--text);box-shadow:0 0 6px rgba(0,0,0,.55);pointer-events:none}
+.cmpstack .wipehandle{position:absolute;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);background:var(--raised);border:1px solid var(--line-strong);border-radius:3px;cursor:ew-resize;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.cmpstack .wipehandle::after{content:'◂▸';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:500 10px/1 var(--sans);color:var(--muted);letter-spacing:1px}
+.cmpstack .wipehandle:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.cmpstack .side{position:absolute;bottom:8px;font:500 0.75rem/1.3 var(--sans);letter-spacing:.01em;background:rgba(20,22,24,.78);padding:1px 6px;border-radius:3px;pointer-events:none}
+.cmpstack .side.a{left:8px;color:var(--text)}
+.cmpstack .side.b{right:8px;color:var(--muted)}
+/* the measure control and its runs, under the plots of the shared axis */
+.measurectl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 0 32px}
+.measurectl #mWin{width:440px}
+.measurectl #mRef{width:56px}
+table.runs{margin:8px 0 0 32px}
+/* the registration's three-fit table */
+table.fits{margin:4px 0 12px}
+table.fits th.fit{text-align:center;border-left:1px solid var(--line-strong)}
+table.fits td.g0{border-left:1px solid var(--line-strong)}
+table.fits tr.largest td{background:var(--panel);border-bottom:0}
+table.fits .chip{margin-left:4px}
+.fitsfoot{display:flex;gap:8px;align-items:center;margin:4px 0 8px}
+/* the probe: one strip per method, the double-exposure table, the face crops at 1:1 */
+.probepair{margin-top:16px}
+.probestrips{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.probestrips figure{margin:0;background:var(--panel);border:1px solid var(--line);padding:4px;max-width:max-content}
+.probestrips img{display:block;max-height:240px;max-width:100%}
+.probestrips figcaption{font:500 0.75rem/1.3 var(--sans);color:var(--muted);padding:4px 2px 0;display:flex;gap:8px;align-items:center}
+/* a model's in-betweens carry the violet mark (DESIGN.md, the Generated Violet Rule) */
+figure.gen img{outline:2px solid var(--gen);outline-offset:-2px}
+table.dexp th.grp{text-align:center;border-left:1px solid var(--line-strong)}
+table.dexp td.g0{border-left:1px solid var(--line-strong)}
+.croprows{overflow-x:auto;padding-bottom:8px}
+.croprow{display:flex;gap:4px;align-items:flex-end;margin-top:8px}
+.croprow .lbl{font:500 0.75rem/1.3 var(--sans);color:var(--muted);width:120px;flex:none}
+.croprow figure{margin:0;flex:none}
+.croprow img{display:block}
+.croprow figcaption{font:500 0.75rem/1.3 var(--sans);color:var(--muted);padding-top:2px}

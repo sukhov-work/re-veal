@@ -1,0 +1,53 @@
+[importlinter]
+root_package = reveal_studio
+include_external_packages = True
+
+# Rule (AGENTS.md hard constraints; STUDIO.md §5): the studio imports neither tool (reveal, transitions) nor any
+# research script, nor anything that loads model weights; every heavy call is a subprocess of the main venv's python.
+[importlinter:contract:no-tool-or-script-import]
+name = no tool or script import
+type = forbidden
+source_modules =
+    reveal_studio
+forbidden_modules =
+    reveal
+    transitions
+    loop_seq
+    rife_probe
+    torch
+    transformers
+    kornia
+    huggingface_hub
+
+# Rule (STUDIO.md §5): cv2 only turns stills and mp4s into thumbnails and JPEG frames, and only reveal_studio.media
+# imports it. Indirect imports are allowed: a view calls media, and media imports cv2 inside its functions.
+[importlinter:contract:cv2-only-in-media]
+name = cv2 only in media
+type = forbidden
+source_modules =
+    reveal_studio.__main__
+    reveal_studio.cli
+    reveal_studio.config
+    reveal_studio.errors
+    reveal_studio.fs
+    reveal_studio.registry
+    reveal_studio.jobs
+    reveal_studio.runner
+    reveal_studio.views
+    reveal_studio.server
+forbidden_modules =
+    cv2
+allow_indirect_imports = True
+
+# Rule (ARCHITECTURE.md, the module map): a layer imports only the layers below it. runner and media are siblings
+# that never import each other, and so are config, errors and fs (config raises its own ConfigError for that reason).
+[importlinter:contract:layers]
+name = layered imports
+type = layers
+layers =
+    reveal_studio.server
+    reveal_studio.views
+    reveal_studio.runner | reveal_studio.media
+    reveal_studio.jobs
+    reveal_studio.registry
+    reveal_studio.config | reveal_studio.errors | reveal_studio.fs

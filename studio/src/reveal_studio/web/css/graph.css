@@ -1,0 +1,38 @@
+/* graph.css: the switch between the strip and the graph, the strip's branch tiles (a second row under their parent),
+   and the graph view: flat node tiles with their ports and the lines between them (DESIGN.md: the light table; flat
+   regions with 1 px lines; the selection amber; a chip with a word for every state). */
+[hidden]{display:none!important}
+.jobhead .viewtoggle{margin-left:auto}
+.strip .stage.branch{padding:4px 6px}
+.strip .stage.branch .nm{margin-top:0}
+.graphwrap{margin:12px 0 0;padding:3px 3px 16px;border-bottom:1px solid var(--line)}
+.gbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.graph{position:relative;overflow:auto;max-height:58vh;background:var(--ground)}
+.gcanvas{position:relative;min-height:120px}
+.gedges{position:absolute;left:0;top:0;z-index:0;pointer-events:none;overflow:visible}
+.gedges path{fill:none;stroke:var(--faint);stroke-width:1.5;stroke-linejoin:round}
+.gedges path.sel{stroke:var(--text)}
+.gedges rect{fill:var(--faint)}
+.gedges rect.sel{fill:var(--text)}
+.gnode{position:absolute;z-index:1;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:6px;cursor:pointer;transition:border-color 150ms ease-out}
+.gnode:hover{border-color:var(--line-strong)}
+.gnode[aria-current="true"]{outline:2px solid var(--amber);outline-offset:-1px;border-color:var(--amber)}
+.gnode.failed{border-color:var(--failed)}
+.gnode.running{border-color:var(--amber)}
+.gnode.added{border-style:dashed}
+.gnode .ghead{display:flex;align-items:baseline;gap:4px;min-width:0}
+.gnode .ghead .chip{margin-left:auto;overflow:hidden;text-overflow:ellipsis;max-width:60%}
+.gnode .tick{display:inline-block;width:10px;height:10px;background:var(--gen);border-radius:2px;align-self:center}
+.gthumb{height:56px;margin-top:6px;background:var(--ground);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);font:500 0.75rem/1.3 var(--sans)}
+.gthumb img{height:56px;width:auto;max-width:100%;object-fit:contain;display:block}
+.gports{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 8px;margin-top:6px}
+.gport{position:relative;font:400 0.75rem/16px var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gport.in{padding-left:2px}
+.gport.out{text-align:right;padding-right:2px}
+.gport.linked{color:var(--text)}
+.gport.more{color:var(--faint)}
+.gport i{display:none}
+.gacts{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto;padding-top:6px}
+/* "rerun from here" asks in the node first (critique A2, P2 5) */
+.gconfirm{flex:1 1 100%;display:flex;flex-direction:column;gap:6px;font-size:.75rem;line-height:1.4;color:var(--text)}
+.gconfirm .gyn{display:flex;gap:6px}

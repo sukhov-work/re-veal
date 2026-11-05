@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reveal studio</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/static/css/studio.css">
+<link rel="stylesheet" href="/static/css/plan.css">
+<link rel="stylesheet" href="/static/css/viewer.css">
+<link rel="stylesheet" href="/static/css/graph.css">
+</head>
+<body>
+<div class="shell">
+<nav class="rail" aria-label="jobs, tasks and models">
+  <div class="wordmark"><b>Reveal studio</b><span class="muted label" id="ver"></span><button class="hint" data-hint="region.rail" tabindex="-1" aria-label="what the rail shows">?</button></div>
+  <section><h2>Jobs <button class="hint" data-hint="control.new_job" tabindex="-1" aria-label="about new jobs">?</button></h2>
+    <ul id="jobs"></ul>
+    <div class="new"><button class="btn" id="btnNew" data-hint="control.new_job">new loop job…</button> <button class="btn ghost" id="btnAdopt" data-hint="control.adopt">adopt a run folder…</button></div>
+    <div id="newForm" style="display:none;padding:8px 16px 0">
+      <div class="label muted"><label for="newFolder">folder of JPGs</label> <button class="hint" data-hint="control.new_job" tabindex="-1" aria-label="about new jobs">?</button></div><input id="newFolder" data-hint="control.new_job" style="width:100%" placeholder="/Users/…/angel-portrait">
+      <label class="label muted" for="newSeq" style="display:block;margin-top:6px">sequence name</label><input id="newSeq" data-hint="control.new_job" style="width:100%" placeholder="angel">
+      <div style="margin-top:6px"><button class="btn primary" id="newGo" data-hint="control.new_job">create</button> <button class="btn ghost" id="newCancel" data-hint="control.new_job">cancel</button></div>
+      <div id="newErr" style="color:var(--failed);font-size:.75rem;margin-top:6px"></div>
+    </div>
+    <div id="adoptForm" style="display:none;padding:8px 16px 0">
+      <div class="label muted"><label for="adoptRoot">run folder under benchmarks/runs</label> <button class="hint" data-hint="control.adopt" tabindex="-1" aria-label="about adopting a run folder">?</button></div><input id="adoptRoot" data-hint="control.adopt" style="width:100%" placeholder="benchmarks/runs/2026-11-04/angel">
+      <label class="label muted" for="adoptSeq" style="display:block;margin-top:6px">sequence (the folder under in/)</label><input id="adoptSeq" data-hint="control.adopt" style="width:100%" placeholder="angel">
+      <div style="margin-top:6px"><button class="btn primary" id="adoptGo" data-hint="control.adopt">adopt</button> <button class="btn ghost" id="adoptCancel" data-hint="control.adopt">cancel</button></div>
+      <div id="adoptErr" style="color:var(--failed);font-size:.75rem;margin-top:6px"></div>
+    </div>
+  </section>
+  <section><h2>Running <button class="hint" data-hint="chip.running" tabindex="-1" aria-label="about running tasks">?</button></h2><ul id="tasks"></ul></section>
+  <section><h2>Requests <button class="hint" data-hint="chip.waiting" tabindex="-1" aria-label="about open requests">?</button></h2><ul id="reqs"></ul></section>
+  <section><h2>Models</h2><ul id="models"></ul></section>
+</nav>
+<main class="work" id="work">
+  <div class="jobhead"><h1 id="title">no job open</h1><span class="muted" id="subtitle"></span><button class="hint" data-hint="region.strip" tabindex="-1" aria-label="what the strip shows">?</button><div class="seg viewtoggle" role="group" aria-label="the job as a strip or a graph"><button id="viewStrip" data-hint="control.view_strip" aria-pressed="true">strip</button><button id="viewGraph" data-hint="control.view_graph" aria-pressed="false">graph</button></div></div>
+  <div class="stripwrap" id="stripwrap"><div class="strip" id="strip" role="tablist" aria-label="stages"></div></div>
+  <div class="graphwrap" id="graphwrap" hidden><div class="gbar" id="gbar"></div><div class="graph" id="graph" role="group" aria-label="the job as a graph"></div></div>
+  <div class="panel" id="panel"><div class="empty">Open a job in the rail, or make one from a folder of stills.</div></div>
+</main>
+<aside class="inspector" id="inspector" aria-label="inspector"><h3>Inspector <button class="hint" data-hint="region.inspector" tabindex="-1" aria-label="about the inspector">?</button></h3><div class="muted">Select a stage.</div></aside>
+</div>
+<div id="pop" role="tooltip"></div>
+<script src="/static/js/core.js"></script>
+<script src="/static/js/rail.js"></script>
+<script src="/static/js/strip.js"></script>
+<script src="/static/js/panels.js"></script>
+<script src="/static/js/plan.js"></script>
+<script src="/static/js/viewer.js"></script>
+<script src="/static/js/inspector.js"></script>
+<script src="/static/js/graph.js"></script>
+<script src="/static/js/boot.js"></script>
+</body>
+</html>

@@ -4,7 +4,10 @@ Reveal is a local before/after photo aligner: one Python file (`reveal.py`) warp
 onto a BEFORE photo, serves a comparison slider on 127.0.0.1, and exports aligned stills plus a
 wipe/fade transition video. Since 2026-09-13 a second single-file tool, `transitions.py`, renders
 the change between two photos as a transition video (harness `transitions_harness.py`); the two
-modules never import each other. Design docs live under `.claude/claude-docs/` (moved there
+modules never import each other. Since 2026-11-05 the studio is the third surface: the Python package `reveal-studio` under `studio/`
+(design of record `STUDIO.md`; conventions `.claude/conventions/studio.md`), one local page on
+127.0.0.1:8380 over the flows, which runs the research scripts and the tools as subprocesses of
+the main venv and imports none of them. Design docs live under `.claude/claude-docs/` (moved there
 2026-09-13 by owner ruling): `HANDOFF.md` (Reveal design of record — invariants, pipeline, 27-row
 decision log, harness coverage, risks, amendments §11), `TRANSITIONS.md` (transitions design of
 record), `EXPLORATION_PLAN.md` (work plan, ranked by the owner on 2026-09-13), `STUDIO.md` (the studio UI's design of
@@ -39,6 +42,7 @@ defaults or to the strict `reshot` profile is NOT in the lane — it needs its o
 - `harness.py` 82/82 green (62.7 s wall on 2026-09-13) and `reveal.py check` all OK (18.5 s).
 - `transitions_harness.py` green (count in `TRANSITIONS.md §5`; 54 on 2026-09-26, ~10 s) and
   `transitions.py check` all OK.
+- `make -C studio qa` green (since 2026-11-05; the counts live in `studio/ARCHITECTURE.md`).
 - The seven invariants in `HANDOFF.md §2`: localhost only · originals never modified · BEFORE is
   the reference frame · convergence judged on inlier statistics, never pixel similarity · the
   residual field is low-order by construction · graceful degradation of optional layers · the
@@ -65,6 +69,11 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
   · Gate 1b `.venv/bin/python transitions_harness.py` (~10 s; own numbering space; count in `TRANSITIONS.md §5`)
   · Gate 0 `.venv/bin/python -m py_compile reveal.py harness.py transitions.py transitions_harness.py`
   (seconds; run before Gate 1)
+  · Gate 3 `make -C studio qa` (the studio package: ruff, mypy strict, the unit tests, import-linter,
+  deptry, vulture, pip-audit, radon, the prose check; `cd studio && uv sync` once; counts and wall
+  time in `studio/ARCHITECTURE.md`) · `make -C studio test` adds the integration layer (needs the main venv)
+  · `make -C studio acceptance` drives the owner's stills through the served page (about 5 min)
+  · Run the studio `make -C studio run` (127.0.0.1:8380; `reveal-studio serve --no-browser` for a drive)
   · Run `./run.sh` (serves 127.0.0.1:8378 and opens the browser) · headless
   `.venv/bin/python reveal.py align BEFORE AFTER --out DIR [--mode loose] [--video --aspect 9:16 --style wipe|fade]`
   · Clean `scripts/clean.sh` (`--jobs` also empties `_reveal/jobs`).
@@ -75,7 +84,9 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
 
 ## Workflow
 `/reveal` for implement / fix / design / research / review / audit. Heavy design →
-`~/.agents/skills/pilot` if installed, else `/reveal` alone.
+`~/.agents/skills/pilot` if installed, else `/reveal` alone. A studio change follows the UI build
+routine of the skill's `references/studio.md` (a Fable review, an acceptance drive, a critique with
+the detector, the prose pass) before the owner's eye.
 - **Prose gate** (`.claude/rules/prose.md`, owner order 2026-09-13): every dev-facing text — the
   final message, DECISIONS lines, handover, design docs, plan and backlog rows, memory, commit
   messages — passes the `no-slop` skill (load it with the `Skill` tool, run its pass) before it is
@@ -97,7 +108,13 @@ imageio-ffmpeg docs via Context7, `gh`, web) — never fabricate an API; `HANDOF
   widened in response to loose-mode feedback (`§9.8`).
 - Engineer features go into the CLI or constants, not the UI (invariant 7).
 - Single file by design: `reveal.py` stays one module, and so does `transitions.py` (a second
-  single-file tool by the 2026-09-13 decision); helpers live in sections, not packages.
+  single-file tool by the 2026-09-13 decision); helpers live in sections, not packages. The
+  studio package under `studio/` is modular by owner order (2026-11-05) and is the one exception;
+  it never imports either tool or a research script (an import-linter contract, Gate 3).
+- The studio's server binds 127.0.0.1 only, opens no connection, writes only under
+  `benchmarks/runs/` and the job folders, and runs every heavy call as a subprocess of
+  `.venv/bin/python`; the research scripts gain only default-off flags for it, proved
+  byte-identical on the default path (`STUDIO.md §7`).
 - `transitions.py` never imports `reveal`, `reveal.py` never imports `transitions`, and
   `transitions.py` imports nothing that can reach the network or load weights at module level;
   torch and transformers appear only inside its depth section, behind `transitions.py warmup` +

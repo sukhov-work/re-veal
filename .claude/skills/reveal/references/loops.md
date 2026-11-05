@@ -110,6 +110,10 @@ and the Halloween loops of 2026-10-30 (ten sequences of 2–6 handheld stills, f
 ## 6. Measures and bars (on the decoded mp4; `measure.json`)
 - The step series: no run of steps below 0.3 while motion is open (a stall); no step above 3× its neighbours
   outside a declared cut or snap (a jump); the seam step is a still (about 1–3) or a declared cut.
+  Amended 2026-11-05 (the studio's `views/measures.py`; DECISIONS 2026-11-05 fourth line): a jump must also reach the 0.3
+  bar, or the encoder's noise inside a byte-exact hold (0.01 against 0.0) counts as a jump: without the floor 110 of 193
+  renders on disk were flagged, with it 30. The floor reuses `STALL_BAR` (0.3) in the jump test of `stalls_and_jumps`; the revert is to drop that
+  clause; the owner's word can change it. Whether a `sheets` pass's 11 identical opening frames count as a stall is his call (T94).
 - Rule 7's double-exposure share per generated frame (3–11 % is the floor on these pairs; a doubled prop is found
   by a crop, not by this number).
 - YuNet faces per frame against the keyframes' counts (noisy on a group and under a breath).
@@ -144,3 +148,6 @@ His grades verbatim in the sheet · the DECISIONS line with the order verbatim, 
 round section with the table (`candidates.md` regenerated) · `TRANSITIONS.md §13.N` · the backlog states ·
 the tooling list rows · the research copies · the handover (the page md5, the watches: `prep` on the talk pair, the
 talk and NPC renders by md5) · the memory leaf's Traps · commit on `main`, push.
+
+## 10. The studio runs the pipeline (2026-11-05)
+Since 2026-11-05 the loop flow of §2 runs in the studio package (`make -C studio run`, 127.0.0.1:8380; `STUDIO.md §13`): the registration with the lock windows and the named windows under each fit, the readers, the probe (RIFE, morph and dissolve at t 0.25, 0.5, 0.75 with the double-exposure share), the plan editor with the schema's sentences and the rulings of §3 and §5 as warnings, drafts and full renders with a progress number, the measures of §6 with the stalls, the jumps and a window's stability on the shared axis, the skeptic request file, the page behind the review gate, his grade text per round. The recipes of §4 and the bars of §6 are the studio's data (`studio/src/reveal_studio/registry/`); a change to a rule here is a change there the same session. The shell commands of §2 stay valid: the studio records the argv of every stage and the CLI and the page read and write the same files.

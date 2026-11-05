@@ -1,0 +1,84 @@
+[project]
+name = "reveal-studio"
+version = "0.2.0"
+description = "The studio: one local page over the loop flow of Reveal's research scripts, served on 127.0.0.1."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+# The same pins as ../requirements.txt, so a thumbnail decodes as the main venv decodes it.
+dependencies = [
+    "numpy==2.2.6",
+    "opencv-python-headless==5.0.0.93",
+]
+
+[project.scripts]
+reveal-studio = "reveal_studio.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "import-linter",
+    "deptry",
+    "vulture",
+    "pip-audit",
+    "radon",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reveal_studio"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "RUF", "S"]
+# 2026-11-05: the hint sentences use the typographic signs of the scripts' --help and SCHEMA.md.
+allowed-confusables = ["×", "−", "–"]
+
+[tool.ruff.lint.per-file-ignores]
+# 2026-11-05: the runner starts the main venv's python and `ps` by design; the argv is built from the registry.
+"src/reveal_studio/runner/*.py" = ["S603", "S607"]
+# 2026-11-05: one sentence per line, so a hint stays diff-able against the scripts' --help and SCHEMA.md.
+"src/reveal_studio/registry/*.py" = ["E501"]
+# 2026-11-05: tests assert with `assert`, and start the fake script and `sleep` (a stranger process for cancel).
+"tests/**/*.py" = ["S101", "S603", "S607"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+warn_unused_ignores = true
+files = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the real repo root and the main venv (../.venv); skipped when either is absent",
+    "acceptance: the scripted drive on the owner's stills; run by `make acceptance`",
+]
+
+[tool.deptry]
+known_first_party = ["reveal_studio"]
+
+[tool.deptry.per_rule_ignores]
+# 2026-11-05: numpy is pinned to the main venv's version for cv2's sake; the package never imports it.
+DEP002 = ["numpy"]
+
+[tool.coverage.run]
+source = ["reveal_studio"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
