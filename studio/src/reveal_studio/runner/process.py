@@ -111,7 +111,13 @@ class Runner:
             for r in records(d):
                 if r["state"] == "running" and r.get("out_part") == self._rel(out_part):
                     raise StudioError(f"{r['id']} is still running into {self._rel(out_part)}", 409)
-            if out_part.exists():
+            in_place = out_part == out_final  # a script that writes its output in place (director_page.py)
+            previous = None
+            if in_place:
+                if out_final.is_file():  # the previous file is kept beside the record, since nothing is renamed
+                    previous = f"previous_{out_final.name}"
+                    shutil.copy2(out_final, rec_dir / previous)
+            elif out_part.exists():
                 _remove(out_part)
         except StudioError:
             shutil.rmtree(rec_dir, ignore_errors=True)
@@ -146,6 +152,9 @@ class Runner:
             "ui_version": self.settings.ui_version,
             "warnings": warnings,
         }
+        if in_place:
+            rec["in_place"] = True
+            rec["previous"] = previous
         write_json(rec_dir / "stage.json", rec)
         self.procs[rid] = p
         threading.Thread(target=self._wait, args=(d, rid, p), daemon=True).start()
@@ -171,6 +180,9 @@ class Runner:
             have = False
             if out_part is not None and out_part.exists():
                 have = (out_part / term).exists() if out_part.is_dir() else True
+            in_place = out_part is not None and out_part == out_final
+            if in_place and rc is None:
+                have = False  # an in-place file cannot say whether the restarted run finished: the record is lost
             lines = [ln for ln in tail_lines(rec_dir / "log.txt", 60) if ln.strip()]
             failed_line = next((ln for ln in reversed(lines) if ln.startswith("FAILED:")), None)
             if rec["state"] == "cancelling":
@@ -184,7 +196,9 @@ class Runner:
                 ):
                     _remove(out_part)
             elif (rc == 0 or rc is None) and have and out_part is not None and out_final is not None:
-                if out_final.exists():
+                if in_place:
+                    pass  # written in place: the previous file was copied beside the record before the run
+                elif out_final.exists():
                     if rec["stage"] == "registration":
                         prev = out_final.with_name(out_final.name + "_prev_" + stamp())
                         os.replace(out_final, prev)
@@ -202,7 +216,8 @@ class Runner:
                         shutil.rmtree(out_final)  # readers: derived files, replaced
                     else:
                         out_final.unlink()
-                os.replace(out_part, out_final)
+                if not in_place:
+                    os.replace(out_part, out_final)
                 rec["state"] = "done"
                 if rc is None:
                     rec["note"] = (

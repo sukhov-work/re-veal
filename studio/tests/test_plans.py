@@ -9,7 +9,7 @@ import pytest
 
 from reveal_studio.config import Settings
 from reveal_studio.errors import StudioError
-from reveal_studio.fs import Json, read_json, sha256_file
+from reveal_studio.fs import Json, read_json, rel, sha256_file
 from reveal_studio.jobs.plans import frozen_plans, plan_diff, plans_of, resolve_plan, save_plan
 from reveal_studio.registry.schema import BY_PATH, validate_plan
 
@@ -162,3 +162,36 @@ def re_escape(text: str) -> str:
     import re
 
     return re.escape(text)
+
+
+def test_a_director_job_resolves_saves_and_lists_the_director_plans(settings: Settings, fixture_pair: str) -> None:
+    # Red if resolve_plan ignores the flow (the director's frozen folder is scripts/research/plans/, not loops/),
+    # if save_plan validates a director plan with the loop grammar, or if frozen_plans lists the loop's folder.
+    from reveal_studio.jobs.store import create_director_job
+
+    j = create_director_job(settings, fixture_pair)
+    d = settings.root / j["root"]
+    d = d.parent if d.name == "run" else d
+    frozen = resolve_plan(settings, None, f"frozen:{fixture_pair}_r1", "director")
+    assert frozen == settings.director_plans / f"{fixture_pair}_r1.json"
+    with pytest.raises(StudioError, match="no plan scripts/research/plans/loops"):
+        resolve_plan(settings, None, f"frozen:{fixture_pair}_r1")  # the loop's folder does not hold it
+    with pytest.raises(StudioError, match="has no plans"):
+        resolve_plan(settings, None, "frozen:x", "pair")
+    plan = read_json(frozen)
+    plan["concepts"][0]["idea"] = "the square brightens, then dims"
+    out = save_plan(settings, d, j, "mine", plan, f"frozen:{fixture_pair}_r1", "his words")
+    saved = read_json(d / "plans" / "mine.json")
+    assert saved["provenance"]["from"] == rel(frozen, settings.root)
+    assert [c["path"] for c in out["changes"]] == ["/concepts/0/idea"]
+    for bad, text in [
+        ({"concepts": [{"id": "c1"}]}, "names its pair"),
+        ({"pair": "p"}, "one concept"),
+        ({"pair": "p", "concepts": [{}]}, "needs an id"),
+    ]:
+        with pytest.raises(StudioError, match=text):
+            save_plan(settings, d, j, "bad", bad)
+    rows = frozen_plans(settings, "director")
+    assert [r["ref"] for r in rows] == [f"frozen:{fixture_pair}_r1"]
+    assert (rows[0]["pair"], rows[0]["concepts"]) == (fixture_pair, ["c1"])
+    assert [r["ref"] for r in frozen_plans(settings)] == ["frozen:tiny_a1"]  # the loop's list is unchanged

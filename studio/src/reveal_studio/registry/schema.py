@@ -28,7 +28,8 @@ from typing import Any, TypedDict
 from reveal_studio.errors import StudioError
 
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
-NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
+NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$")
+"""A render, plan or sequence name: 60 characters since phase B, so a director folder <stem>_<concept>-<tag> fits."""
 SCHEMA_DATE = "2026-11-05"
 METHODS = ("rife", "dissolve", "morph", "teleport", "cut", "rewind", "slices", "sheets", "snap", "slide", "rise")
 EASES = ("linear", "smooth", "snap", "accel", "accel3", "decel", "sine")

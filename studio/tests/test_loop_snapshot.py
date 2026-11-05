@@ -2,9 +2,10 @@
 
 Pinned: the argv, the output paths and the inputs of every loop run on the fake job (registration, readers, probe,
 measure with and without frames.json, render full and draft, page with and without variants), the stage tiles of
-two jobs (a new one and one that went through every stage), their rail rows and the rounds, and digests of the loop's
-registry rows (the stages without the slice's two new keys, the hints without its two chip keys, the plan schema and
-the rulings). A value that holds a time, a stamp or a digest of a time-dependent file is replaced by a token first.
+two jobs (a new one and one that went through every stage, also after a later registration), their rail rows and the
+rounds. A value that holds a time, a stamp or a digest of a time-dependent file is replaced by a token first. The
+digests of the loop's registry rows, pinned here on the untouched tree, moved to tests/test_registry.py once the slice
+passed, so a loop builder updates them with the loop counts.
 
 The argv come from argv_for itself on a fixed record folder, after coerce, as start_stage builds them; the tiles from
 stage_views after real runs of the fake script through the Runner.
@@ -29,10 +30,6 @@ from reveal_studio.fs import Json, md5_file, write_json
 from reveal_studio.jobs.candidates import candidates, rounds
 from reveal_studio.jobs.grades import save_grade, write_request
 from reveal_studio.jobs.store import create_job
-from reveal_studio.registry.hints import HINTS
-from reveal_studio.registry.loop import LOOP_STAGES
-from reveal_studio.registry.rulings import RULINGS
-from reveal_studio.registry.schema import PLAN_SCHEMA
 from reveal_studio.runner.argv import argv_for, coerce
 from reveal_studio.runner.process import Runner
 from reveal_studio.views.job import job_row, stage_views
@@ -44,11 +41,6 @@ try:  # the slice moves stage_def from registry.loop to registry.flows; this fil
     from reveal_studio.registry.flows import stage_def
 except ImportError:  # the tree before the slice
     from reveal_studio.registry.loop import stage_def
-
-SLICE_STAGE_KEYS = ("script", "identity")
-"""The keys the slice adds to a stage definition; the digest of the loop's stages leaves them out."""
-SLICE_HINT_KEYS = ("chip.above_6", "chip.above_10")
-"""The hint rows the slice adds (the still-count chips); the digest of the loop's 290 rows leaves them out."""
 
 STAMP = re.compile(r"\d{8}-\d{6}")
 SUFFIX = re.compile(r"(<stamp>_[a-z]+)_\d+\b")
@@ -187,18 +179,6 @@ def build(tmp: Path) -> Json:
     return dict(scrub(out, swaps))
 
 
-def registry_digests() -> Json:
-    return {
-        "stages": digest([{k: v for k, v in s.items() if k not in SLICE_STAGE_KEYS} for s in LOOP_STAGES]),
-        "hints": digest({k: v for k, v in HINTS.items() if k not in SLICE_HINT_KEYS}),
-        "hint_count": len([k for k in HINTS if k not in SLICE_HINT_KEYS]),
-        "schema": digest(PLAN_SCHEMA),
-        "schema_rows": len(PLAN_SCHEMA),
-        "rulings": digest(RULINGS),
-        "rulings_rows": len(RULINGS),
-    }
-
-
 @pytest.fixture(scope="module")
 def snap(tmp_path_factory: pytest.TempPathFactory) -> Json:
     return build(tmp_path_factory.mktemp("snapshot"))
@@ -244,12 +224,6 @@ def test_the_rail_rows_and_the_rounds_are_the_snapshot(snap: Json) -> None:
         assert snap[job]["rounds"] == EXPECTED[job]["rounds"], job
     assert snap["page_md5_beside_the_page"] is True
     assert snap["round_files"] == EXPECTED["round_files"]
-
-
-def test_the_loop_registry_rows_keep_their_digests() -> None:
-    """Mutation: a sentence, a knob or a default of the loop's stages, hints, schema or rulings edited while the
-    registry is split, e.g. one character of a knob's sentence, turns this red."""
-    assert registry_digests() == EXPECTED["registry"]
 
 
 # Generated on 2026-11-05 from build() on tree 4f564b5 before the slice's first edit, then never regenerated.
@@ -1323,14 +1297,5 @@ EXPECTED: Json = {
                 "ungraded_by_his_word": None,
             },
         ],
-    },
-    "registry": {
-        "stages": "83b7f497d40f9380",
-        "hints": "ceca97b5111fc312",
-        "hint_count": 290,
-        "schema": "d9bdc86dd439f099",
-        "schema_rows": 151,
-        "rulings": "b533b58ecedcb25e",
-        "rulings_rows": 7,
     },
 }

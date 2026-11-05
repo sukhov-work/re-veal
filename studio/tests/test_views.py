@@ -15,13 +15,19 @@ from reveal_studio.fs import Json, md5_file, read_json, rel, write_json
 from reveal_studio.jobs.grades import mark_frame, save_grade, write_request
 from reveal_studio.jobs.records import records
 from reveal_studio.jobs.store import create_director_job, create_job, create_pair_job
+from reveal_studio.registry import director as director_registry
 from reveal_studio.registry import pair as pair_registry
 from reveal_studio.registry.common import VERDICT_STAGE
-from reveal_studio.registry.flows import FLOWS, stage_def
+from reveal_studio.registry.flows import FLOWS, stage_def, stage_order
 from reveal_studio.registry.hints import HINTS
 from reveal_studio.registry.loop import LOOP_STAGES
 from reveal_studio.runner.argv import ScriptFlags
 from reveal_studio.runner.process import Runner
+from reveal_studio.views import director as director_views
+from reveal_studio.views import job as job_views
+from reveal_studio.views import pair as pair_views
+from reveal_studio.views import render as render_module
+from reveal_studio.views.base import base_render_view
 from reveal_studio.views.job import job_row, job_view, record_view, stage_views
 from reveal_studio.views.models import models_view, open_requests, registry_view
 from reveal_studio.views.page import build_page
@@ -444,15 +450,17 @@ LOOP_VIEW_KEYS = {
 def test_a_pair_and_a_director_job_open_with_the_shared_keys(
     settings: Settings, runner: Runner, fixture_pair: str
 ) -> None:
-    """A job of a flow without stages yet opens: the shared keys, the loop's prep, readers and probe as None (the
-    page's shared scripts read them), no frozen loop plan. Mutation: the loop's frozen plans served to every flow,
-    or a key the loop's view lacks added to the base view, turns this red."""
+    """A job of another flow opens with every key the loop's view has: the loop's prep, readers and probe as None
+    (the page's shared scripts read them), no frozen loop plan, its flow's stages. A flow's own keys come on top.
+    Mutation: the loop's frozen plans served to every flow, or a shared key missing from another flow's view (the
+    page's scripts then throw), turns this red."""
     for j in (create_pair_job(settings, fixture=fixture_pair), create_director_job(settings, fixture_pair)):
         d = settings.runs / "2026-11-05" / "studio" / j["id"]
         v = job_view(runner, d, j)
-        assert set(v) == LOOP_VIEW_KEYS, j["flow"]
-        assert (v["stages"], v["candidates"], v["frozen_plans"]) == ([], [], [])
+        assert set(v) >= LOOP_VIEW_KEYS, j["flow"]
+        assert [s["name"] for s in v["stages"]] == stage_order(j["flow"]) and v["candidates"] == []
         assert (v["prep"], v["readers"], v["probe"]) == (None, None, None)
+        assert "frozen:tiny_a1" not in [p.get("ref") for p in v["frozen_plans"]]  # the tmp root's loop plan
         row = job_row(settings, d, runner)
         assert row is not None and (row["flow"], row["seq"], row["stills"], row["last_render"]) == (
             j["flow"],
@@ -466,8 +474,10 @@ def test_a_stage_without_a_tile_function_shows_its_base_tile(
     settings: Settings, runner: Runner, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A flow builder's stage shows its latest record's state before its tile function exists, and a branch makes no
-    stage stale. Mutation: stage_views skipping a stage that has no tile function turns this red."""
+    stage stale. The test sets the pair's stages and an empty tile table itself. Mutation: stage_views skipping a stage
+    that has no tile function turns this red."""
     monkeypatch.setitem(pair_registry.FLOW, "stages", [VERDICT_STAGE])
+    monkeypatch.setitem(job_views.TILES, "pair", {})
     j = create_pair_job(settings, fixture=fixture_pair)
     d = settings.runs / "2026-11-05" / "studio" / j["id"]
     rec = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
@@ -494,16 +504,39 @@ def mp4(path: Path, frames: int, w: int = 64, h: int = 48) -> None:
     vw.release()
 
 
-def test_a_pair_render_opens_in_the_base_view_at_its_own_fps(
-    settings: Settings, runner: Runner, fixture_pair: str
+SPECS: dict[str, Json] = {
+    "pair": {
+        "full": ["{root}/{seq}"],
+        "draft": ["{root}/drafts/{seq}"],
+        "terminal": "report.json",
+        "mp4": "transition.mp4",
+    },
+    "director": {"full": ["{root}"], "draft": ["{job}/drafts"], "terminal": "info.json", "mp4": "transition.mp4"},
+}
+"""The candidate specs of b_design.md, fixed here so the base view's tests hold whatever spec a flow carries later."""
+
+
+def test_the_render_view_dispatches_by_flow() -> None:
+    """Mutation: a flow missing from the table (its renders then open in the loop's view, which reads measure.json)
+    turns this red."""
+    assert {
+        "loop": render_module.loop_render_view,
+        "pair": pair_views.render_view,
+        "director": director_views.render_view,
+    } == render_module.RENDER_VIEWS
+
+
+def test_the_base_view_decodes_a_pair_renders_own_mp4_at_its_fps(
+    settings: Settings, runner: Runner, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The render view dispatches by flow and decodes the candidate's own mp4. Mutation: the decode opening loop.mp4
-    for every candidate (0 frames for a pair), or the viewer playing 25 fps for a 30 fps clip, turns this red."""
+    """The base view of views/base.py, which a flow's render view builds on. Mutation: the decode opening loop.mp4 for
+    every candidate (0 frames for a pair), or the viewer given 25 fps for a 30 fps clip, turns this red."""
+    monkeypatch.setitem(pair_registry.FLOW, "candidates", SPECS["pair"])
     j = create_pair_job(settings, fixture=fixture_pair)
     d = settings.runs / "2026-11-05" / "studio" / j["id"]
     mp4(d / "tiny_1" / "r1" / "transition.mp4", 12)
     write_json(d / "tiny_1" / "r1" / "report.json", {"n_frames": 12, "canvas": [64, 48], "spec": {"fps": 30.0}})
-    v = render_view(settings, d, j, "full", "r1")
+    v = base_render_view(settings, d, j, "full", "r1", 25)
     assert (v["fps"], v["frames_available"], v["frames_tags"], v["mp4"]) == (30.0, 12, [], "transition.mp4")
     assert v["mp4_url"] == f"/api/jobs/{j['id']}/file/tiny_1/r1/transition.mp4"
     assert v["frame_url"] == f"/api/jobs/{j['id']}/render/full/r1/frame/" and "dir" not in v
@@ -512,15 +545,16 @@ def test_a_pair_render_opens_in_the_base_view_at_its_own_fps(
 
 
 def test_a_director_draft_outside_run_gets_a_url_the_file_route_serves(
-    settings: Settings, runner: Runner, fixture_pair: str
+    settings: Settings, runner: Runner, fixture_pair: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A director's drafts sit in the job folder, outside run/ (the root). Mutation: the mp4 URL built from the
     repo-relative path (the file route then answers 404) turns this red."""
+    monkeypatch.setitem(director_registry.FLOW, "candidates", SPECS["director"])
     j = create_director_job(settings, fixture_pair)
     d = settings.runs / "2026-11-05" / "studio" / j["id"]
     mp4(d / "drafts" / "tiny_1_r1_c1-a" / "transition.mp4", 6)
     write_json(d / "drafts" / "tiny_1_r1_c1-a" / "info.json", {"frames": 6, "fps": 30, "canvas": [64, 48]})
-    v = render_view(settings, d, j, "draft", "tiny_1_r1_c1-a")
+    v = base_render_view(settings, d, j, "draft", "tiny_1_r1_c1-a", 25)
     assert v["mp4_url"] == f"/api/jobs/{j['id']}/file/drafts/tiny_1_r1_c1-a/transition.mp4"
     assert (v["fps"], v["frames_available"], v["draft"]) == (30, 6, 64)
 

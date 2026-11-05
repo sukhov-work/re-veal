@@ -3,6 +3,7 @@ the resolver the rulings use, and the rulings table's shape."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -147,9 +148,12 @@ def test_the_page_stage_has_the_variants_knob() -> None:
 
 
 def test_the_hints_table_holds_the_a1_keys_each_with_a_sentence() -> None:
+    # The prefixes are the loop's; another flow's table may add its own (a pair's `report.`, a director's `info.`).
     assert len(HINTS) >= A1_HINT_COUNT
+    assert all(key.startswith(HINT_PREFIXES) for key in LOOP_HINTS), [
+        k for k in LOOP_HINTS if not k.startswith(HINT_PREFIXES)
+    ]
     for key, h in HINTS.items():
-        assert key.startswith(HINT_PREFIXES), key
         assert isinstance(h["what"], str) and h["what"].strip(), key
         assert set(h) <= {"what", "default", "range", "stage", "source"}, key
         if "stage" in h:
@@ -380,4 +384,38 @@ def test_the_loop_registers_a_panel_for_each_of_its_stages_in_flow_ui() -> None:
     for key in ("wire:wireLoop", "candRow:candRow", "sources:loopSources", "plots:drawPlots", "newJob:openLoopForm"):
         assert any(key in text for text in js.values()), key
     assert "flowEntry('loop').measures=loopMeasures" in js["inspector"] and "flowEntry('loop').graph=" in js["graph"]
-    assert "flowEntry('pair');" in js["pair"] and "flowEntry('director');" in js["director"]
+    assert "flowEntry('pair')" in js["pair"] and "flowEntry('director')" in js["director"]
+
+
+def _digest(obj: Any) -> str:
+    return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()[:16]
+
+
+# The loop's registry rows on 2026-11-05, pinned by the slice of phase B before its first edit (in
+# tests/test_loop_snapshot.py then, moved here so a loop builder updates them with the loop counts): the stages without
+# the two keys the slice added, the 290 hints without its two chips, the plan schema and the rulings.
+LOOP_REGISTRY_2026_11_05 = {
+    "stages": "83b7f497d40f9380",
+    "hints": "ceca97b5111fc312",
+    "hint_count": 290,
+    "schema": "d9bdc86dd439f099",
+    "schema_rows": 151,
+    "rulings": "b533b58ecedcb25e",
+    "rulings_rows": 7,
+}
+
+
+def test_the_loop_registry_rows_keep_their_digests() -> None:
+    """Mutation: one character of a loop knob's sentence, a hint, a schema default or a ruling turns this red; a loop
+    builder who changes a row on purpose updates the digest here with the loop counts."""
+    stages = [{k: v for k, v in s.items() if k not in ("script", "identity")} for s in LOOP_STAGES]
+    hints = {k: v for k, v in LOOP_HINTS.items() if k not in ("chip.above_6", "chip.above_10")}
+    assert {
+        "stages": _digest(stages),
+        "hints": _digest(hints),
+        "hint_count": len(hints),
+        "schema": _digest(PLAN_SCHEMA),
+        "schema_rows": len(PLAN_SCHEMA),
+        "rulings": _digest(RULINGS),
+        "rulings_rows": len(RULINGS),
+    } == LOOP_REGISTRY_2026_11_05

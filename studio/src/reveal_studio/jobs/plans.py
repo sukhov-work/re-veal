@@ -12,12 +12,24 @@ from reveal_studio.registry.rulings import plan_hits, stage_warnings
 from reveal_studio.registry.schema import NAME_RE, validate_plan
 
 
-def resolve_plan(settings: Settings, d: Path | None, ref: Any) -> Path:
-    """`job:<name>` (a plan saved in the job `d`) or `frozen:<name>` (scripts/research/plans/loops/<name>.json)."""
+def frozen_dir(settings: Settings, flow: str = "loop") -> Path:
+    """The folder of a flow's frozen plans: the loop's `scripts/research/plans/loops/`, the director's
+    `scripts/research/plans/`; a pair job has no plans (400)."""
+    if flow == "loop":
+        return settings.frozen_plans
+    if flow == "director":
+        return settings.director_plans
+    raise StudioError(f"a {flow} job has no plans", 400)
+
+
+def resolve_plan(settings: Settings, d: Path | None, ref: Any, flow: str = "loop") -> Path:
+    """`job:<name>` (a plan saved in the job `d`) or `frozen:<name>` (the flow's frozen folder: the loop's
+    scripts/research/plans/loops/<name>.json, the director's scripts/research/plans/<name>.json)."""
+    folder = frozen_dir(settings, flow)
     if not isinstance(ref, str) or ":" not in ref:
         raise StudioError(
             "the plan is job:<name> (a plan saved in this job) or frozen:<name> "
-            "(scripts/research/plans/loops/<name>.json)",
+            f"({rel(folder, settings.root)}/<name>.json)",
             400,
         )
     kind, name = ref.split(":", 1)
@@ -26,12 +38,31 @@ def resolve_plan(settings: Settings, d: Path | None, ref: Any) -> Path:
     if kind == "job" and d is not None:
         p = d / "plans" / f"{name}.json"
     elif kind == "frozen":
-        p = settings.frozen_plans / f"{name}.json"
+        p = folder / f"{name}.json"
     else:
         raise StudioError("the plan is job:<name> or frozen:<name>", 400)
     if not p.exists():
         raise StudioError(f"no plan {rel(p, settings.root)}", 404)
     return p
+
+
+def validate_director_plan(plan: Any) -> None:
+    """A director plan (scripts/research/plans/SCHEMA.md): an object with the pair's name and one concept or more,
+    each with an id; the renderer reads the rest."""
+    if not isinstance(plan, dict):
+        raise StudioError("a director plan is a JSON object", 400)
+    if not isinstance(plan.get("pair"), str) or not plan["pair"]:
+        raise StudioError("a director plan names its pair", 400)
+    concepts = plan.get("concepts")
+    if not isinstance(concepts, list) or not concepts:
+        raise StudioError("a director plan holds one concept or more under concepts", 400)
+    for i, c in enumerate(concepts):
+        if not isinstance(c, dict) or not isinstance(c.get("id"), str) or not c["id"]:
+            raise StudioError(f"concept {i} needs an id", 400)
+
+
+VALIDATORS = {"loop": validate_plan, "director": validate_director_plan}
+"""The plan validator per flow, read by save_plan from the job's flow."""
 
 
 def plans_of(settings: Settings, d: Path) -> list[Json]:
@@ -57,8 +88,26 @@ def plans_of(settings: Settings, d: Path) -> list[Json]:
     return out
 
 
-def frozen_plans(settings: Settings) -> list[Json]:
+def frozen_plans(settings: Settings, flow: str = "loop") -> list[Json]:
+    """The flow's frozen plans as the page lists them: the loop's with seq, title and in; a director plan with its
+    pair, its relation and its concept ids."""
     out = []
+    if flow == "director":
+        for pj in sorted(frozen_dir(settings, flow).glob("*.json")):
+            p = read_json(pj) or {}
+            concepts = [c.get("id") for c in p.get("concepts") or [] if isinstance(c, dict)]
+            out.append(
+                {
+                    "name": pj.stem,
+                    "ref": f"frozen:{pj.stem}",
+                    "path": rel(pj, settings.root),
+                    "pair": p.get("pair"),
+                    "relation": p.get("relation"),
+                    "concepts": concepts,
+                    "warnings": [],
+                }
+            )
+        return out
     for pj in sorted(settings.frozen_plans.glob("*.json")):
         p = read_json(pj) or {}
         out.append(
@@ -119,16 +168,21 @@ def save_plan(
     from_ref: Any = None,
     words: Any = "",
 ) -> Json:
-    """Writes plans/<name>.json with a provenance block; refuses a name that exists (a saved plan stays as saved)."""
+    """Writes plans/<name>.json with a provenance block; refuses a name that exists (a saved plan stays as saved).
+    The plan is checked by the job's flow (the loop grammar, or a director plan's pair and concepts)."""
     if not NAME_RE.match(name or ""):
         raise StudioError("a plan name is letters, digits, dash and underscore", 400)
-    validate_plan(plan)
+    flow = str(job.get("flow") or "loop")
+    validator = VALIDATORS.get(flow)
+    if validator is None:
+        raise StudioError(f"a {flow} job has no plans", 400)
+    validator(plan)
     dest = d / "plans" / f"{name}.json"
     if dest.exists():
         raise StudioError(f"plans/{name}.json exists: a saved plan is never overwritten; choose another name", 409)
     prov: Json = {"author": "owner", "at": now_iso(), "ui_version": settings.ui_version, "words": str(words or "")}
     if from_ref:
-        src = resolve_plan(settings, d, from_ref)
+        src = resolve_plan(settings, d, from_ref, flow)
         old = read_json(src) or {}
         prov["from"] = rel(src, settings.root)
         prov["from_sha256"] = sha256_file(src)

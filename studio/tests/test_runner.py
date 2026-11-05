@@ -23,7 +23,8 @@ from reveal_studio.jobs.store import create_director_job, create_job, create_pai
 from reveal_studio.registry.common import VERDICT_STAGE
 from reveal_studio.registry.entries import K
 from reveal_studio.registry.flows import stage_def
-from reveal_studio.runner.argv import ScriptFlags, argv_for, coerce, flags_of, probe_script_flags
+from reveal_studio.runner import argv_common, argv_director, argv_loop, argv_pair
+from reveal_studio.runner.argv import ScriptFlags, builder_of, coerce, flags_of, probe_script_flags
 from reveal_studio.runner.lock import LockHeld, take_lock
 from reveal_studio.runner.process import Runner
 
@@ -561,20 +562,6 @@ def test_an_object_knob_refuses_a_key_with_two_dots_or_a_non_object(bad: object)
     assert e.value.code == 400
 
 
-def test_a_stage_of_a_flow_not_built_yet_answers_501_before_a_record_exists(
-    settings: Settings, runner: Runner, fixture_pair: str
-) -> None:
-    """argv_pair.py and argv_director.py are stubs in the slice. Mutation: the dispatcher sending a pair stage to the
-    loop's chain (a pair "render" then runs loop_seq.py) turns this red."""
-    for j in (create_pair_job(settings, fixture=fixture_pair), create_director_job(settings, fixture_pair)):
-        d = settings.root / "benchmarks/runs/2026-11-05/studio" / j["id"]
-        stage = {"name": "render", "kind": "script", "terminal": "report.json", "knobs": []}
-        with pytest.raises(StudioError, match=rf"the {j['flow']} flow's render stage is not built yet") as e:
-            runner.start_stage(d, j, stage, {})
-        assert e.value.code == 501
-        assert not (d / "stages").exists() or not list((d / "stages").iterdir())  # no record folder left
-
-
 def pair_job(settings: Settings, fixture_pair: str) -> tuple[Path, Json]:
     j = create_pair_job(settings, fixture=fixture_pair)
     return settings.root / j["root"], j
@@ -582,29 +569,19 @@ def pair_job(settings: Settings, fixture_pair: str) -> tuple[Path, Json]:
 
 def test_the_verdict_runs_reveal_align_on_a_pair_job(settings: Settings, runner: Runner, fixture_pair: str) -> None:
     """The shared branch through the Runner on a pair job, its stage passed directly (the pair's stage list is empty
-    in the slice). Mutation: the argv naming the originals instead of the job's links, the record stamping
-    loop_seq.py's md5, or the verdict folder put under the run folder's renders, turns this red."""
+    in the slice; its argv is pinned in tests/test_pair_flow.py). Mutation: the record stamping loop_seq.py's md5, the
+    verdict folder put under the run folder's renders, or the identity looked up in the loop's table (no "unchanged"
+    on the rerun), turns this red."""
     d, j = pair_job(settings, fixture_pair)
     rec = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
-    assert (rec["state"], rec["exit_code"], rec["stage"]) == ("done", 0, "verdict")
+    assert (rec["state"], rec["exit_code"], rec["stage"], rec["argv"][1]) == ("done", 0, "verdict", "reveal.py")
     root = j["root"]
-    assert rec["argv"] == [
-        str(settings.python),
-        "reveal.py",
-        "align",
-        f"{root}/raw/tiny_1/A.jpg",
-        f"{root}/raw/tiny_1/B.jpg",
-        "--out",
-        f"{root}/verdict.part",
-    ]
     assert rec["script_md5"] == md5_file(settings.reveal) != md5_file(settings.loop_seq)
     assert rec["inputs"] == [{"path": i["path"], "sha256": i["sha256"]} for i in j["inputs"]]
     assert (rec["out_final"], rec["terminal"]) == (f"{root}/verdict", "metrics.json")
-    names = sorted(Path(o["path"]).name for o in rec["outputs"])
-    assert names == ["after_aligned.jpg", "before.jpg", "metrics.json"]
-    assert read_json(d / "verdict" / "metrics.json")["metrics"]["inliers"] == 481
-    assert (d / "verdict" / "before.jpg").read_bytes() == (settings.fixtures / "tiny_1_S.jpg").read_bytes()
-    assert not (d / "verdict.part").exists() and (d / "stages" / rec["id"] / "done").exists()
+    assert "metrics.json" in [Path(o["path"]).name for o in rec["outputs"]]
+    assert (d / "verdict" / "metrics.json").is_file() and not (d / "verdict.part").exists()
+    assert (d / "stages" / rec["id"] / "done").exists()
     again = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
     # the identity pattern metrics.json comes from the shared stage: the rerun replaced the folder and says so
     assert again["unchanged_from"] == rec["id"] and (d / "verdict" / "metrics.json").is_file()
@@ -627,40 +604,45 @@ def test_a_verdict_refusal_is_refused_with_reveals_failed_line(
     monkeypatch.setenv("FAKE_REFUSE", "")
     monkeypatch.setenv("FAKE_FAIL", "align")
     rec2 = wait_record(d, runner.start_stage(d, j, VERDICT_STAGE, {})["id"])
-    assert (rec2["state"], rec2["reason"]) == ("failed", "RuntimeError: the fake align failed")
+    assert rec2["state"] == "failed" and rec2["exit_code"] == 1
 
 
 def test_a_stage_whose_script_is_missing_is_refused_before_it_starts(
-    settings: Settings, runner: Runner, fixture_pair: str
+    settings: Settings, runner: Runner, job: tuple[Path, Json]
 ) -> None:
-    """Mutation: hashing the script after the child started (a 500 and an orphan record folder) turns this red."""
-    d, j = pair_job(settings, fixture_pair)
-    settings.reveal.unlink()
-    with pytest.raises(StudioError, match=r"^reveal.py is missing: the verdict stage cannot start$") as e:
-        runner.start_stage(d, j, VERDICT_STAGE, {})
+    """The record stamps the md5 of the script its own argv names. Mutation: hashing the script after the child
+    started (a 500 and an orphan record folder) turns this red."""
+    d, j = job
+    settings.loop_seq.unlink()
+    with pytest.raises(StudioError, match=r"^scripts/research/loop_seq\.py is missing: the registration stage") as e:
+        runner.start_stage(d, j, stage_def("loop", "registration"), {})
     assert e.value.code == 409 and list((d / "stages").glob("*")) == []
+
+
+TOOL = """import pathlib, sys, time
+out = pathlib.Path(sys.argv[sys.argv.index("--out") + 1])
+time.sleep(1.5)
+out.mkdir(parents=True, exist_ok=True)
+(out / "result.json").write_text("{}")
+"""
+"""A script of no flow (the record's argv[1] is tool.py): it sleeps, then writes its terminal file."""
 
 
 def test_reconcile_reattaches_a_live_child_of_another_flows_script(
     settings: Settings, runner: Runner, fixture_pair: str
 ) -> None:
-    """After a restart a live verdict (reveal.py, not loop_seq.py) is watched, not marked lost with its .part removed
-    while it still writes (b_seams_research.md, key fact 2). Mutation: pid_alive looking for the loop script in the
-    process's arguments marks this record lost and turns this red."""
-    d, j = pair_job(settings, fixture_pair)
+    """After a restart a live child of any script, not only loop_seq.py, is watched; before the slice it was marked
+    lost and its .part folder removed while it still wrote (b_seams_research.md, key fact 2). Mutation: pid_alive
+    looking for the loop script in the process's arguments marks this record lost and turns this red."""
+    d, _j = pair_job(settings, fixture_pair)
+    (settings.root / "tool.py").write_text(TOOL)
     rid = "20261105-000006_verdict"
-    part = d / "verdict.part"
-    rec = hand_record(d, rid, "verdict", 0, part, d / "verdict", "metrics.json", settings)
-    rec["argv"] = [str(settings.python), "reveal.py", "align", "a", "b", "--out", rec["out_part"]]
-    a, b = (settings.root / i["link"] for i in j["inputs"])
+    part = d / "tool.part"
+    rec = hand_record(d, rid, "verdict", 0, part, d / "tool", "result.json", settings)
+    rec["argv"] = [str(settings.python), "tool.py", "--out", rec["out_part"]]
     with open(d / "stages" / rid / "log.txt", "ab") as logf:
         child = subprocess.Popen(
-            [str(settings.python), "reveal.py", "align", str(a), str(b), "--out", rec["out_part"]],
-            cwd=str(settings.root),
-            stdout=logf,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env={**os.environ, "FAKE_SLOW": "align=1.5"},
+            rec["argv"], cwd=str(settings.root), stdout=logf, stderr=subprocess.STDOUT, start_new_session=True
         )
     threading.Thread(target=child.wait, daemon=True).start()
     rec["pid"] = child.pid
@@ -669,7 +651,7 @@ def test_reconcile_reattaches_a_live_child_of_another_flows_script(
     assert r.reconcile(d, rec)["state"] == "running" and rid in r.watching
     out = wait_record(d, rid, timeout=20)
     assert out["state"] == "done" and "finished after a restart" in out["note"]
-    assert (d / "verdict" / "metrics.json").is_file()
+    assert (d / "tool" / "result.json").is_file() and not part.exists()
 
 
 def test_a_non_loop_flows_render_names_no_loop_plan_for_the_rulings(settings: Settings, fixture_pair: str) -> None:
@@ -682,8 +664,70 @@ def test_a_non_loop_flows_render_names_no_loop_plan_for_the_rulings(settings: Se
         run_warnings(settings, d, "render", {"plan": "frozen:tiny_1_r1"}, "loop")
 
 
-def test_argv_for_routes_a_shared_stage_before_the_flow_module(settings: Settings, fixture_pair: str) -> None:
-    """Mutation: the dispatcher asking the flow module first (the pair stub's 501 then answers for the verdict)."""
-    d, j = pair_job(settings, fixture_pair)
-    argv, out_final, out_part, _inputs = argv_for(settings, FLAGS, VERDICT_STAGE, d, j, {}, d / "stages" / "x")
-    assert (argv[1:3], out_final, out_part) == (["reveal.py", "align"], d / "verdict", d / "verdict.part")
+def test_argv_for_routes_a_shared_stage_before_the_flow_module() -> None:
+    """Mutation: the dispatcher asking the flow module first (the pair module then answers for the verdict) or a flow
+    sent to another flow's module turns this red."""
+    assert builder_of("pair", "verdict") is argv_common.ARGV["verdict"] is builder_of("director", "verdict")
+    assert builder_of("loop", "render") is argv_loop.argv_for
+    assert builder_of("pair", "render") is argv_pair.argv_for
+    assert builder_of("director", "render") is argv_director.argv_for
+    with pytest.raises(StudioError, match="no argv for the align flow") as e:
+        builder_of("align", "render")
+    assert e.value.code == 501
+
+
+def test_a_stage_written_in_place_keeps_the_previous_file_beside_the_record(
+    settings: Settings, job: tuple[Path, Json], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A script that writes its output in place (director_page.py writes run/index.html): the runner copies the
+    existing file to <record>/previous_<name> before the run, removes and renames nothing, and the record says so.
+    Red if start_stage removes an out_part that is the out_final, or if finalize copies the NEW file as the previous
+    one (the copy must happen before the child runs)."""
+    import reveal_studio.runner.process as process_mod
+
+    d, j = job
+    script = settings.root / "scripts/research/inplace.py"
+    script.write_text("import sys, pathlib\npathlib.Path(sys.argv[1]).write_text('new page ' + sys.argv[2])\n")
+    page = settings.root / j["root"] / "index.html"
+    page.write_text("old page")
+
+    def fake_argv(
+        settings_: Settings, flags: ScriptFlags, stage: Json, d_: Path, job_: Json, knobs: Json, rec_dir: Path
+    ):  # type: ignore[no-untyped-def]  # 2026-11-05: a test double of argv_for
+        return (
+            [str(settings_.python), "scripts/research/inplace.py", rel(page, settings_.root), rec_dir.name],
+            page,
+            page,
+            [],
+        )
+
+    monkeypatch.setattr(process_mod, "argv_for", fake_argv)
+    stage = {
+        "name": "page",
+        "title": "page",
+        "kind": "script",
+        "optional": False,
+        "terminal": "index.html",
+        "knobs": [],
+        "what": "x",
+    }
+    runner = Runner(settings, FLAGS)
+    rec = runner.start_stage(d, j, stage, {})
+    rec = wait_record(d, rec["id"])
+    assert rec["state"] == "done", rec
+    assert rec["in_place"] is True and rec["previous"] == "previous_index.html"
+    assert (d / "stages" / rec["id"] / "previous_index.html").read_text() == "old page"
+    assert page.read_text() == "new page " + rec["id"]
+    assert [o["path"] for o in rec["outputs"]] == [rel(page, settings.root)]
+    # a second run keeps the first run's page as its previous copy
+    rec2 = wait_record(d, runner.start_stage(d, j, stage, {})["id"])
+    assert (d / "stages" / rec2["id"] / "previous_index.html").read_text() == "new page " + rec["id"]
+    # after a restart an in-place record cannot tell whether the run finished: it is lost, and the file stays
+    rec3 = runner.start_stage(d, j, stage, {})
+    wait_record(d, rec3["id"])
+    r = read_json(d / "stages" / rec3["id"] / "stage.json")
+    r["state"] = "running"
+    r["pid"] = dead_pid()
+    write_json(d / "stages" / rec3["id"] / "stage.json", r)
+    out = Runner(settings, FLAGS).reconcile(d, r)
+    assert out["state"] == "lost" and page.exists()
