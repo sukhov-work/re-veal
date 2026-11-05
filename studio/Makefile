@@ -52,8 +52,8 @@ audit:  ## dead code, dependencies, known vulnerabilities, import contracts, com
 	$(RUN) lint-imports
 	$(RUN) radon cc src -n C -s
 
-prose:  ## the no-slop checker over the package's two documents
-	python3 -I ../.claude/skills/no-slop/scripts/slop-check.py --profile file README.md ARCHITECTURE.md
+prose:  ## the no-slop checker over the package's three documents
+	python3 -I ../.claude/skills/no-slop/scripts/slop-check.py --profile file README.md ARCHITECTURE.md GUIDE.md
 
 qa: lint typecheck test-fast audit prose  ## every gate but the integration and acceptance tests
 

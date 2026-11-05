@@ -30,6 +30,8 @@ other host in the lock.
 
 ## Run
 
+The owner's start and usage guide is `GUIDE.md` (the essentials; it grows with the flows).
+
 ```
 make run                                   # uv run reveal-studio serve: 127.0.0.1:8380, opens the browser
 uv run --frozen reveal-studio serve --port 8390 --no-browser --lock /tmp/review.lock
