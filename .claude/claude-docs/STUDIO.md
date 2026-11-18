@@ -265,7 +265,7 @@ Terms. Stock Reveal is `reveal.py align` as shipped. The surface fit is `scripts
 | subject | nothing; a drawing | a polygon on BEFORE (the lock windows' drawing tool of the loop flow) and keep boxes on AFTER | the polygon and the boxes over the photos |
 | surface fit (a branch under align) | `wall_pairs.py fit` | the polygon; read-only at first: the levels, the thresholds, the held-out share | the two groove maps; the residual vectors (fitted, held-out, rejected); the log's inliers and held-out RMSE |
 | field (a knob of the render) | `wall_pairs.py render-after --field` | the width in px, 0 by default; 200 is the wall pairs' value | the field's largest move; a chip that says it is ungraded until an independent measure ran |
-| render | `wall_pairs.py render` or `render-after` | the frame of record, `before` by default (Reveal's rule) or `after` (his ruling for a promo); the 4:5 window | the slider re-hosted with three views (full frame, real pixels only, 4:5); the coverage mask as an overlay |
+| render | `wall_pairs.py render` or `render-after` | the frame of record, `after` by default in the studio (his answer of 2026-11-18) or `before` (Reveal's rule); the 4:5 window | the slider re-hosted with three views (full frame, real pixels only, 4:5); the coverage mask as an overlay |
 | measure (a branch under render) | `wall_pairs.py verify` or `verify-after` | the strip length | the joints per zone, and the control shift's reading beside them |
 | skeptic | the request file, as in the loop flow | the two renders to compare when a correction is on trial | the returned tables saved with the job |
 
@@ -288,8 +288,21 @@ Terms. Stock Reveal is `reveal.py align` as shipped. The surface fit is `scripts
 
 `wall_pairs.py` reads its pairs, source folder and polygons from constants. Before the studio can run it, it takes `--before`, `--after`, `--wall`, `--keep` and `--win45` as arguments and writes a progress line. The default path must give the md5 values above on both pairs (backlog T125). The script stays a research script; whether the surface fit or the AFTER-frame export enters `reveal.py` is his decision (backlog T122, T123).
 
-### Open for the owner (do not block on them)
+### The owner's answers (2026-11-18, the same evening; verbatim in DECISIONS 2026-11-18 third line)
 
-- Whether the frame of record defaults to `after` in the studio's align flow, since his ruling was for a promo.
-- Whether a generated fill on the second machine replaces the synthetic ground when BEFORE covers under 90 % of a wanted crop.
+The two questions this section left open, and the one on `reveal.py`, are answered. They supersede the sentences above where they differ.
 
+| Question | His answer | What it changes here |
+|---|---|---|
+| Does the studio's align flow default to the AFTER photo as the frame of record? | "ok" | The render stage's frame knob defaults to `after` in the studio. `reveal.py`'s own default stays `before` until the slice below decides it with him; Reveal's third invariant (BEFORE is the reference frame) still holds for the tool's default path |
+| Does a generated fill replace the synthetic ground when BEFORE covers little of a wanted crop? | "ok" | When BEFORE is real on under 90 % of a crop, the render stage offers the generated fill as the "improve on the box" stage (phase D's queue; the conditions of 2026-09-29 for generated content apply). Until that stage exists the synthetic completion runs and a chip says so. The generated fill never runs inside `reveal.py`: its runtime does not download and has no second machine |
+| Does any of this enter `reveal.py`? | "lets add it" | The surface fit and the AFTER-frame export become a slice of the tool (plan rows E1 and E4; backlog T122, T123). Once it ships, the studio's align stages run `reveal.py` for them. `wall_pairs.py` stays as the reference whose numbers the tool must reproduce on `wall_1` and `wall_2`. T125 then covers only what the tool does not take |
+
+The slice of the tool is built before phase C's stages for it, and after a design pass (the plan's rule for every E row). What the design must settle, each derived or asked, none invented:
+- the new mode's name (a `MODES` key; not chosen);
+- whether the mode needs the drawn subject polygon or finds the dominant relief plane by itself, and where an operator gives the polygon (Reveal's seventh invariant keeps engineer features in the CLI or in constants);
+- the confidence of the new mode from inlier statistics on the groove maps and the held-out error, with no pixel-similarity term (decision 21);
+- whether the smooth field stays inside "low-order by construction" and outside "dense or masked flow" (decisions 16, 18, 20), and that it is off until an independent measure graded it;
+- whether the tool writes a completion or only the coverage mask;
+- the harness checks with their red-making mutations, and a synthetic pair of a repainted plane in front of an off-plane background.
+Fixed by the roster: `reshot` and `loose` stay byte-identical, `CFG` defaults untouched, match_4 at 481 inliers, 0.79 px and confidence 94, no network call, one file.
