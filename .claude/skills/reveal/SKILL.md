@@ -349,6 +349,7 @@ remain the OUTER loop; the engine's gate complements them, never replaces them.
 | A new preset or style judged by "looks right" in the strip | A decoded-mp4 observable in `transitions_harness.py` section H (seam monotone, endpoints within codec loss, no black frame) |
 | A performance change that alters frames silently | Hash the harness pair's frames before and after; byte-identical, or the DECISIONS line says what moved |
 | A model or device (MPS/MLX) added to `transitions.py` without an offline proof and a CPU-equivalence check | Warmup + manifest + refuse-to-download (decisions 24–27) and a harness check comparing device output to the CPU field on a fixture |
+| Trusting a passed fit on a subject repainted whole, or cropping the AFTER photo of a promo pair | Draw the inliers first; when none sits on the subject, fit on its relief and keep AFTER's full frame (`research/2026-11-17/wall_method.md`; `STUDIO.md` section 14) |
 | Presenting or saving dev-facing prose without the `no-slop` pass | `.claude/rules/prose.md`: load the skill, run the pass, then save |
 | A studio change on the retired script, or a page sentence no test checks | The package under `studio/` with its test; the hints table (the prose test runs the checker over every sentence) |
 | A studio server started on the owner's port 8380 for a drive | A free port with its own `--lock` path; the owner's server is his to close |
